@@ -1,0 +1,18 @@
+const { chromium } = require('playwright');
+const { pathToFileURL } = require('node:url');
+const path = require('node:path');
+(async () => {
+  const browser = await chromium.launch({headless: true, executablePath: process.env.EYA_BROWSER_EXECUTABLE});
+  const page = await browser.newPage();
+  page.on('pageerror', error => console.error('Page error:', error));
+  await page.goto(pathToFileURL(path.resolve('client.html')).href);
+  await page.locator('#url').fill('ws://127.0.0.1:18765/ws');
+  await page.locator('#key').fill('000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f');
+  await page.locator('#start-connection').click();
+  await page.waitForFunction(() => document.querySelector('#status').textContent === 'Connected', null, {timeout: 10000});
+  await page.keyboard.type("printf '\\103\\110\\122\\117\\115\\105\\137\\106\\111\\114\\105\\137\\117\\113\\n'");
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => document.querySelector('.xterm-screen').innerText.includes('CHROME_FILE_OK'), null, {timeout: 5000});
+  console.log('Chromium file:// standalone client connected and terminal worked');
+  await browser.close();
+})().catch(error => { console.error(error); process.exit(1); });
