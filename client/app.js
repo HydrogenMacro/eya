@@ -180,6 +180,10 @@ function applySettings() {
 }
 function validateConnection() {
   const command = $('default-command').value;
+  if (!$('key').value.length) {
+    setDialogError('Enter the shared password.');
+    return null;
+  }
   if (command.length > MAX_COMMAND_LENGTH || command.includes('\0')) {
     setDialogError(`Default command must be at most ${MAX_COMMAND_LENGTH} characters and cannot contain a NUL byte.`);
     return null;

@@ -15,11 +15,9 @@ COPY --from=client-build /app/client.html ./client.html
 RUN cargo build --manifest-path eya-server/Cargo.toml --release --locked
 
 FROM alpine:3.22
-RUN apk add --no-cache bash tmux ncurses-terminfo ca-certificates \
-    && adduser -D -s /bin/bash eya
+RUN apk add --no-cache ca-certificates util-linux
 COPY --from=server-build /app/eya-server/target/release/eya-server /usr/local/bin/eya-server
-USER eya
-WORKDIR /home/eya
-ENV EYA_BIND=0.0.0.0:8080 EYA_SHELL=/bin/bash
+WORKDIR /app
+ENV EYA_BIND=0.0.0.0:8080 EYA_HOST_PID=1 EYA_NSENTER=/usr/bin/nsenter EYA_HOST_SU=/bin/su
 EXPOSE 8080
 CMD ["eya-server"]
