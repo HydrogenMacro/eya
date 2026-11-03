@@ -2,6 +2,15 @@ import Noise from 'noise-handshake';
 import Cipher from 'noise-handshake/cipher';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { EditorState } from '@codemirror/state';
+import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection } from '@codemirror/view';
+import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
+import { json } from '@codemirror/lang-json';
+import { javascript } from '@codemirror/lang-javascript';
+import { html } from '@codemirror/lang-html';
+import { css } from '@codemirror/lang-css';
+import { markdown } from '@codemirror/lang-markdown';
 
 // Chromium exposes this legacy method on SVG documents but throws when xterm probes it.
 try { document.queryCommandSupported?.('copy'); }
@@ -27,6 +36,15 @@ const cursorBlink = validBoolean(preferences.cursorBlink, validBoolean(config.cu
 const cursorStyle = ['block', 'underline', 'bar'].includes(preferences.cursorStyle) ? preferences.cursorStyle : (['block', 'underline', 'bar'].includes(config.cursorStyle) ? config.cursorStyle : 'block');
 const localEcho = validBoolean(preferences.localEcho, validBoolean(config.localEcho, false));
 const scrollOnUserInput = validBoolean(preferences.scrollOnUserInput, validBoolean(config.scrollOnUserInput, true));
+const panelVisible = validBoolean(preferences.panelVisible, validBoolean(config.panelVisible, false));
+const splitDirection = ['vertical', 'horizontal'].includes(preferences.splitDirection) ? preferences.splitDirection : (['vertical', 'horizontal'].includes(config.splitDirection) ? config.splitDirection : 'vertical');
+const panelSize = validNumber(preferences.panelSize, 25, 75, validNumber(config.panelSize, 25, 75, 46));
+const refreshInterval = [0, 2, 5, 10, 30].includes(preferences.refreshInterval) ? preferences.refreshInterval : 5;
+const showHidden = validBoolean(preferences.showHidden, false);
+const editorWrap = validBoolean(preferences.editorWrap, true);
+const editorLineNumbers = validBoolean(preferences.editorLineNumbers, true);
+const confirmDelete = validBoolean(preferences.confirmDelete, true);
+const startingDirectory = typeof preferences.startingDirectory === 'string' ? preferences.startingDirectory : (typeof config.startingDirectory === 'string' ? config.startingDirectory : '');
 const terminal = new Terminal({ cursorBlink, cursorStyle, fontSize, scrollback, scrollOnUserInput, rightClickSelectsWord: true, theme: themes[theme] });
 const fit = new FitAddon();
 terminal.loadAddon(fit); terminal.open($('terminal')); fit.fit();
@@ -39,6 +57,14 @@ let ctrlArmed = false;
 let viewportFrame;
 let directionTimer, directionInterval, activeDirection = '';
 let touchGesture;
+let fileRequestId = 0, fileRefreshTimer, fileSearchTimer;
+let currentPath = '', directoryEntries = [], selectedEntry, historyPaths = [], historyIndex = -1;
+let activeFileTab = 'browser';
+const filePending = new Map();
+const fileTabs = new Map();
+const decoder = new TextDecoder();
+const fatalDecoder = new TextDecoder('utf-8', { fatal: true });
+const TEXT_EDITOR_LIMIT = 5 * 1024 * 1024;
 
 async function deriveKey(secret) {
   // Keep generated clients compatible with the original hexadecimal key format.
@@ -57,6 +83,20 @@ $('cursor-blink').checked = cursorBlink;
 $('cursor-style').value = cursorStyle;
 $('local-echo').checked = localEcho;
 $('scroll-on-input').checked = scrollOnUserInput;
+$('panel-visible').checked = panelVisible;
+$('split-direction').value = splitDirection;
+$('panel-size').value = panelSize;
+$('panel-size-value').textContent = panelSize;
+$('refresh-interval').value = refreshInterval;
+$('show-hidden').checked = showHidden;
+$('editor-wrap').checked = editorWrap;
+$('editor-line-numbers').checked = editorLineNumbers;
+$('confirm-delete').checked = confirmDelete;
+$('starting-directory').value = startingDirectory;
+document.body.dataset.split = splitDirection;
+document.documentElement.style.setProperty('--panel-size', `${panelSize}%`);
+document.body.classList.toggle('panel-visible', panelVisible);
+$('files').setAttribute('aria-pressed', String(panelVisible));
 
 function status(text) { $('status').textContent = text; }
 function error(text) { $('error').textContent = text; $('error').hidden = !text; }
@@ -376,14 +416,26 @@ function applySettings() {
   terminal.options.cursorBlink = $('cursor-blink').checked;
   terminal.options.cursorStyle = $('cursor-style').value;
   terminal.options.scrollOnUserInput = $('scroll-on-input').checked;
+  const sizePercent = Number($('panel-size').value);
+  const interval = Number($('refresh-interval').value);
+  document.body.dataset.split = $('split-direction').value;
+  document.documentElement.style.setProperty('--panel-size', `${sizePercent}%`);
+  $('panel-size-value').textContent = sizePercent;
+  setPanelVisible($('panel-visible').checked, false);
   try {
     localStorage.setItem('eya-settings', JSON.stringify({
       fontSize: size, scrollback: lines, theme: $('theme').value,
       cursorBlink: $('cursor-blink').checked, cursorStyle: $('cursor-style').value,
       localEcho: $('local-echo').checked, scrollOnUserInput: $('scroll-on-input').checked,
+      panelVisible: $('panel-visible').checked, splitDirection: $('split-direction').value,
+      panelSize: sizePercent, refreshInterval: interval, showHidden: $('show-hidden').checked,
+      editorWrap: $('editor-wrap').checked, editorLineNumbers: $('editor-line-numbers').checked,
+      confirmDelete: $('confirm-delete').checked, startingDirectory: $('starting-directory').value.trim(),
     }));
   } catch { /* Storage is optional. */ }
   if (!$('local-echo').checked) clearLocalEcho();
+  restartFileRefresh();
+  updateEditorConfiguration();
   resize();
   return true;
 }
@@ -415,6 +467,9 @@ function disconnect() {
   socket?.close();
   socket = outbound = inbound = null;
   awaitingHandshake = false;
+  rejectFileRequests('Disconnected.');
+  clearInterval(fileRefreshTimer);
+  $('file-status').textContent = 'Connect to browse files.';
   $('latency').textContent = '';
   status('Disconnected');
 }
@@ -433,10 +488,437 @@ $('settings').onclick = () => { openDialog($('settings-dialog')); setDialogError
 $('disconnect').onclick = disconnect;
 $('close-connect').onclick = () => closeDialog($('connect-dialog'));
 $('close-settings').onclick = () => { closeDialog($('settings-dialog')); terminal.focus(); };
-for (const id of ['font-size', 'scrollback', 'theme', 'cursor-blink', 'cursor-style', 'local-echo', 'scroll-on-input']) {
+for (const id of ['font-size', 'scrollback', 'theme', 'cursor-blink', 'cursor-style', 'local-echo', 'scroll-on-input', 'panel-visible', 'split-direction', 'panel-size', 'refresh-interval', 'show-hidden', 'editor-wrap', 'editor-line-numbers', 'confirm-delete', 'starting-directory']) {
   $(id).addEventListener('input', applySettings);
   $(id).addEventListener('change', applySettings);
 }
+
+$('settings-search').addEventListener('input', () => {
+  const query = $('settings-search').value.trim().toLowerCase();
+  for (const section of document.querySelectorAll('[data-settings]')) {
+    const headingMatch = !!query && section.querySelector('h3').textContent.toLowerCase().includes(query);
+    let matches = 0;
+    for (const setting of section.querySelectorAll('.setting')) {
+      const match = !query || headingMatch || setting.textContent.toLowerCase().includes(query);
+      setting.hidden = !match;
+      if (match) matches++;
+    }
+    section.hidden = !!query && !matches;
+  }
+});
+
+function setPanelVisible(visible, remember = true) {
+  document.body.classList.toggle('panel-visible', visible);
+  $('files').setAttribute('aria-pressed', String(visible));
+  $('panel-visible').checked = visible;
+  if (remember) applySettings();
+  if (visible && outbound && !currentPath) navigateTo($('starting-directory').value.trim(), true);
+  scheduleResize();
+}
+
+function restartFileRefresh() {
+  clearInterval(fileRefreshTimer);
+  const seconds = Number($('refresh-interval').value);
+  if (seconds > 0) fileRefreshTimer = setInterval(() => {
+    if (!document.hidden && outbound && document.body.classList.contains('panel-visible')) refreshFiles(true);
+  }, seconds * 1000);
+}
+
+function nextFileRequestId() {
+  do { fileRequestId = (fileRequestId + 1) >>> 0 || 1; } while (filePending.has(fileRequestId));
+  return fileRequestId;
+}
+
+function sendFileControl(id, op, values = {}) {
+  const jsonBytes = encoder.encode(JSON.stringify({ id, op, ...values }));
+  const message = new Uint8Array(jsonBytes.length + 1);
+  message[0] = 4;
+  message.set(jsonBytes, 1);
+  if (!send(message)) throw Error('Not connected.');
+}
+
+function fileRequest(op, values = {}) {
+  const id = nextFileRequestId();
+  return new Promise((resolve, reject) => {
+    filePending.set(id, { resolve, reject, onJson(response) { filePending.delete(id); resolve(response); } });
+    try { sendFileControl(id, op, values); } catch (cause) { filePending.delete(id); reject(cause); }
+  });
+}
+
+function readFile(path) {
+  const id = nextFileRequestId();
+  return new Promise((resolve, reject) => {
+    filePending.set(id, { resolve, reject, chunks: [], meta: null, onJson(response) { this.meta = response; } });
+    try { sendFileControl(id, 'read', { path }); } catch (cause) { filePending.delete(id); reject(cause); }
+  });
+}
+
+function uploadBytes(path, bytes, overwrite) {
+  const id = nextFileRequestId();
+  return new Promise((resolve, reject) => {
+    filePending.set(id, {
+      resolve, reject,
+      onJson(response) {
+        if (response.ready) sendUploadChunks(id, bytes).catch(cause => { filePending.delete(id); reject(cause); });
+        else if (response.done) { filePending.delete(id); resolve(response); }
+      },
+    });
+    try { sendFileControl(id, 'write', { path, size: bytes.byteLength, overwrite }); }
+    catch (cause) { filePending.delete(id); reject(cause); }
+  });
+}
+
+async function sendUploadChunks(id, bytes) {
+  const length = bytes.byteLength;
+  if (!length) {
+    const message = new Uint8Array(6); message[0] = 5; new DataView(message.buffer).setUint32(1, id); message[5] = 1;
+    if (!send(message)) throw Error('Upload failed.');
+    return;
+  }
+  for (let offset = 0; offset < length; offset += 60000) {
+    while (socket?.bufferedAmount > 512 * 1024) await new Promise(resolve => setTimeout(resolve, 20));
+    const chunk = bytes.subarray(offset, Math.min(length, offset + 60000));
+    const message = new Uint8Array(chunk.length + 6);
+    message[0] = 5;
+    new DataView(message.buffer).setUint32(1, id);
+    message[5] = offset + chunk.length === length ? 1 : 0;
+    message.set(chunk, 6);
+    if (!send(message)) throw Error('Upload failed.');
+  }
+}
+
+function handleFileResponse(response) {
+  const pending = filePending.get(response.id);
+  if (!pending) return;
+  if (!response.ok) {
+    filePending.delete(response.id);
+    pending.reject(Error(response.error || 'File operation failed.'));
+    return;
+  }
+  pending.onJson(response);
+}
+
+function handleFileChunk(message) {
+  const id = new DataView(message.buffer, message.byteOffset, message.byteLength).getUint32(1);
+  const pending = filePending.get(id);
+  if (!pending?.chunks) return;
+  pending.chunks.push(message.slice(6));
+  if (!message[5]) return;
+  filePending.delete(id);
+  const length = pending.chunks.reduce((total, value) => total + value.length, 0);
+  const bytes = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of pending.chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+  pending.resolve({ meta: pending.meta, bytes });
+}
+
+function handleFileJsonChunk(message) {
+  const id = new DataView(message.buffer, message.byteOffset, message.byteLength).getUint32(1);
+  const pending = filePending.get(id);
+  if (!pending) return;
+  (pending.jsonChunks ||= []).push(message.slice(6));
+  if (!message[5]) return;
+  const length = pending.jsonChunks.reduce((total, value) => total + value.length, 0);
+  const bytes = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of pending.jsonChunks) { bytes.set(chunk, offset); offset += chunk.length; }
+  pending.jsonChunks = [];
+  handleFileResponse(JSON.parse(decoder.decode(bytes)));
+}
+
+function rejectFileRequests(message) {
+  for (const pending of filePending.values()) pending.reject(Error(message));
+  filePending.clear();
+}
+
+function fileFailure(cause) {
+  $('file-status').textContent = cause?.message || String(cause);
+}
+
+async function navigateTo(path, push = true) {
+  if (!outbound) { $('file-status').textContent = 'Connect to browse files.'; return; }
+  $('file-status').textContent = 'Loading…';
+  try {
+    const response = await fileRequest('list', { path: path || $('starting-directory').value.trim(), showHidden: $('show-hidden').checked });
+    currentPath = response.path;
+    directoryEntries = response.entries;
+    selectedEntry = undefined;
+    $('file-path').value = currentPath;
+    $('file-search').value = '';
+    if (push && historyPaths[historyIndex] !== currentPath) {
+      historyPaths = historyPaths.slice(0, historyIndex + 1);
+      historyPaths.push(currentPath);
+      historyIndex = historyPaths.length - 1;
+    }
+    renderDirectory();
+    updateNavigationButtons();
+    $('file-status').textContent = `${directoryEntries.length} item${directoryEntries.length === 1 ? '' : 's'} in ${currentPath}`;
+  } catch (cause) { fileFailure(cause); }
+}
+
+function renderDirectory() {
+  const body = $('file-list');
+  body.replaceChildren();
+  for (const item of directoryEntries) {
+    const row = document.createElement('tr');
+    row.tabIndex = 0;
+    row.dataset.path = item.path;
+    row.classList.toggle('selected', selectedEntry?.path === item.path);
+    const name = document.createElement('td');
+    name.textContent = `${item.kind === 'directory' ? '📁' : item.kind === 'symlink' ? '↗' : '📄'} ${item.name}`;
+    name.title = item.path;
+    const size = document.createElement('td'); size.className = 'size'; size.textContent = item.kind === 'directory' ? '—' : formatSize(item.size);
+    const modified = document.createElement('td'); modified.className = 'modified'; modified.textContent = item.modified ? new Date(item.modified).toLocaleString() : '—';
+    row.append(name, size, modified);
+    row.addEventListener('click', () => selectEntry(item));
+    row.addEventListener('dblclick', () => activateEntry(item));
+    row.addEventListener('keydown', event => { if (event.key === 'Enter') activateEntry(item); });
+    body.append(row);
+  }
+  $('file-empty').hidden = !!directoryEntries.length;
+  $('file-empty').textContent = $('file-search').value ? 'No matching files.' : 'This directory is empty.';
+  updateSelectionButtons();
+}
+
+function selectEntry(item) { selectedEntry = item; renderDirectory(); }
+function activateEntry(item) { if (item.kind === 'directory') navigateTo(item.path, true); else openFile(item.path); }
+function updateSelectionButtons() {
+  $('file-download').disabled = !selectedEntry || selectedEntry.kind === 'directory';
+  $('file-rename').disabled = !selectedEntry;
+  $('file-delete').disabled = !selectedEntry;
+}
+function updateNavigationButtons() {
+  $('file-back').disabled = historyIndex <= 0;
+  $('file-forward').disabled = historyIndex < 0 || historyIndex >= historyPaths.length - 1;
+  $('file-up').disabled = !currentPath || currentPath === '/';
+}
+function formatSize(value) {
+  if (value < 1024) return `${value} B`;
+  const units = ['KiB', 'MiB', 'GiB', 'TiB']; let amount = value;
+  for (const unit of units) { amount /= 1024; if (amount < 1024 || unit === units.at(-1)) return `${amount < 10 ? amount.toFixed(1) : Math.round(amount)} ${unit}`; }
+}
+function baseName(path) { return path.split('/').filter(Boolean).at(-1) || '/'; }
+function parentPath(path) { const parts = path.split('/').filter(Boolean); parts.pop(); return `/${parts.join('/')}`; }
+
+async function searchFiles() {
+  const query = $('file-search').value.trim();
+  if (!query) { await navigateTo(currentPath, false); return; }
+  try {
+    $('file-status').textContent = `Searching ${currentPath}…`;
+    const response = await fileRequest('search', { path: currentPath, query, showHidden: $('show-hidden').checked });
+    if ($('file-search').value.trim() !== query) return;
+    directoryEntries = response.entries;
+    selectedEntry = undefined;
+    renderDirectory();
+    $('file-status').textContent = `${directoryEntries.length} result${directoryEntries.length === 1 ? '' : 's'} for “${query}”`;
+  } catch (cause) { fileFailure(cause); }
+}
+
+async function refreshFiles(automatic = false) {
+  if (!currentPath || $('file-search').value) return;
+  await navigateTo(currentPath, false);
+  const tab = fileTabs.get(activeFileTab);
+  if (automatic && tab && !tab.dirty) await openFile(tab.path, true);
+}
+
+const textExtensions = new Set(['txt','md','markdown','js','mjs','cjs','ts','tsx','jsx','json','html','htm','css','scss','xml','svg','yml','yaml','toml','ini','conf','cfg','sh','bash','zsh','fish','py','rb','rs','go','java','c','h','cpp','hpp','cs','php','sql','log','env','gitignore']);
+const imageExtensions = new Set(['png','jpg','jpeg','gif','webp','avif','bmp','ico','svg']);
+const videoExtensions = new Set(['mp4','webm','ogv','mov','m4v']);
+function extension(path) { const name = baseName(path); return name.includes('.') ? name.split('.').at(-1).toLowerCase() : ''; }
+function likelyText(path, bytes) {
+  if (bytes.length > TEXT_EDITOR_LIMIT || bytes.subarray(0, 8192).includes(0)) return false;
+  if (textExtensions.has(extension(path))) return true;
+  try { fatalDecoder.decode(bytes); return true; } catch { return false; }
+}
+function languageFor(path) {
+  const ext = extension(path);
+  if (ext === 'json') return json();
+  if (['js','mjs','cjs','ts','tsx','jsx'].includes(ext)) return javascript({ typescript: ['ts','tsx'].includes(ext), jsx: ['jsx','tsx'].includes(ext) });
+  if (['html','htm'].includes(ext)) return html();
+  if (['css','scss'].includes(ext)) return css();
+  if (['md','markdown'].includes(ext)) return markdown();
+  return [];
+}
+
+const fileViewers = [
+  { name: 'image', supports: tab => imageExtensions.has(extension(tab.path)), render: renderImageViewer },
+  { name: 'video', supports: tab => videoExtensions.has(extension(tab.path)), render: renderVideoViewer },
+  { name: 'text', supports: tab => likelyText(tab.path, tab.bytes), render: renderTextEditor },
+  { name: 'generic', supports: () => true, render: renderGenericViewer },
+];
+
+async function openFile(path, force = false) {
+  const existing = fileTabs.get(path);
+  if (existing && !force) { activateFileTab(path); return; }
+  try {
+    $('file-status').textContent = `Opening ${path}…`;
+    const result = await readFile(path);
+    if (existing && force) {
+      if (existing.modified === result.meta.modified && existing.bytes.length === result.bytes.length) return;
+      existing.bytes = result.bytes; existing.modified = result.meta.modified;
+      if (existing.viewer === 'text') existing.text = decoder.decode(result.bytes);
+      renderTabContent(existing);
+      $('file-status').textContent = `${baseName(path)} refreshed after an external change.`;
+      return;
+    }
+    const tab = { path, name: baseName(path), bytes: result.bytes, modified: result.meta.modified, dirty: false, view: null, node: null, url: null };
+    fileTabs.set(path, tab);
+    renderTabContent(tab);
+    renderTabs();
+    activateFileTab(path);
+    $('file-status').textContent = `${tab.name} · ${formatSize(tab.bytes.length)}`;
+  } catch (cause) { fileFailure(cause); }
+}
+
+function createViewerShell(tab, save = false) {
+  const root = document.createElement('div'); root.className = 'viewer';
+  const actions = document.createElement('div'); actions.className = 'viewer-actions';
+  const path = document.createElement('span'); path.className = 'viewer-path'; path.textContent = tab.path; path.title = tab.path;
+  actions.append(path);
+  if (save) {
+    const button = document.createElement('button'); button.textContent = 'Save'; button.addEventListener('click', () => saveTab(tab)); actions.append(button); tab.saveButton = button;
+  }
+  const download = document.createElement('button'); download.textContent = 'Download'; download.addEventListener('click', () => downloadTab(tab)); actions.append(download);
+  const body = document.createElement('div'); body.className = 'viewer-body';
+  root.append(actions, body);
+  return { root, body };
+}
+
+function renderTabContent(tab) {
+  tab.view?.destroy(); tab.view = null;
+  if (tab.url) URL.revokeObjectURL(tab.url);
+  tab.node?.remove();
+  const provider = fileViewers.find(value => value.supports(tab));
+  tab.viewer = provider.name;
+  tab.node = provider.render(tab);
+  tab.node.dataset.path = tab.path;
+  tab.node.hidden = activeFileTab !== tab.path;
+  $('viewer-view').append(tab.node);
+}
+
+function renderTextEditor(tab) {
+  const shell = createViewerShell(tab, true);
+  const host = document.createElement('div'); host.className = 'editor-host'; shell.body.append(host);
+  const text = tab.text ?? decoder.decode(tab.bytes); tab.text = text;
+  const extensions = [
+    history(), drawSelection(), highlightActiveLine(), syntaxHighlighting(defaultHighlightStyle, { fallback: true }), languageFor(tab.path),
+    keymap.of([{ key: 'Mod-s', preventDefault: true, run: () => { saveTab(tab); return true; } }, indentWithTab, ...defaultKeymap, ...historyKeymap]),
+    EditorView.updateListener.of(update => { if (update.docChanged) { tab.text = update.state.doc.toString(); setTabDirty(tab, true); } }),
+    EditorView.theme({ '&': { backgroundColor: '#101820', color: '#e4edf2' }, '.cm-content': { caretColor: '#7fdbc5' }, '.cm-gutters': { backgroundColor: '#17232c', color: '#8399a4', border: 'none' }, '&.cm-focused .cm-cursor': { borderLeftColor: '#7fdbc5' }, '.cm-activeLine,.cm-activeLineGutter': { backgroundColor: '#1d2b34' } }, { dark: true }),
+  ];
+  if ($('editor-line-numbers').checked) extensions.push(lineNumbers());
+  if ($('editor-wrap').checked) extensions.push(EditorView.lineWrapping);
+  tab.view = new EditorView({ state: EditorState.create({ doc: text, extensions }), parent: host });
+  return shell.root;
+}
+
+function renderImageViewer(tab) {
+  const shell = createViewerShell(tab);
+  tab.url = URL.createObjectURL(new Blob([tab.bytes]));
+  const image = document.createElement('img'); image.src = tab.url; image.alt = tab.name; shell.body.append(image); return shell.root;
+}
+function renderVideoViewer(tab) {
+  const shell = createViewerShell(tab);
+  tab.url = URL.createObjectURL(new Blob([tab.bytes]));
+  const video = document.createElement('video'); video.src = tab.url; video.controls = true; video.playsInline = true; shell.body.append(video); return shell.root;
+}
+function renderGenericViewer(tab) {
+  const shell = createViewerShell(tab);
+  const message = document.createElement('div'); message.className = 'viewer-message'; message.textContent = `No inline viewer is registered for this ${formatSize(tab.bytes.length)} file. Download it to open it in another app.`; shell.body.append(message); return shell.root;
+}
+
+function renderTabs() {
+  const bar = $('file-tabs');
+  for (const button of [...bar.querySelectorAll('[data-tab]:not([data-tab=browser])')]) button.remove();
+  for (const tab of fileTabs.values()) {
+    const button = document.createElement('button'); button.className = 'file-tab'; button.dataset.tab = tab.path; button.title = tab.path;
+    const name = document.createElement('span'); name.className = 'file-tab-name'; name.textContent = tab.name;
+    const dirty = document.createElement('span'); dirty.className = 'tab-dirty'; dirty.textContent = tab.dirty ? '●' : '';
+    const close = document.createElement('span'); close.className = 'tab-close'; close.textContent = '×'; close.setAttribute('role', 'button'); close.setAttribute('aria-label', `Close ${tab.name}`);
+    close.addEventListener('click', event => { event.stopPropagation(); closeFileTab(tab.path); });
+    button.append(name, dirty, close); button.addEventListener('click', () => activateFileTab(tab.path)); bar.append(button);
+  }
+  updateActiveTabClasses();
+}
+
+function activateFileTab(path) {
+  activeFileTab = path;
+  $('browser-view').classList.toggle('active', path === 'browser');
+  $('viewer-view').classList.toggle('active', path !== 'browser');
+  for (const tab of fileTabs.values()) if (tab.node) tab.node.hidden = tab.path !== path;
+  updateActiveTabClasses();
+  fileTabs.get(path)?.view?.focus();
+}
+function updateActiveTabClasses() { for (const button of $('file-tabs').querySelectorAll('[data-tab]')) button.classList.toggle('active', button.dataset.tab === activeFileTab); }
+function closeFileTab(path) {
+  const tab = fileTabs.get(path); if (!tab) return;
+  if (tab.dirty && !confirm(`Discard unsaved changes to ${tab.name}?`)) return;
+  tab.view?.destroy(); if (tab.url) URL.revokeObjectURL(tab.url); tab.node?.remove(); fileTabs.delete(path);
+  if (activeFileTab === path) activateFileTab('browser');
+  renderTabs();
+}
+function setTabDirty(tab, dirty) {
+  if (tab.dirty === dirty) return;
+  tab.dirty = dirty;
+  if (tab.saveButton) tab.saveButton.disabled = !dirty;
+  renderTabs();
+}
+async function saveTab(tab) {
+  try {
+    tab.saveButton.disabled = true; $('file-status').textContent = `Saving ${tab.path}…`;
+    const bytes = encoder.encode(tab.text ?? '');
+    await uploadBytes(tab.path, bytes, true);
+    tab.bytes = bytes; setTabDirty(tab, false); $('file-status').textContent = `${tab.name} saved.`;
+    await navigateTo(currentPath, false);
+  } catch (cause) { setTabDirty(tab, true); fileFailure(cause); }
+}
+function downloadBlob(path, bytes) {
+  const url = URL.createObjectURL(new Blob([bytes])); const link = document.createElement('a'); link.href = url; link.download = baseName(path); link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function downloadTab(tab) { downloadBlob(tab.path, tab.viewer === 'text' ? encoder.encode(tab.text) : tab.bytes); }
+function updateEditorConfiguration() { for (const tab of fileTabs.values()) if (tab.viewer === 'text') renderTabContent(tab); }
+
+$('files').onclick = () => setPanelVisible(!document.body.classList.contains('panel-visible'));
+$('file-close').onclick = () => setPanelVisible(false);
+$('file-tabs').querySelector('[data-tab=browser]').onclick = () => activateFileTab('browser');
+$('file-go').onclick = () => navigateTo($('file-path').value.trim(), true);
+$('file-path').addEventListener('keydown', event => { if (event.key === 'Enter') navigateTo($('file-path').value.trim(), true); });
+$('file-refresh').onclick = () => refreshFiles(false);
+$('file-up').onclick = () => navigateTo(parentPath(currentPath), true);
+$('file-back').onclick = () => { if (historyIndex > 0) { historyIndex--; navigateTo(historyPaths[historyIndex], false); } };
+$('file-forward').onclick = () => { if (historyIndex < historyPaths.length - 1) { historyIndex++; navigateTo(historyPaths[historyIndex], false); } };
+$('file-search').addEventListener('input', () => { clearTimeout(fileSearchTimer); fileSearchTimer = setTimeout(searchFiles, 350); });
+$('show-hidden').addEventListener('change', () => { if (currentPath && outbound) navigateTo(currentPath, false); });
+$('file-new-folder').onclick = async () => {
+  const name = prompt('New folder name:'); if (!name) return;
+  try { await fileRequest('mkdir', { path: `${currentPath}/${name}` }); await navigateTo(currentPath, false); } catch (cause) { fileFailure(cause); }
+};
+$('file-upload').onclick = () => $('file-upload-input').click();
+$('file-upload-input').addEventListener('change', async () => {
+  for (const file of $('file-upload-input').files) {
+    const path = `${currentPath}/${file.name}`;
+    try { $('file-status').textContent = `Uploading ${file.name}…`; await uploadBytes(path, new Uint8Array(await file.arrayBuffer()), false); }
+    catch (cause) {
+      if (cause.message.includes('already exists') && confirm(`${file.name} already exists. Replace it?`)) {
+        try { await uploadBytes(path, new Uint8Array(await file.arrayBuffer()), true); } catch (retryCause) { fileFailure(retryCause); break; }
+      } else { fileFailure(cause); break; }
+    }
+  }
+  $('file-upload-input').value = ''; await navigateTo(currentPath, false);
+});
+$('file-download').onclick = async () => {
+  if (!selectedEntry) return;
+  try { $('file-status').textContent = `Downloading ${selectedEntry.name}…`; const result = await readFile(selectedEntry.path); downloadBlob(selectedEntry.path, result.bytes); $('file-status').textContent = `${selectedEntry.name} downloaded.`; } catch (cause) { fileFailure(cause); }
+};
+$('file-rename').onclick = async () => {
+  if (!selectedEntry) return; const name = prompt('New name:', selectedEntry.name); if (!name || name === selectedEntry.name) return;
+  try { await fileRequest('rename', { path: selectedEntry.path, newPath: name }); await navigateTo(currentPath, false); } catch (cause) { fileFailure(cause); }
+};
+$('file-delete').onclick = async () => {
+  if (!selectedEntry) return;
+  if ($('confirm-delete').checked && !confirm(`Delete ${selectedEntry.name}${selectedEntry.kind === 'directory' ? ' and everything inside it' : ''}? This cannot be undone.`)) return;
+  try { await fileRequest('delete', { path: selectedEntry.path, recursive: selectedEntry.kind === 'directory' }); closeFileTab(selectedEntry.path); await navigateTo(currentPath, false); } catch (cause) { fileFailure(cause); }
+};
 
 $('start-connection').onclick = async () => {
   if (!applySettings()) return;
@@ -490,10 +972,12 @@ $('start-connection').onclick = async () => {
         outbound = new Cipher(handshake.tx);
         inbound = new Cipher(handshake.rx);
         awaitingHandshake = false;
-        if (!send(encoder.encode('eya-ready-v2'))) throw Error('Could not confirm the encrypted connection');
+        if (!send(encoder.encode('eya-ready-v3'))) throw Error('Could not confirm the encrypted connection');
         status('Connected');
         resize();
         terminal.focus();
+        if (document.body.classList.contains('panel-visible')) navigateTo($('starting-directory').value.trim(), true);
+        restartFileRefresh();
         if (connection.command) sendInput(connection.command.replace(/\r?\n/g, '\r') + (/[\r\n]$/.test(connection.command) ? '' : '\r'));
         pingTimer = setInterval(() => {
           const message = new Uint8Array(9);
@@ -521,6 +1005,12 @@ $('start-connection').onclick = async () => {
           const sample = Math.max(0, performance.now() - sent);
           rtt = Math.round(rtt * 0.75 + sample * 0.25);
           $('latency').textContent = `${Math.round(sample)} ms`;
+        } else if (message[0] === 4) {
+          handleFileResponse(JSON.parse(decoder.decode(message.subarray(1))));
+        } else if (message[0] === 5 && message.length >= 6) {
+          handleFileChunk(message);
+        } else if (message[0] === 6 && message.length >= 6) {
+          handleFileJsonChunk(message);
         } else throw Error('Unexpected server message');
       }
     } catch {
@@ -539,6 +1029,8 @@ $('start-connection').onclick = async () => {
     if (socket === current) {
       clearInterval(pingTimer);
       clearLocalEcho();
+      rejectFileRequests('The connection closed.');
+      clearInterval(fileRefreshTimer);
       $('latency').textContent = '';
       outbound = inbound = null;
       if (awaitingHandshake && !failed) {

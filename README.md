@@ -1,6 +1,6 @@
 # Eya
 
-Eya is a single-user browser terminal for a Linux host. The client is one self-contained HTML file. It connects over a WebSocket and uses the Noise `NNpsk0` handshake and encrypted transport with a shared password. The password authenticates both ends; terminal input, output and resizing are encrypted even on `ws://`.
+Eya is a single-user browser terminal and file workspace for a Linux host. The client is one self-contained HTML file. It connects over a WebSocket and uses the Noise `NNpsk0` handshake and encrypted transport with a shared password. The password authenticates both ends; terminal traffic, file operations, uploads, and downloads are encrypted even on `ws://`.
 
 ## Run with Docker and a host terminal
 
@@ -67,9 +67,13 @@ The generated HTML contains the shared password and any default command in reada
 
 The header keeps Connect available at all times, with connection details in a separate panel from terminal settings. The settings include font size, scrollback, theme, cursor style and blinking, whether typing returns to the bottom, and adaptive local echo. Adaptive echo waits for the measured network latency and only predicts printable one-cell ASCII input while viewing live output; it is off by default because it can still expose typed characters when an application is asking for a password. Disable it before entering secrets or using applications with custom input. The terminal is cleared before every new connection. Output flow control bounds buffering on slow clients and a latency indicator reports round-trip time; these do not provide mosh-style roaming or reconnect. Sessions still terminate on disconnect.
 
-On touch devices and narrow screens, a fixed non-scrolling bar sits above the software keyboard with Esc, Tab, sticky Ctrl, Paste, and a direction pad. Drag the pad toward an arrow to send it once; continue holding to repeat it. In the terminal, ordinary touch drags scroll, while a long press followed by a drag selects text. Releasing opens a Copy/Paste/Select-all/Clear menu; right-click opens the same menu on desktop.
+The **Files** button opens a tabbed file workspace next to or above the terminal. It supports directory history, direct path navigation, recursive name search, hidden files, folder creation, upload, download, rename, recursive deletion, and automatic refresh. Opening a text file creates a CodeMirror editor tab with syntax support and `Ctrl`/`Cmd`+`S`; supported images and videos use the browser's native viewers. Other formats receive a safe generic view with a download action. The panel visibility, side-by-side/stacked split, size, initial directory, refresh interval, hidden-file behavior, editor wrapping, line numbers, and delete confirmation are persisted in searchable settings. See [docs/file-manager.md](docs/file-manager.md) for the complete guide and extension notes.
 
-The shell runs directly on the host as the native Eya server user or the Docker `EYA_HOST_USER`. Anyone with the generated client and shared password can act as that user, so use a strong unique password, restrict network access, and do not select root. Sessions end on disconnect; use the host's `tmux` for processes you want to reconnect to. A reverse proxy should use an idle timeout suitable for interactive sessions.
+File operations have the permissions of the native Eya server account. In Docker host mode, Eya reaches the host through `/proc/EYA_HOST_PID/root` while applying the UID, primary group, and supplementary groups resolved for `EYA_HOST_USER`, so terminal and file access share the same host identity. The privileged container must still be treated as full host control and exposed only to trusted users. `EYA_MAX_FILE_BYTES` sets the maximum size of one opened, uploaded, or downloaded file in bytes and defaults to 256 MiB.
+
+On touch devices and narrow screens, a fixed non-scrolling bar sits above the software keyboard with Esc, Tab, sticky Ctrl, Paste, and a direction pad. Drag the pad toward an arrow to send it once; continue holding to repeat it. In the terminal, ordinary touch drags scroll, while a long press followed by a drag selects text. Releasing opens a Copy/Paste/Select-all/Clear menu; right-click opens the same menu on desktop. The file workspace uses the full available area on small screens and restores the terminal when closed. Inputs use a mobile-safe size so focusing path, search, settings, and editor controls does not trigger browser auto-zoom.
+
+The shell runs directly on the host as the native Eya server user or the Docker `EYA_HOST_USER`. Anyone with the generated client and shared password can run terminal commands and use the file service, so use a strong unique password, restrict network access, and do not select root. Sessions end on disconnect; use the host's `tmux` for processes you want to reconnect to. A reverse proxy should use an idle timeout suitable for interactive sessions and file transfers.
 
 ## Development
 
@@ -92,4 +96,8 @@ NODE_PATH=client/node_modules client/node_modules/.bin/esbuild tests/noise-clien
 node tests/noise-client.bundle.cjs
 node tests/noise-client.bundle.cjs bad-key
 node tests/noise-client.bundle.cjs tamper
+NODE_PATH=client/node_modules client/node_modules/.bin/esbuild tests/file-protocol.js --bundle --platform=browser --format=iife --outfile=tests/file-protocol.bundle.cjs
+node tests/file-protocol.bundle.cjs
 ```
+
+Set `EYA_BROWSER_EXECUTABLE` to a Chromium-family browser and `NODE_PATH=client/node_modules` to run `tests/browser.cjs`, `tests/mobile.cjs`, and `tests/file-browser.cjs`. The file-browser test also needs `EYA_TEST_ROOT` pointing to the server's test working directory containing `seed.txt`. These cover the standalone client, responsive touch controls, mobile file layout and input sizing, CodeMirror saves, transfer actions, navigation, search, and searchable settings.

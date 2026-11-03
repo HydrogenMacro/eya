@@ -32,6 +32,17 @@ const path = require('node:path');
     const barLayout = await bar.evaluate(element => ({ clientWidth: element.clientWidth, scrollWidth: element.scrollWidth, bottom: element.getBoundingClientRect().bottom, viewport: innerHeight }));
     if (barLayout.scrollWidth > barLayout.clientWidth || Math.abs(barLayout.bottom - barLayout.viewport) > 2) throw Error(`Mobile key bar layout is invalid: ${JSON.stringify(barLayout)}`);
 
+    await page.locator('#files').click();
+    await page.locator('#file-list tr').first().waitFor({ timeout: 5000 });
+    const panelLayout = await page.locator('#file-panel').evaluate(element => {
+      const rect = element.getBoundingClientRect();
+      const inputSizes = [...element.querySelectorAll('input')].filter(input => !input.hidden).map(input => parseFloat(getComputedStyle(input).fontSize));
+      return { left: rect.left, right: rect.right, viewport: innerWidth, terminalVisible: getComputedStyle(document.querySelector('#terminal-pane')).display !== 'none', keybarVisible: getComputedStyle(document.querySelector('#keybar')).display !== 'none', inputSizes };
+    });
+    if (panelLayout.terminalVisible || panelLayout.keybarVisible || panelLayout.left > 5 || panelLayout.right < panelLayout.viewport - 5 || panelLayout.inputSizes.some(size => size < 16)) throw Error(`Mobile file panel layout is invalid: ${JSON.stringify(panelLayout)}`);
+    await page.locator('#file-close').click();
+    if (!await bar.isVisible()) throw Error('Mobile key bar was not restored after closing Files');
+
     async function typeCommand(command) {
       await page.locator('#terminal').click();
       await page.keyboard.type(command);
@@ -88,7 +99,7 @@ const path = require('node:path');
 
     await page.locator('#terminal').dispatchEvent('contextmenu', { clientX: 20, clientY: 20, button: 2 });
     await page.locator('#terminal-menu').waitFor({ state: 'visible' });
-    console.log('Mobile key bar, Ctrl, paste, joystick arrows, touch selection and context menu passed');
+    console.log('Mobile file workspace, safe input sizing, key bar, Ctrl, paste, joystick arrows, touch selection and context menu passed');
   } finally {
     await browser.close();
   }

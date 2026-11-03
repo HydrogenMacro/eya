@@ -1,3 +1,5 @@
+mod files;
+
 use axum::{
     Router,
     extract::{
@@ -11,6 +13,7 @@ use futures_util::{SinkExt, StreamExt};
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use sha2::{Digest, Sha256};
 use std::{
+    collections::HashMap,
     env,
     ffi::OsString,
     io::{self, Read, Write},
@@ -19,6 +22,7 @@ use std::{
     time::Duration,
 };
 use tokio::{
+    io::AsyncReadExt,
     sync::{Semaphore, mpsc},
     time::timeout,
 };
@@ -32,6 +36,7 @@ struct App {
     key: Arc<[u8; 32]>,
     slots: Arc<Semaphore>,
     terminal: Arc<CommandBuilder>,
+    files: Arc<files::FileManager>,
 }
 
 #[tokio::main]
@@ -42,6 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let key = derive_key(&key);
     let terminal = terminal_command()?;
+    let files = files::FileManager::from_env()?;
     // A session has the privileges of this host process, so do not expose it to
     // the network unless the operator explicitly opts in with EYA_BIND.
     let bind = env::var("EYA_BIND").unwrap_or_else(|_| "127.0.0.1:8080".into());
@@ -49,6 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         key: Arc::new(key),
         slots: Arc::new(Semaphore::new(8)),
         terminal: Arc::new(terminal),
+        files: Arc::new(files),
     };
     let router = Router::new()
         .route("/", get(|| async { Html(GENERATOR) }))
@@ -96,7 +103,13 @@ async fn session(socket: WebSocket, app: App) {
     };
     if let Err(err) = timeout(
         Duration::from_secs(10),
-        handshake_and_run(socket, app.key.clone(), app.terminal.clone(), slot),
+        handshake_and_run(
+            socket,
+            app.key.clone(),
+            app.terminal.clone(),
+            app.files.clone(),
+            slot,
+        ),
     )
     .await
     {
@@ -107,6 +120,7 @@ async fn handshake_and_run(
     mut socket: WebSocket,
     key: Arc<[u8; 32]>,
     terminal: Arc<CommandBuilder>,
+    files: Arc<files::FileManager>,
     slot: tokio::sync::OwnedSemaphorePermit,
 ) {
     let Ok(params) = PROTOCOL.parse() else { return };
@@ -146,13 +160,13 @@ async fn handshake_and_run(
     };
     let flow_control = match &buf[..n] {
         b"eya-ready" => false,
-        b"eya-ready-v2" => true,
+        b"eya-ready-v2" | b"eya-ready-v3" => true,
         _ => return,
     };
     // The timeout applies to the handshake only, not the interactive session.
     tokio::spawn(async move {
         let _slot = slot;
-        run_terminal(socket, noise, flow_control, terminal).await;
+        run_terminal(socket, noise, flow_control, terminal, files).await;
     });
 }
 async fn run_terminal(
@@ -160,6 +174,7 @@ async fn run_terminal(
     mut noise: snow::TransportState,
     flow_control: bool,
     terminal: Arc<CommandBuilder>,
+    files: Arc<files::FileManager>,
 ) {
     let pty = native_pty_system();
     let Ok(pair) = pty.openpty(PtySize {
@@ -201,6 +216,7 @@ async fn run_terminal(
     let mut plain = vec![0u8; 65535];
     let mut cipher = vec![0u8; 65535];
     let mut outstanding = 0usize;
+    let mut uploads = HashMap::<u32, files::Upload>::new();
     loop {
         tokio::select! {
             msg = receiver.next() => match msg {
@@ -212,6 +228,28 @@ async fn run_terminal(
                         1 if n == 5 => { let cols = u16::from_be_bytes([plain[1], plain[2]]); let rows = u16::from_be_bytes([plain[3], plain[4]]); if cols > 0 && rows > 0 && cols <= 1000 && rows <= 1000 { let _ = pair.master.resize(PtySize { cols, rows, pixel_width: 0, pixel_height: 0 }); } },
                         2 if flow_control && n == 5 => { let ack = u32::from_be_bytes([plain[1], plain[2], plain[3], plain[4]]) as usize; if ack > outstanding { break; } outstanding -= ack; },
                         3 if flow_control && n == 9 => { let Ok(size) = noise.write_message(&plain[..n], &mut cipher) else { break }; if sender.send(Message::Binary(cipher[..size].to_vec().into())).await.is_err() { break; } },
+                        4 if flow_control => {
+                            if handle_file_request(&plain[1..n], &files, &mut uploads, &mut sender, &mut noise, &mut cipher).await.is_err() { break; }
+                        },
+                        5 if flow_control && n >= 6 => {
+                            let id = u32::from_be_bytes([plain[1], plain[2], plain[3], plain[4]]);
+                            let final_chunk = plain[5] != 0;
+                            let Some(mut upload) = uploads.remove(&id) else {
+                                if send_file_error(id, "upload is not active", &mut sender, &mut noise, &mut cipher).await.is_err() { break; }
+                                continue;
+                            };
+                            if let Err(err) = upload.write(&plain[6..n]).await {
+                                upload.cancel().await;
+                                if send_file_error(id, &err.to_string(), &mut sender, &mut noise, &mut cipher).await.is_err() { break; }
+                            } else if final_chunk {
+                                match upload.finish().await {
+                                    Ok(()) => if send_file_json(serde_json::json!({"id": id, "ok": true, "op": "write", "done": true}), &mut sender, &mut noise, &mut cipher).await.is_err() { break; },
+                                    Err(err) => if send_file_error(id, &err.to_string(), &mut sender, &mut noise, &mut cipher).await.is_err() { break; },
+                                }
+                            } else {
+                                uploads.insert(id, upload);
+                            }
+                        },
                         _ => break,
                     }
                 },
@@ -243,6 +281,9 @@ async fn run_terminal(
             }
         }
     }
+    for (_, upload) in uploads {
+        upload.cancel().await;
+    }
     // Signal the PTY's foreground job as well as the shell. Detached tmux servers
     // have their own process group and can outlive this connection.
     if let Some(group) = pair.master.process_group_leader()
@@ -254,6 +295,169 @@ async fn run_terminal(
     }
     let _ = child.kill();
     let _ = child.wait();
+}
+
+async fn handle_file_request(
+    data: &[u8],
+    files: &files::FileManager,
+    uploads: &mut HashMap<u32, files::Upload>,
+    sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
+    noise: &mut snow::TransportState,
+    cipher: &mut [u8],
+) -> io::Result<()> {
+    let request: serde_json::Value =
+        serde_json::from_slice(data).map_err(|_| invalid_config("invalid file request"))?;
+    let id = request
+        .get("id")
+        .and_then(|value| value.as_u64())
+        .and_then(|value| u32::try_from(value).ok())
+        .ok_or_else(|| invalid_config("invalid file request id"))?;
+    let op = request
+        .get("op")
+        .and_then(|value| value.as_str())
+        .unwrap_or("");
+    let path = request
+        .get("path")
+        .and_then(|value| value.as_str())
+        .unwrap_or("");
+    let result: io::Result<()> = async {
+        match op {
+            "list" => {
+                let show_hidden = request.get("showHidden").and_then(|value| value.as_bool()).unwrap_or(false);
+                let (path, entries) = files.list(path, show_hidden).await?;
+                let entries: Vec<_> = entries.into_iter().map(files::Entry::into_json).collect();
+                send_file_json(serde_json::json!({"id": id, "ok": true, "op": op, "path": path, "entries": entries, "initial": files.initial()}), sender, noise, cipher).await
+            }
+            "search" => {
+                let query = request.get("query").and_then(|value| value.as_str()).unwrap_or("");
+                let show_hidden = request.get("showHidden").and_then(|value| value.as_bool()).unwrap_or(false);
+                let (path, entries) = files.search(path, query, show_hidden).await?;
+                let entries: Vec<_> = entries.into_iter().map(files::Entry::into_json).collect();
+                send_file_json(serde_json::json!({"id": id, "ok": true, "op": op, "path": path, "query": query, "entries": entries}), sender, noise, cipher).await
+            }
+            "mkdir" => {
+                let path = files.mkdir(path).await?;
+                send_file_json(serde_json::json!({"id": id, "ok": true, "op": op, "path": path}), sender, noise, cipher).await
+            }
+            "rename" => {
+                let new_path = request.get("newPath").and_then(|value| value.as_str()).ok_or_else(|| invalid_config("newPath is required"))?;
+                let path = files.rename(path, new_path).await?;
+                send_file_json(serde_json::json!({"id": id, "ok": true, "op": op, "path": path}), sender, noise, cipher).await
+            }
+            "delete" => {
+                let recursive = request.get("recursive").and_then(|value| value.as_bool()).unwrap_or(false);
+                files.remove(path, recursive).await?;
+                send_file_json(serde_json::json!({"id": id, "ok": true, "op": op}), sender, noise, cipher).await
+            }
+            "read" => {
+                let (logical, metadata) = files.metadata(path).await?;
+                if !metadata.is_file() { return Err(invalid_config("only regular files can be opened")); }
+                if metadata.len() > files.max_file_bytes { return Err(invalid_config("file exceeds the configured transfer limit")); }
+                send_file_json(serde_json::json!({"id": id, "ok": true, "op": op, "path": logical, "size": metadata.len(), "modified": metadata.modified().ok().and_then(|value| value.duration_since(std::time::UNIX_EPOCH).ok()).and_then(|value| u64::try_from(value.as_millis()).ok()).unwrap_or(0)}), sender, noise, cipher).await?;
+                let mut file = files.open(path).await?;
+                let mut buffer = vec![0u8; 60_000];
+                if metadata.len() == 0 { send_file_chunk(id, true, &[], sender, noise, cipher).await?; }
+                let mut remaining = metadata.len();
+                while remaining > 0 {
+                    let read = file.read(&mut buffer).await?;
+                    if read == 0 { return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "file changed while it was being read")); }
+                    remaining -= read as u64;
+                    send_file_chunk(id, remaining == 0, &buffer[..read], sender, noise, cipher).await?;
+                }
+                Ok(())
+            }
+            "write" => {
+                let size = request.get("size").and_then(|value| value.as_u64()).ok_or_else(|| invalid_config("upload size is required"))?;
+                let overwrite = request.get("overwrite").and_then(|value| value.as_bool()).unwrap_or(false);
+                if uploads.contains_key(&id) { return Err(invalid_config("upload id is already active")); }
+                let upload = files.begin_upload(id, path, size, overwrite).await?;
+                uploads.insert(id, upload);
+                send_file_json(serde_json::json!({"id": id, "ok": true, "op": op, "ready": true}), sender, noise, cipher).await
+            }
+            _ => Err(invalid_config("unsupported file operation")),
+        }
+    }.await;
+    if let Err(err) = result {
+        send_file_error(id, &err.to_string(), sender, noise, cipher).await?;
+    }
+    Ok(())
+}
+
+async fn send_file_error(
+    id: u32,
+    message: &str,
+    sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
+    noise: &mut snow::TransportState,
+    cipher: &mut [u8],
+) -> io::Result<()> {
+    send_file_json(
+        serde_json::json!({"id": id, "ok": false, "error": message}),
+        sender,
+        noise,
+        cipher,
+    )
+    .await
+}
+
+async fn send_file_json(
+    value: serde_json::Value,
+    sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
+    noise: &mut snow::TransportState,
+    cipher: &mut [u8],
+) -> io::Result<()> {
+    let data = serde_json::to_vec(&value)?;
+    if data.len() > 60_000 {
+        let id = value
+            .get("id")
+            .and_then(|value| value.as_u64())
+            .and_then(|value| u32::try_from(value).ok())
+            .ok_or_else(|| invalid_config("chunked response has no request id"))?;
+        let chunk_count = data.len().div_ceil(60_000);
+        for (index, chunk) in data.chunks(60_000).enumerate() {
+            let mut message = Vec::with_capacity(chunk.len() + 6);
+            message.push(6);
+            message.extend_from_slice(&id.to_be_bytes());
+            message.push((index + 1 == chunk_count) as u8);
+            message.extend_from_slice(chunk);
+            send_encrypted(&message, sender, noise, cipher).await?;
+        }
+        return Ok(());
+    }
+    let mut message = Vec::with_capacity(data.len() + 1);
+    message.push(4);
+    message.extend_from_slice(&data);
+    send_encrypted(&message, sender, noise, cipher).await
+}
+
+async fn send_file_chunk(
+    id: u32,
+    final_chunk: bool,
+    data: &[u8],
+    sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
+    noise: &mut snow::TransportState,
+    cipher: &mut [u8],
+) -> io::Result<()> {
+    let mut message = Vec::with_capacity(data.len() + 6);
+    message.push(5);
+    message.extend_from_slice(&id.to_be_bytes());
+    message.push(final_chunk as u8);
+    message.extend_from_slice(data);
+    send_encrypted(&message, sender, noise, cipher).await
+}
+
+async fn send_encrypted(
+    data: &[u8],
+    sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
+    noise: &mut snow::TransportState,
+    cipher: &mut [u8],
+) -> io::Result<()> {
+    let size = noise
+        .write_message(data, cipher)
+        .map_err(|_| invalid_config("could not encrypt file response"))?;
+    sender
+        .send(Message::Binary(cipher[..size].to_vec().into()))
+        .await
+        .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "connection closed"))
 }
 
 fn terminal_command() -> io::Result<CommandBuilder> {
