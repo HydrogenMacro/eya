@@ -1,0 +1,12 @@
+FROM node:24-alpine3.22
+RUN apk add --no-cache chromium font-dejavu
+WORKDIR /app
+COPY client/package*.json ./client/
+RUN npm ci --prefix client --ignore-scripts
+COPY client/ ./client/
+RUN node client/build.mjs
+COPY tests/ ./tests/
+ENV NODE_PATH=/app/client/node_modules \
+    EYA_BROWSER_EXECUTABLE=/usr/bin/chromium-browser \
+    EYA_BROWSER_NO_SANDBOX=1 \
+    EYA_TEST_FONT=/usr/share/fonts/dejavu/DejaVuSansMono.ttf

@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 const { pathToFileURL } = require('node:url');
 const path = require('node:path');
 (async () => {
-  const browser = await chromium.launch({headless: true, executablePath: process.env.EYA_BROWSER_EXECUTABLE});
+  const browser = await chromium.launch({headless: true, executablePath: process.env.EYA_BROWSER_EXECUTABLE, args: process.env.EYA_BROWSER_NO_SANDBOX ? ['--no-sandbox'] : []});
   const page = await browser.newPage();
   page.on('pageerror', error => console.error('Page error:', error));
   await page.goto(pathToFileURL(path.resolve('client.html')).href);

@@ -3,6 +3,10 @@ import Cipher from 'noise-handshake/cipher';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 
+// Chromium exposes this legacy method on SVG documents but throws when xterm probes it.
+try { document.queryCommandSupported?.('copy'); }
+catch { Object.defineProperty(document, 'queryCommandSupported', { configurable: true, value: () => false }); }
+
 const $ = id => document.getElementById(id);
 const encoder = new TextEncoder();
 const MAX_COMMAND_LENGTH = 8192;
@@ -23,7 +27,7 @@ const cursorBlink = validBoolean(preferences.cursorBlink, validBoolean(config.cu
 const cursorStyle = ['block', 'underline', 'bar'].includes(preferences.cursorStyle) ? preferences.cursorStyle : (['block', 'underline', 'bar'].includes(config.cursorStyle) ? config.cursorStyle : 'block');
 const localEcho = validBoolean(preferences.localEcho, validBoolean(config.localEcho, false));
 const scrollOnUserInput = validBoolean(preferences.scrollOnUserInput, validBoolean(config.scrollOnUserInput, true));
-const terminal = new Terminal({ cursorBlink, cursorStyle, fontSize, scrollback, scrollOnUserInput, theme: themes[theme] });
+const terminal = new Terminal({ cursorBlink, cursorStyle, fontSize, scrollback, scrollOnUserInput, rightClickSelectsWord: true, theme: themes[theme] });
 const fit = new FitAddon();
 terminal.loadAddon(fit); terminal.open($('terminal')); fit.fit();
 
@@ -31,6 +35,10 @@ let socket, outbound, inbound, awaitingHandshake = false, pingTimer, failed = fa
 let rtt = 180;
 let echoTimer, echoSequence = 0;
 let echoQueue = [];
+let ctrlArmed = false;
+let viewportFrame;
+let directionTimer, directionInterval, activeDirection = '';
+let touchGesture;
 
 async function deriveKey(secret) {
   // Keep generated clients compatible with the original hexadecimal key format.
@@ -143,6 +151,27 @@ function sendInput(data) {
   }
   return true;
 }
+function setCtrlArmed(value) {
+  ctrlArmed = value;
+  $('ctrl-key').classList.toggle('active', value);
+  $('ctrl-key').setAttribute('aria-pressed', String(value));
+}
+function applyCtrl(data) {
+  if (!ctrlArmed || !data) return data;
+  setCtrlArmed(false);
+  const code = data.charCodeAt(0);
+  let control;
+  if (code >= 0x40 && code <= 0x5f) control = code - 0x40;
+  else if (code >= 0x60 && code <= 0x7f) control = code - 0x60;
+  else if (code === 0x20) control = 0;
+  else return data;
+  return String.fromCharCode(control) + data.slice(1);
+}
+function sendKey(data) {
+  clearLocalEcho();
+  sendInput(data);
+  terminal.focus();
+}
 function resize() {
   try { fit.fit(); } catch { return; }
   if (outbound) {
@@ -150,8 +179,188 @@ function resize() {
     send(Uint8Array.of(1, cols >> 8, cols & 255, rows >> 8, rows & 255));
   }
 }
-window.addEventListener('resize', resize);
-terminal.onData(data => { queueLocalEcho(data); sendInput(data); });
+function scheduleResize() {
+  cancelAnimationFrame(viewportFrame);
+  viewportFrame = requestAnimationFrame(() => {
+    if (window.visualViewport) document.documentElement.style.setProperty('--eya-viewport-height', `${window.visualViewport.height}px`);
+    resize();
+  });
+}
+window.addEventListener('resize', scheduleResize);
+window.visualViewport?.addEventListener('resize', scheduleResize);
+window.visualViewport?.addEventListener('scroll', scheduleResize);
+terminal.onData(data => {
+  data = applyCtrl(data);
+  queueLocalEcho(data);
+  sendInput(data);
+});
+
+const keyActions = {
+  escape: () => sendKey('\x1b'),
+  tab: () => sendKey('\t'),
+  ctrl: () => { setCtrlArmed(!ctrlArmed); terminal.focus(); },
+  paste: () => pasteFromClipboard(),
+};
+for (const button of document.querySelectorAll('#keybar [data-key]')) {
+  button.addEventListener('pointerdown', event => {
+    event.preventDefault();
+    keyActions[button.dataset.key]?.();
+  });
+  button.addEventListener('click', event => {
+    // Keyboard activation has no preceding pointer event.
+    if (event.detail === 0) keyActions[button.dataset.key]?.();
+  });
+}
+
+const directionKeys = { up: '\x1b[A', down: '\x1b[B', right: '\x1b[C', left: '\x1b[D' };
+function directionAt(event) {
+  const rect = $('arrow-pad').getBoundingClientRect();
+  const x = event.clientX - rect.left - rect.width / 2;
+  const y = event.clientY - rect.top - rect.height / 2;
+  if (Math.hypot(x, y) < Math.min(rect.width, rect.height) * 0.16) return '';
+  return Math.abs(x) > Math.abs(y) ? (x < 0 ? 'left' : 'right') : (y < 0 ? 'up' : 'down');
+}
+function stopDirection() {
+  clearTimeout(directionTimer);
+  clearInterval(directionInterval);
+  directionTimer = directionInterval = undefined;
+  activeDirection = '';
+  $('arrow-pad').dataset.direction = '';
+}
+function setDirection(direction) {
+  if (direction === activeDirection) return;
+  clearTimeout(directionTimer);
+  clearInterval(directionInterval);
+  activeDirection = direction;
+  $('arrow-pad').dataset.direction = direction;
+  if (!direction) return;
+  sendKey(directionKeys[direction]);
+  directionTimer = setTimeout(() => {
+    directionInterval = setInterval(() => {
+      const key = directionKeys[activeDirection];
+      if (key) sendKey(key);
+    }, 75);
+  }, 360);
+}
+$('arrow-pad').addEventListener('pointerdown', event => {
+  event.preventDefault();
+  $('arrow-pad').setPointerCapture(event.pointerId);
+  setDirection(directionAt(event));
+});
+$('arrow-pad').addEventListener('pointermove', event => {
+  if ($('arrow-pad').hasPointerCapture(event.pointerId)) setDirection(directionAt(event));
+});
+for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) $('arrow-pad').addEventListener(type, stopDirection);
+$('arrow-pad').addEventListener('keydown', event => {
+  const direction = ({ ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' })[event.key];
+  if (direction) { event.preventDefault(); sendKey(directionKeys[direction]); }
+});
+
+function fallbackCopy(text) {
+  const area = document.createElement('textarea');
+  area.value = text;
+  area.style.cssText = 'position:fixed;opacity:0;inset:0';
+  (document.body || document.querySelector('body')).append(area);
+  area.select();
+  let copied = false;
+  try { copied = document.execCommand('copy'); } catch { /* Clipboard API may be unavailable too. */ }
+  area.remove();
+  return copied;
+}
+async function copySelection() {
+  const text = terminal.getSelection();
+  if (!text) return;
+  try { await navigator.clipboard.writeText(text); }
+  catch { if (!fallbackCopy(text)) error('The selection could not be copied.'); }
+  hideTerminalMenu();
+  terminal.focus();
+}
+async function pasteFromClipboard() {
+  setCtrlArmed(false);
+  let text;
+  try { text = await navigator.clipboard.readText(); }
+  catch { text = window.prompt('Paste terminal text:'); }
+  if (typeof text === 'string' && text) terminal.paste(text);
+  hideTerminalMenu();
+  terminal.focus();
+}
+function showTerminalMenu(x, y) {
+  const menu = $('terminal-menu');
+  $('copy-selection').disabled = !terminal.hasSelection();
+  menu.hidden = false;
+  const width = menu.offsetWidth, height = menu.offsetHeight;
+  menu.style.left = `${Math.max(6, Math.min(x, innerWidth - width - 6))}px`;
+  menu.style.top = `${Math.max(6, Math.min(y, (window.visualViewport?.height || innerHeight) - height - 6))}px`;
+}
+function hideTerminalMenu() { $('terminal-menu').hidden = true; }
+$('copy-selection').onclick = copySelection;
+$('paste-selection').onclick = pasteFromClipboard;
+$('select-all').onclick = () => { terminal.selectAll(); $('copy-selection').disabled = false; };
+$('clear-selection').onclick = () => { terminal.clearSelection(); hideTerminalMenu(); terminal.focus(); };
+$('terminal-menu').addEventListener('pointerdown', event => event.stopPropagation());
+document.addEventListener('pointerdown', event => { if (!$('terminal-menu').contains(event.target)) hideTerminalMenu(); });
+$('terminal').addEventListener('contextmenu', event => {
+  event.preventDefault();
+  showTerminalMenu(event.clientX, event.clientY);
+});
+
+function terminalCell(event) {
+  const screen = $('terminal').querySelector('.xterm-screen');
+  if (!screen || !terminal.cols || !terminal.rows) return null;
+  const rect = screen.getBoundingClientRect();
+  const col = Math.max(0, Math.min(terminal.cols - 1, Math.floor((event.clientX - rect.left) * terminal.cols / rect.width)));
+  const visibleRow = Math.max(0, Math.min(terminal.rows - 1, Math.floor((event.clientY - rect.top) * terminal.rows / rect.height)));
+  return { col, row: terminal.buffer.active.viewportY + visibleRow };
+}
+function updateTouchSelection(event) {
+  const end = terminalCell(event);
+  if (!end || !touchGesture?.start) return;
+  const startIndex = touchGesture.start.row * terminal.cols + touchGesture.start.col;
+  const endIndex = end.row * terminal.cols + end.col;
+  const first = Math.min(startIndex, endIndex), last = Math.max(startIndex, endIndex);
+  terminal.select(first % terminal.cols, Math.floor(first / terminal.cols), last - first + 1);
+}
+function finishTouch(event) {
+  if (!touchGesture || event.pointerId !== touchGesture.pointerId) return;
+  clearTimeout(touchGesture.timer);
+  if (touchGesture.selecting) {
+    updateTouchSelection(event);
+    showTerminalMenu(event.clientX, event.clientY);
+  } else if (!touchGesture.scrolling) {
+    terminal.focus();
+  }
+  touchGesture = undefined;
+}
+$('terminal').addEventListener('pointerdown', event => {
+  if (event.pointerType !== 'touch' || touchGesture) return;
+  hideTerminalMenu();
+  const start = terminalCell(event);
+  touchGesture = { pointerId: event.pointerId, start, x: event.clientX, y: event.clientY, lastY: event.clientY, scrolling: false, selecting: false };
+  $('terminal').setPointerCapture(event.pointerId);
+  touchGesture.timer = setTimeout(() => {
+    if (!touchGesture || touchGesture.scrolling || !start) return;
+    touchGesture.selecting = true;
+    terminal.select(start.col, start.row, 1);
+    navigator.vibrate?.(20);
+  }, 480);
+});
+$('terminal').addEventListener('pointermove', event => {
+  if (!touchGesture || event.pointerId !== touchGesture.pointerId) return;
+  event.preventDefault();
+  if (touchGesture.selecting) { updateTouchSelection(event); return; }
+  if (Math.hypot(event.clientX - touchGesture.x, event.clientY - touchGesture.y) > 8) {
+    touchGesture.scrolling = true;
+    clearTimeout(touchGesture.timer);
+  }
+  if (touchGesture.scrolling) {
+    const screen = $('terminal').querySelector('.xterm-screen');
+    const cellHeight = screen ? screen.getBoundingClientRect().height / terminal.rows : 16;
+    const lines = Math.trunc((touchGesture.lastY - event.clientY) / Math.max(1, cellHeight));
+    if (lines) { terminal.scrollLines(lines); touchGesture.lastY -= lines * cellHeight; }
+  }
+});
+for (const type of ['pointerup', 'pointercancel']) $('terminal').addEventListener(type, finishTouch);
+scheduleResize();
 
 function applySettings() {
   const size = Number($('font-size').value);

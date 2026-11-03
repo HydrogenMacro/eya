@@ -4,4 +4,9 @@ const result = await build({ entryPoints: ['client/app.js'], bundle: true, platf
 const js = result.outputFiles[0].text.replaceAll('</script', '<\\/script');
 const css = await readFile('client/node_modules/@xterm/xterm/css/xterm.css', 'utf8');
 const template = await readFile('client/template.html', 'utf8');
-await writeFile('client.html', template.replace('/* XTERM_CSS */', css).replace('/* EYA_JS */', js));
+await writeFile(
+  'client.html',
+  template
+    .replace('/* XTERM_CSS */', () => css)
+    .replace('/* EYA_JS */', () => js),
+);
