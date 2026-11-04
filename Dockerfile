@@ -11,6 +11,7 @@ WORKDIR /app
 COPY eya-server/Cargo.toml eya-server/Cargo.lock ./eya-server/
 COPY eya-server/src ./eya-server/src
 COPY client/generator.html ./client/generator.html
+COPY client/hosted.svg ./client/hosted.svg
 COPY --from=client-build /app/client.html ./client.html
 RUN cargo build --manifest-path eya-server/Cargo.toml --release --locked
 

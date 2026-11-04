@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
+  <title>Eya SVG client</title>
+  <foreignObject x="0" y="0" width="100%" height="100%">
+    <div xmlns="http://www.w3.org/1999/xhtml" id="hosted-svg-status" style="box-sizing:border-box;width:100%;height:100%;display:grid;place-items:center;background:#10151b;color:#e4edf2;font:16px system-ui">Loading Eya…</div>
+  </foreignObject>
+  <script><![CDATA[
+  (async () => {
+    const xhtml = 'http://www.w3.org/1999/xhtml';
+    const foreignObject = document.querySelector('foreignObject');
+    try {
+      const response = await fetch(new URL('client.html', location.href), { cache: 'no-store' });
+      if (!response.ok) throw Error(`HTTP ${response.status}`);
+      const source = new DOMParser().parseFromString(await response.text(), 'text/html');
+      const executable = script => !script.type || /^(application|text)\/(java|ecma)script$/i.test(script.type);
+      const programs = [...source.scripts].filter(executable).map(script => script.textContent);
+      for (const script of [...source.scripts]) if (executable(script)) script.remove();
+      const client = document.importNode(source.documentElement, true);
+      client.setAttribute('xmlns', xhtml);
+      client.style.width = '100%';
+      client.style.height = '100%';
+      foreignObject.replaceChildren(client);
+      Object.defineProperties(document, {
+        queryCommandSupported: { configurable: true, value: () => false },
+        createElement: { configurable: true, value: (name, options) => document.createElementNS(xhtml, name, options) },
+      });
+      for (const program of programs) Function(program)();
+    } catch (error) {
+      console.error('Could not load the hosted Eya SVG client', error);
+      let status = document.getElementById('hosted-svg-status');
+      if (!status) {
+        status = document.createElementNS(xhtml, 'div');
+        status.style.cssText = 'box-sizing:border-box;width:100%;height:100%;display:grid;place-items:center;padding:24px;background:#10151b;color:#ffd4ce;font:16px system-ui';
+        foreignObject.replaceChildren(status);
+      }
+      status.textContent = `Could not load the Eya client: ${error.message || error}`;
+    }
+  })();
+  ]]></script>
+</svg>

@@ -22,10 +22,11 @@ On narrow or touch layouts, Files fills the workspace rather than squeezing the 
 The Browser tab provides:
 
 - Back, forward, parent-directory, direct-path, and refresh navigation.
+- A `..` row at the top of ordinary directory listings.
 - Recursive, case-insensitive name search below the current directory. Results are capped at 1,000 entries and traversal is capped at 24 directory levels.
 - Folder-first directory listings with sizes and modification times.
 - Optional hidden files.
-- New folder, multi-file upload, download, rename, and delete actions.
+- New folder and multi-file upload controls, with Open, Download, Rename, and Delete in the menu beside each file.
 - Keyboard navigation: focus a row and press Enter to open it.
 
 Select an item once to enable its actions. Double-click a folder to enter it or a file to open it. Deleting a directory is recursive after confirmation. Deletes are not moved to an operating-system trash and cannot be undone.
@@ -44,7 +45,7 @@ Every opened file receives a tab. The Browser tab always remains available. A do
 
 Text files up to 5 MiB open in CodeMirror. Eya detects UTF-8 text and common text extensions, supplies modes for JSON, JavaScript/TypeScript/JSX, HTML, CSS, and Markdown, and supports undo history, indentation, selection, line numbers, wrapping, and `Ctrl`/`Cmd`+`S`. Files above the editor limit can still be downloaded.
 
-PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, and SVG files use an image view. MP4, WebM, Ogg video, MOV, and M4V use a native `<video>` view with controls and inline mobile playback. Actual codec support depends on the browser. Unknown or complex formats use the generic viewer, which reports the file size and offers Download.
+PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, and SVG files use an image view. Common MP4, WebM, Ogg video, QuickTime, 3GP, and Matroska extensions use a native `<video>` view with controls and inline mobile playback. MP3, WAV, Ogg/Opus, M4A, AAC, FLAC, and WebM audio use a native `<audio>` view. Actual container and codec support depends on the browser. Unknown or complex formats use the generic viewer, which reports the file size and offers Download.
 
 The client viewer selection is an ordered registry in `client/app.js` named `fileViewers`. To add a complex viewer, add a provider before `generic` with:
 

@@ -31,6 +31,8 @@ const path = require('node:path');
     if (!await bar.isVisible()) throw Error('Mobile key bar is not visible');
     const barLayout = await bar.evaluate(element => ({ clientWidth: element.clientWidth, scrollWidth: element.scrollWidth, bottom: element.getBoundingClientRect().bottom, viewport: innerHeight }));
     if (barLayout.scrollWidth > barLayout.clientWidth || Math.abs(barLayout.bottom - barLayout.viewport) > 2) throw Error(`Mobile key bar layout is invalid: ${JSON.stringify(barLayout)}`);
+    const scrollLock = await page.evaluate(() => { scrollTo(0, 100); return { y: scrollY, htmlOverflow: getComputedStyle(document.documentElement).overflow, bodyPosition: getComputedStyle(document.body).position }; });
+    if (scrollLock.y !== 0 || scrollLock.htmlOverflow !== 'hidden' || scrollLock.bodyPosition !== 'fixed') throw Error(`Full-page mobile scrolling is not locked: ${JSON.stringify(scrollLock)}`);
 
     await page.locator('#files').click();
     await page.locator('#file-list tr').first().waitFor({ timeout: 5000 });
@@ -99,7 +101,7 @@ const path = require('node:path');
 
     await page.locator('#terminal').dispatchEvent('contextmenu', { clientX: 20, clientY: 20, button: 2 });
     await page.locator('#terminal-menu').waitFor({ state: 'visible' });
-    console.log('Mobile file workspace, safe input sizing, key bar, Ctrl, paste, joystick arrows, touch selection and context menu passed');
+    console.log('Mobile scroll lock, file workspace, safe input sizing, key bar, Ctrl, paste, joystick arrows, touch selection and context menu passed');
   } finally {
     await browser.close();
   }

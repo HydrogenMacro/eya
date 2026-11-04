@@ -17,6 +17,7 @@ try { document.queryCommandSupported?.('copy'); }
 catch { Object.defineProperty(document, 'queryCommandSupported', { configurable: true, value: () => false }); }
 
 const $ = id => document.getElementById(id);
+const pageBody = document.body || document.querySelector('body');
 const encoder = new TextEncoder();
 const MAX_COMMAND_LENGTH = 8192;
 let config = {};
@@ -59,6 +60,7 @@ let directionTimer, directionInterval, activeDirection = '';
 let touchGesture;
 let fileRequestId = 0, fileRefreshTimer, fileSearchTimer;
 let currentPath = '', directoryEntries = [], selectedEntry, historyPaths = [], historyIndex = -1;
+let fileMenuEntry;
 let activeFileTab = 'browser';
 const filePending = new Map();
 const fileTabs = new Map();
@@ -73,7 +75,15 @@ async function deriveKey(secret) {
   return new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(secret)));
 }
 
-try { $('url').value = config.url || localStorage.getItem('eya-url') || ''; } catch { $('url').value = config.url || ''; }
+function inheritedWebSocketUrl() {
+  if (!['http:', 'https:'].includes(location.protocol)) return '';
+  const url = new URL('ws', location.href);
+  url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return url.href;
+}
+const inheritedUrl = inheritedWebSocketUrl();
+try { $('url').value = config.url || (config.hosted ? inheritedUrl : localStorage.getItem('eya-url')) || inheritedUrl; }
+catch { $('url').value = config.url || inheritedUrl; }
 $('key').value = config.key || '';
 $('default-command').value = typeof config.defaultCommand === 'string' ? config.defaultCommand : '';
 $('font-size').value = fontSize;
@@ -93,9 +103,10 @@ $('editor-wrap').checked = editorWrap;
 $('editor-line-numbers').checked = editorLineNumbers;
 $('confirm-delete').checked = confirmDelete;
 $('starting-directory').value = startingDirectory;
-document.body.dataset.split = splitDirection;
+pageBody.dataset.split = splitDirection;
 document.documentElement.style.setProperty('--panel-size', `${panelSize}%`);
-document.body.classList.toggle('panel-visible', panelVisible);
+pageBody.classList.toggle('panel-visible', panelVisible);
+pageBody.classList.add('connection-offline');
 $('files').setAttribute('aria-pressed', String(panelVisible));
 
 function status(text) { $('status').textContent = text; }
@@ -229,6 +240,10 @@ function scheduleResize() {
 window.addEventListener('resize', scheduleResize);
 window.visualViewport?.addEventListener('resize', scheduleResize);
 window.visualViewport?.addEventListener('scroll', scheduleResize);
+document.addEventListener('touchmove', event => {
+  const target = event.target instanceof Element && event.target.closest('#browser-view,.viewer-body,.file-tabs,dialog,.cm-scroller');
+  if (!target && event.cancelable) event.preventDefault();
+}, { passive: false });
 terminal.onData(data => {
   data = applyCtrl(data);
   queueLocalEcho(data);
@@ -300,7 +315,7 @@ function fallbackCopy(text) {
   const area = document.createElement('textarea');
   area.value = text;
   area.style.cssText = 'position:fixed;opacity:0;inset:0';
-  (document.body || document.querySelector('body')).append(area);
+  pageBody.append(area);
   area.select();
   let copied = false;
   try { copied = document.execCommand('copy'); } catch { /* Clipboard API may be unavailable too. */ }
@@ -329,8 +344,9 @@ function showTerminalMenu(x, y) {
   $('copy-selection').disabled = !terminal.hasSelection();
   menu.hidden = false;
   const width = menu.offsetWidth, height = menu.offsetHeight;
-  menu.style.left = `${Math.max(6, Math.min(x, innerWidth - width - 6))}px`;
-  menu.style.top = `${Math.max(6, Math.min(y, (window.visualViewport?.height || innerHeight) - height - 6))}px`;
+  const viewport = window.visualViewport || { offsetLeft: 0, offsetTop: 0, width: innerWidth, height: innerHeight };
+  menu.style.left = `${Math.max(viewport.offsetLeft + 6, Math.min(x, viewport.offsetLeft + viewport.width - width - 6))}px`;
+  menu.style.top = `${Math.max(viewport.offsetTop + 6, Math.min(y, viewport.offsetTop + viewport.height - height - 6))}px`;
 }
 function hideTerminalMenu() { $('terminal-menu').hidden = true; }
 $('copy-selection').onclick = copySelection;
@@ -418,7 +434,7 @@ function applySettings() {
   terminal.options.scrollOnUserInput = $('scroll-on-input').checked;
   const sizePercent = Number($('panel-size').value);
   const interval = Number($('refresh-interval').value);
-  document.body.dataset.split = $('split-direction').value;
+  pageBody.dataset.split = $('split-direction').value;
   document.documentElement.style.setProperty('--panel-size', `${sizePercent}%`);
   $('panel-size-value').textContent = sizePercent;
   setPanelVisible($('panel-visible').checked, false);
@@ -459,7 +475,16 @@ function validateConnection() {
   }
 }
 function openConnection() { setDialogError(''); openDialog($('connect-dialog')); }
+function setConnectionAppearance(connected) {
+  pageBody.classList.toggle('connection-offline', !connected);
+  $('disconnect').disabled = !connected && !awaitingHandshake;
+}
+function announceDisconnect(message) {
+  terminal.writeln(`\r\n\x1b[1;31m[Disconnected]\x1b[0m ${message}`);
+  setConnectionAppearance(false);
+}
 function disconnect() {
+  const hadConnection = !!outbound || awaitingHandshake;
   connectionId++;
   failed = false;
   clearInterval(pingTimer);
@@ -471,8 +496,11 @@ function disconnect() {
   clearInterval(fileRefreshTimer);
   $('file-status').textContent = 'Connect to browse files.';
   $('latency').textContent = '';
-  status('Disconnected');
+  status('Disconnected — click Connect to reconnect');
+  if (hadConnection) announceDisconnect('The terminal session was closed.');
+  else setConnectionAppearance(false);
 }
+setConnectionAppearance(false);
 
 if (config.font) {
   const face = new FontFace('EyaEmbeddedFont', `url(${JSON.stringify(config.font)})`);
@@ -508,7 +536,7 @@ $('settings-search').addEventListener('input', () => {
 });
 
 function setPanelVisible(visible, remember = true) {
-  document.body.classList.toggle('panel-visible', visible);
+  pageBody.classList.toggle('panel-visible', visible);
   $('files').setAttribute('aria-pressed', String(visible));
   $('panel-visible').checked = visible;
   if (remember) applySettings();
@@ -520,7 +548,7 @@ function restartFileRefresh() {
   clearInterval(fileRefreshTimer);
   const seconds = Number($('refresh-interval').value);
   if (seconds > 0) fileRefreshTimer = setInterval(() => {
-    if (!document.hidden && outbound && document.body.classList.contains('panel-visible')) refreshFiles(true);
+    if (!document.hidden && outbound && pageBody.classList.contains('panel-visible')) refreshFiles(true);
   }, seconds * 1000);
 }
 
@@ -657,41 +685,62 @@ async function navigateTo(path, push = true) {
 }
 
 function renderDirectory() {
+  hideFileEntryMenu();
   const body = $('file-list');
   body.replaceChildren();
-  for (const item of directoryEntries) {
+  const parent = { name: '..', path: parentPath(currentPath), kind: 'parent', size: 0, modified: 0 };
+  const entries = currentPath !== '/' && !$('file-search').value ? [parent, ...directoryEntries] : directoryEntries;
+  for (const item of entries) {
     const row = document.createElement('tr');
     row.tabIndex = 0;
     row.dataset.path = item.path;
     row.classList.toggle('selected', selectedEntry?.path === item.path);
     const name = document.createElement('td');
-    name.textContent = `${item.kind === 'directory' ? '📁' : item.kind === 'symlink' ? '↗' : '📄'} ${item.name}`;
+    name.textContent = `${item.kind === 'parent' ? '↰' : item.kind === 'directory' ? '📁' : item.kind === 'symlink' ? '↗' : '📄'} ${item.name}`;
     name.title = item.path;
-    const size = document.createElement('td'); size.className = 'size'; size.textContent = item.kind === 'directory' ? '—' : formatSize(item.size);
+    const size = document.createElement('td'); size.className = 'size'; size.textContent = ['directory', 'parent'].includes(item.kind) ? '—' : formatSize(item.size);
     const modified = document.createElement('td'); modified.className = 'modified'; modified.textContent = item.modified ? new Date(item.modified).toLocaleString() : '—';
-    row.append(name, size, modified);
+    const actions = document.createElement('td'); actions.className = 'entry-actions';
+    if (item.kind !== 'parent') {
+      const menu = document.createElement('button');
+      menu.type = 'button'; menu.className = 'file-entry-button'; menu.textContent = '⋮';
+      menu.title = `Actions for ${item.name}`; menu.setAttribute('aria-label', `Actions for ${item.name}`); menu.setAttribute('aria-haspopup', 'menu');
+      menu.addEventListener('click', event => { event.stopPropagation(); showFileEntryMenu(item, menu); });
+      actions.append(menu);
+    }
+    row.append(name, size, modified, actions);
     row.addEventListener('click', () => selectEntry(item));
     row.addEventListener('dblclick', () => activateEntry(item));
     row.addEventListener('keydown', event => { if (event.key === 'Enter') activateEntry(item); });
     body.append(row);
   }
-  $('file-empty').hidden = !!directoryEntries.length;
+  $('file-empty').hidden = !!directoryEntries.length || (!$('file-search').value && currentPath !== '/');
   $('file-empty').textContent = $('file-search').value ? 'No matching files.' : 'This directory is empty.';
-  updateSelectionButtons();
 }
 
-function selectEntry(item) { selectedEntry = item; renderDirectory(); }
-function activateEntry(item) { if (item.kind === 'directory') navigateTo(item.path, true); else openFile(item.path); }
-function updateSelectionButtons() {
-  $('file-download').disabled = !selectedEntry || selectedEntry.kind === 'directory';
-  $('file-rename').disabled = !selectedEntry;
-  $('file-delete').disabled = !selectedEntry;
+function selectEntry(item) {
+  selectedEntry = item;
+  for (const row of $('file-list').rows) row.classList.toggle('selected', row.dataset.path === item.path);
 }
+function activateEntry(item) { if (['directory', 'parent'].includes(item.kind)) navigateTo(item.path, true); else openFile(item.path); }
 function updateNavigationButtons() {
   $('file-back').disabled = historyIndex <= 0;
   $('file-forward').disabled = historyIndex < 0 || historyIndex >= historyPaths.length - 1;
   $('file-up').disabled = !currentPath || currentPath === '/';
 }
+function showFileEntryMenu(item, button) {
+  selectEntry(item);
+  fileMenuEntry = item;
+  const menu = $('file-entry-menu');
+  menu.querySelector('[data-file-action=download]').hidden = item.kind === 'directory';
+  menu.hidden = false;
+  const rect = button.getBoundingClientRect();
+  const width = menu.offsetWidth, height = menu.offsetHeight;
+  const viewport = window.visualViewport || { offsetLeft: 0, offsetTop: 0, width: innerWidth, height: innerHeight };
+  menu.style.left = `${Math.max(viewport.offsetLeft + 6, Math.min(rect.right - width, viewport.offsetLeft + viewport.width - width - 6))}px`;
+  menu.style.top = `${Math.max(viewport.offsetTop + 6, Math.min(rect.bottom + 4, viewport.offsetTop + viewport.height - height - 6))}px`;
+}
+function hideFileEntryMenu() { $('file-entry-menu').hidden = true; fileMenuEntry = undefined; }
 function formatSize(value) {
   if (value < 1024) return `${value} B`;
   const units = ['KiB', 'MiB', 'GiB', 'TiB']; let amount = value;
@@ -723,8 +772,13 @@ async function refreshFiles(automatic = false) {
 
 const textExtensions = new Set(['txt','md','markdown','js','mjs','cjs','ts','tsx','jsx','json','html','htm','css','scss','xml','svg','yml','yaml','toml','ini','conf','cfg','sh','bash','zsh','fish','py','rb','rs','go','java','c','h','cpp','hpp','cs','php','sql','log','env','gitignore']);
 const imageExtensions = new Set(['png','jpg','jpeg','gif','webp','avif','bmp','ico','svg']);
-const videoExtensions = new Set(['mp4','webm','ogv','mov','m4v']);
+const videoExtensions = new Set(['mp4','webm','ogv','mov','m4v','3gp','3g2','mkv']);
+const audioExtensions = new Set(['mp3','wav','ogg','oga','opus','m4a','aac','flac','weba']);
 function extension(path) { const name = baseName(path); return name.includes('.') ? name.split('.').at(-1).toLowerCase() : ''; }
+function mediaType(path) {
+  const ext = extension(path);
+  return ({ mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', ogv: 'video/ogg', mov: 'video/quicktime', '3gp': 'video/3gpp', '3g2': 'video/3gpp2', mkv: 'video/x-matroska', mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg; codecs=opus', m4a: 'audio/mp4', aac: 'audio/aac', flac: 'audio/flac', weba: 'audio/webm', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', bmp: 'image/bmp', ico: 'image/x-icon', svg: 'image/svg+xml' })[ext] || 'application/octet-stream';
+}
 function likelyText(path, bytes) {
   if (bytes.length > TEXT_EDITOR_LIMIT || bytes.subarray(0, 8192).includes(0)) return false;
   if (textExtensions.has(extension(path))) return true;
@@ -743,6 +797,7 @@ function languageFor(path) {
 const fileViewers = [
   { name: 'image', supports: tab => imageExtensions.has(extension(tab.path)), render: renderImageViewer },
   { name: 'video', supports: tab => videoExtensions.has(extension(tab.path)), render: renderVideoViewer },
+  { name: 'audio', supports: tab => audioExtensions.has(extension(tab.path)), render: renderAudioViewer },
   { name: 'text', supports: tab => likelyText(tab.path, tab.bytes), render: renderTextEditor },
   { name: 'generic', supports: () => true, render: renderGenericViewer },
 ];
@@ -814,13 +869,18 @@ function renderTextEditor(tab) {
 
 function renderImageViewer(tab) {
   const shell = createViewerShell(tab);
-  tab.url = URL.createObjectURL(new Blob([tab.bytes]));
+  tab.url = URL.createObjectURL(new Blob([tab.bytes], { type: mediaType(tab.path) }));
   const image = document.createElement('img'); image.src = tab.url; image.alt = tab.name; shell.body.append(image); return shell.root;
 }
 function renderVideoViewer(tab) {
   const shell = createViewerShell(tab);
-  tab.url = URL.createObjectURL(new Blob([tab.bytes]));
-  const video = document.createElement('video'); video.src = tab.url; video.controls = true; video.playsInline = true; shell.body.append(video); return shell.root;
+  tab.url = URL.createObjectURL(new Blob([tab.bytes], { type: mediaType(tab.path) }));
+  const video = document.createElement('video'); video.src = tab.url; video.controls = true; video.playsInline = true; video.preload = 'metadata'; shell.body.append(video); return shell.root;
+}
+function renderAudioViewer(tab) {
+  const shell = createViewerShell(tab);
+  tab.url = URL.createObjectURL(new Blob([tab.bytes], { type: mediaType(tab.path) }));
+  const audio = document.createElement('audio'); audio.src = tab.url; audio.controls = true; audio.preload = 'metadata'; shell.body.append(audio); return shell.root;
 }
 function renderGenericViewer(tab) {
   const shell = createViewerShell(tab);
@@ -878,7 +938,7 @@ function downloadBlob(path, bytes) {
 function downloadTab(tab) { downloadBlob(tab.path, tab.viewer === 'text' ? encoder.encode(tab.text) : tab.bytes); }
 function updateEditorConfiguration() { for (const tab of fileTabs.values()) if (tab.viewer === 'text') renderTabContent(tab); }
 
-$('files').onclick = () => setPanelVisible(!document.body.classList.contains('panel-visible'));
+$('files').onclick = () => setPanelVisible(!pageBody.classList.contains('panel-visible'));
 $('file-close').onclick = () => setPanelVisible(false);
 $('file-tabs').querySelector('[data-tab=browser]').onclick = () => activateFileTab('browser');
 $('file-go').onclick = () => navigateTo($('file-path').value.trim(), true);
@@ -906,19 +966,30 @@ $('file-upload-input').addEventListener('change', async () => {
   }
   $('file-upload-input').value = ''; await navigateTo(currentPath, false);
 });
-$('file-download').onclick = async () => {
-  if (!selectedEntry) return;
-  try { $('file-status').textContent = `Downloading ${selectedEntry.name}…`; const result = await readFile(selectedEntry.path); downloadBlob(selectedEntry.path, result.bytes); $('file-status').textContent = `${selectedEntry.name} downloaded.`; } catch (cause) { fileFailure(cause); }
-};
-$('file-rename').onclick = async () => {
-  if (!selectedEntry) return; const name = prompt('New name:', selectedEntry.name); if (!name || name === selectedEntry.name) return;
-  try { await fileRequest('rename', { path: selectedEntry.path, newPath: name }); await navigateTo(currentPath, false); } catch (cause) { fileFailure(cause); }
-};
-$('file-delete').onclick = async () => {
-  if (!selectedEntry) return;
-  if ($('confirm-delete').checked && !confirm(`Delete ${selectedEntry.name}${selectedEntry.kind === 'directory' ? ' and everything inside it' : ''}? This cannot be undone.`)) return;
-  try { await fileRequest('delete', { path: selectedEntry.path, recursive: selectedEntry.kind === 'directory' }); closeFileTab(selectedEntry.path); await navigateTo(currentPath, false); } catch (cause) { fileFailure(cause); }
-};
+async function downloadEntry(item) {
+  try { $('file-status').textContent = `Downloading ${item.name}…`; const result = await readFile(item.path); downloadBlob(item.path, result.bytes); $('file-status').textContent = `${item.name} downloaded.`; } catch (cause) { fileFailure(cause); }
+}
+async function renameEntry(item) {
+  const name = prompt('New name:', item.name); if (!name || name === item.name) return;
+  try { await fileRequest('rename', { path: item.path, newPath: name }); await navigateTo(currentPath, false); } catch (cause) { fileFailure(cause); }
+}
+async function deleteEntry(item) {
+  if ($('confirm-delete').checked && !confirm(`Delete ${item.name}${item.kind === 'directory' ? ' and everything inside it' : ''}? This cannot be undone.`)) return;
+  try { await fileRequest('delete', { path: item.path, recursive: item.kind === 'directory' }); closeFileTab(item.path); await navigateTo(currentPath, false); } catch (cause) { fileFailure(cause); }
+}
+for (const button of $('file-entry-menu').querySelectorAll('[data-file-action]')) button.addEventListener('click', () => {
+  const item = fileMenuEntry;
+  const action = button.dataset.fileAction;
+  hideFileEntryMenu();
+  if (!item) return;
+  if (action === 'open') activateEntry(item);
+  else if (action === 'download') downloadEntry(item);
+  else if (action === 'rename') renameEntry(item);
+  else if (action === 'delete') deleteEntry(item);
+});
+$('file-entry-menu').addEventListener('pointerdown', event => event.stopPropagation());
+document.addEventListener('pointerdown', event => { if (!$('file-entry-menu').contains(event.target) && !event.target.closest?.('.file-entry-button')) hideFileEntryMenu(); });
+$('browser-view').addEventListener('scroll', hideFileEntryMenu, { passive: true });
 
 $('start-connection').onclick = async () => {
   if (!applySettings()) return;
@@ -951,6 +1022,8 @@ $('start-connection').onclick = async () => {
   socket = current;
   current.binaryType = 'arraybuffer';
   awaitingHandshake = true;
+  let established = false;
+  setConnectionAppearance(false);
   status('Connecting…');
   closeDialog($('connect-dialog'));
   current.onopen = () => {
@@ -973,10 +1046,12 @@ $('start-connection').onclick = async () => {
         inbound = new Cipher(handshake.rx);
         awaitingHandshake = false;
         if (!send(encoder.encode('eya-ready-v3'))) throw Error('Could not confirm the encrypted connection');
+        established = true;
+        setConnectionAppearance(true);
         status('Connected');
         resize();
         terminal.focus();
-        if (document.body.classList.contains('panel-visible')) navigateTo($('starting-directory').value.trim(), true);
+        if (pageBody.classList.contains('panel-visible')) navigateTo($('starting-directory').value.trim(), true);
         restartFileRefresh();
         if (connection.command) sendInput(connection.command.replace(/\r?\n/g, '\r') + (/[\r\n]$/.test(connection.command) ? '' : '\r'));
         pingTimer = setInterval(() => {
@@ -1037,7 +1112,10 @@ $('start-connection').onclick = async () => {
         failed = true;
         error('Authentication did not complete. Check the shared password and server availability.');
       }
-      status(failed ? 'Connection failed' : 'Disconnected');
+      const message = failed ? 'Connection failed — reconnect to try again' : 'Disconnected — click Connect to reconnect';
+      status(message);
+      if (established) announceDisconnect(failed ? 'The connection was lost.' : 'The server closed the terminal session.');
+      else setConnectionAppearance(false);
     }
   };
 };

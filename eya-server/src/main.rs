@@ -30,10 +30,13 @@ use tokio::{
 const PROTOCOL: &str = "Noise_NNpsk0_25519_ChaChaPoly_BLAKE2b";
 const PROLOGUE: &[u8] = b"eya-terminal-v1";
 const CLIENT: &str = include_str!("../../client.html");
+const SVG_CLIENT: &str = include_str!("../../client/hosted.svg");
 const GENERATOR: &str = include_str!("../../client/generator.html");
+const CLIENT_CONFIG_MARKER: &str = r#"<script id="eya-config" type="application/json">{}</script>"#;
 #[derive(Clone)]
 struct App {
     key: Arc<[u8; 32]>,
+    client_key: Arc<str>,
     slots: Arc<Semaphore>,
     terminal: Arc<CommandBuilder>,
     files: Arc<files::FileManager>,
@@ -41,10 +44,16 @@ struct App {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if let Err(error) = dotenvy::dotenv()
+        && !error.not_found()
+    {
+        return Err(error.into());
+    }
     let key = env::var("EYA_KEY").map_err(|_| "EYA_KEY is required")?;
     if key.is_empty() {
         return Err("EYA_KEY must not be empty".into());
     }
+    let client_key: Arc<str> = key.clone().into();
     let key = derive_key(&key);
     let terminal = terminal_command()?;
     let files = files::FileManager::from_env()?;
@@ -53,14 +62,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bind = env::var("EYA_BIND").unwrap_or_else(|_| "127.0.0.1:8080".into());
     let app = App {
         key: Arc::new(key),
+        client_key,
         slots: Arc::new(Semaphore::new(8)),
         terminal: Arc::new(terminal),
         files: Arc::new(files),
     };
     let router = Router::new()
         .route("/", get(|| async { Html(GENERATOR) }))
+        .route("/client.html", get(hosted_client))
         .route(
-            "/client.html",
+            "/client-template.html",
             get(|| async {
                 (
                     [
@@ -71,12 +82,46 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
             }),
         )
+        .route(
+            "/client.svg",
+            get(|| async {
+                (
+                    [
+                        ("content-type", "image/svg+xml; charset=utf-8"),
+                        ("cache-control", "no-store"),
+                    ],
+                    SVG_CLIENT,
+                )
+            }),
+        )
         .route("/ws", get(upgrade))
         .with_state(app);
     let listener = tokio::net::TcpListener::bind(&bind).await?;
     eprintln!("Eya listening on {bind}");
     axum::serve(listener, router).await?;
     Ok(())
+}
+
+async fn hosted_client(State(app): State<App>) -> impl IntoResponse {
+    let configured = configured_client(app.client_key.as_ref());
+    (
+        [
+            ("content-type", "text/html; charset=utf-8"),
+            ("cache-control", "no-store"),
+        ],
+        configured,
+    )
+}
+
+fn configured_client(client_key: &str) -> String {
+    let config = serde_json::json!({ "key": client_key, "hosted": true })
+        .to_string()
+        .replace('<', "\\u003c");
+    CLIENT.replacen(
+        CLIENT_CONFIG_MARKER,
+        &format!(r#"<script id="eya-config" type="application/json">{config}</script>"#),
+        1,
+    )
 }
 
 fn derive_key(secret: &str) -> [u8; 32] {
@@ -548,7 +593,7 @@ fn invalid_config(message: &str) -> io::Error {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_host_terminal_command, derive_key};
+    use super::{build_host_terminal_command, configured_client, derive_key};
     use sha2::{Digest, Sha256};
     use std::ffi::{OsStr, OsString};
 
@@ -563,6 +608,16 @@ mod tests {
     fn retains_hex_key_compatibility() {
         let key = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
         assert_eq!(derive_key(key), core::array::from_fn(|i| i as u8));
+    }
+
+    #[test]
+    fn hosted_client_escapes_script_terminators_in_passwords() {
+        let password = "</script><script>alert('unsafe')</script>";
+        let client = configured_client(password);
+        assert!(!client.contains(password));
+        assert!(!client.contains("<script>alert('unsafe')</script>"));
+        assert!(client.contains(r#"\u003c/script>\u003cscript>alert('unsafe')\u003c/script>"#));
+        assert!(client.contains(r#""hosted":true"#));
     }
 
     #[test]

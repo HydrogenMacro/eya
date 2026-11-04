@@ -1,13 +1,17 @@
 use std::{
     env,
+    ffi::CString,
     ffi::OsString,
     fs as stdfs, io,
+    os::unix::ffi::OsStrExt,
     path::{Component, Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
     time::UNIX_EPOCH,
 };
 use tokio::{fs, io::AsyncWriteExt};
 
 pub const DEFAULT_MAX_FILE_BYTES: u64 = 256 * 1024 * 1024;
+static UPLOAD_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone)]
 pub struct FileManager {
@@ -53,6 +57,7 @@ pub struct Upload {
     file: fs::File,
     expected: u64,
     received: u64,
+    overwrite: bool,
 }
 
 impl FileManager {
@@ -205,27 +210,34 @@ impl FileManager {
             return Err(invalid("file exceeds the configured transfer limit"));
         }
         let (_, target) = self.resolve(path, &self.initial);
-        let name = target
-            .file_name()
-            .and_then(|value| value.to_str())
-            .unwrap_or("file");
-        let temporary = target.with_file_name(format!(
-            ".{name}.eya-upload-{}-{id}.tmp",
-            std::process::id()
-        ));
         let target_for_open = target.clone();
-        let temporary_for_open = temporary.clone();
-        let file = blocking(self.identity.clone(), "start upload", move || {
+        let (file, temporary) = blocking(self.identity.clone(), "start upload", move || {
             if !overwrite && target_for_open.try_exists()? {
                 return Err(io::Error::new(
                     io::ErrorKind::AlreadyExists,
                     "a file already exists at that path",
                 ));
             }
-            stdfs::OpenOptions::new()
-                .create_new(true)
-                .write(true)
-                .open(temporary_for_open)
+            let name = target_for_open
+                .file_name()
+                .and_then(|value| value.to_str())
+                .unwrap_or("file");
+            loop {
+                let sequence = UPLOAD_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+                let temporary = target_for_open.with_file_name(format!(
+                    ".{name}.eya-upload-{}-{id}-{sequence}.tmp",
+                    std::process::id()
+                ));
+                match stdfs::OpenOptions::new()
+                    .create_new(true)
+                    .write(true)
+                    .open(&temporary)
+                {
+                    Ok(file) => return Ok((file, temporary)),
+                    Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+                    Err(error) => return Err(error),
+                }
+            }
         })
         .await?;
         Ok(Upload {
@@ -235,6 +247,7 @@ impl FileManager {
             file: fs::File::from_std(file),
             expected: size,
             received: 0,
+            overwrite,
         })
     }
 }
@@ -269,8 +282,9 @@ impl Upload {
         let temporary_on_error = self.temporary;
         let target = self.target;
         let identity = self.identity;
+        let overwrite = self.overwrite;
         let result = blocking(identity.clone(), "finish upload", move || {
-            stdfs::rename(temporary, target)
+            rename_upload(&temporary, &target, overwrite)
         })
         .await;
         if result.is_err() {
@@ -289,6 +303,31 @@ impl Upload {
             stdfs::remove_file(path)
         })
         .await;
+    }
+}
+
+fn rename_upload(source: &Path, target: &Path, overwrite: bool) -> io::Result<()> {
+    if overwrite {
+        return stdfs::rename(source, target);
+    }
+    let source = CString::new(source.as_os_str().as_bytes())
+        .map_err(|_| invalid("upload path contains a NUL byte"))?;
+    let target = CString::new(target.as_os_str().as_bytes())
+        .map_err(|_| invalid("upload path contains a NUL byte"))?;
+    let result = unsafe {
+        libc::syscall(
+            libc::SYS_renameat2,
+            libc::AT_FDCWD,
+            source.as_ptr(),
+            libc::AT_FDCWD,
+            target.as_ptr(),
+            libc::RENAME_NOREPLACE,
+        )
+    };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
     }
 }
 
@@ -529,7 +568,7 @@ fn invalid(message: &str) -> io::Error {
 
 #[cfg(test)]
 mod tests {
-    use super::{host_identity, normalize};
+    use super::{host_identity, normalize, rename_upload};
     use std::{fs, path::PathBuf};
 
     #[test]
@@ -555,6 +594,27 @@ mod tests {
         let identity = host_identity(&root, "example").unwrap();
         assert_eq!((identity.uid, identity.gid), (1234, 5678));
         assert_eq!(identity.groups, vec![5678, 6789]);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn upload_finalization_only_overwrites_when_requested() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-upload-rename");
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let source = root.join("source");
+        let target = root.join("target");
+        fs::write(&source, "new").unwrap();
+        fs::write(&target, "old").unwrap();
+
+        let error = rename_upload(&source, &target, false).unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::AlreadyExists);
+        assert_eq!(fs::read_to_string(&source).unwrap(), "new");
+        assert_eq!(fs::read_to_string(&target).unwrap(), "old");
+
+        rename_upload(&source, &target, true).unwrap();
+        assert_eq!(fs::read_to_string(&target).unwrap(), "new");
+        assert!(!source.exists());
         fs::remove_dir_all(root).unwrap();
     }
 }
