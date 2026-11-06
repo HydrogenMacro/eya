@@ -1,0 +1,55 @@
+/* Shared custom controls inherit the active workspace theme. */
+.ui-select{display:inline-flex;position:relative;min-width:0;max-width:100%;vertical-align:middle}
+.ui-select[hidden]{display:none!important}
+.ui-native-select{position:absolute!important;inset:0 auto auto 0!important;width:1px!important;height:1px!important;min-width:0!important;max-width:1px!important;margin:0!important;padding:0!important;opacity:0!important;pointer-events:none!important;clip-path:inset(50%);overflow:hidden}
+.ui-select-trigger{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:34px;min-width:0;padding:6px 9px;text-align:left;font-size:16px;border:1px solid var(--ui-border,#4c626f);background:var(--ui-control,#253541);color:var(--ui-fg,#e4edf2)}
+.ui-select-trigger>.ui-icon{width:15px;height:15px;opacity:.7}
+.ui-select-value{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ui-select-options{padding:5px;min-width:160px;gap:2px;background:var(--ui-surface,#192730);border-color:var(--ui-border,#4c626f);color:var(--ui-fg,#e4edf2)}
+.ui-select-options .ui-select-option,.cad-toolbar .ui-menu .ui-select-option{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;min-height:34px;padding:7px 9px;font-size:14px;text-align:left;border:0;background:transparent;color:inherit}
+.ui-select-option>.ui-icon{width:15px;height:15px;opacity:0;color:var(--ui-accent,#7fdbc5)}
+.ui-select-option[aria-selected=true]>.ui-icon{opacity:1}
+.ui-select-option[aria-selected=true]{background:color-mix(in srgb,var(--ui-accent,#7fdbc5) 10%,transparent)}
+.ui-select-option:focus-visible{outline:1px solid var(--ui-accent,#7fdbc5);outline-offset:-1px;background:var(--ui-control,#253541)}
+.ui-select-option[hidden]{display:none!important}
+.ui-select-option:disabled{opacity:.4}
+label>.ui-select{width:100%;margin-top:4px}
+.ui-menu label.ui-field>.ui-select{width:auto;max-width:175px;margin:0}
+.ui-menu .ui-select-trigger,.cad-toolbar .ui-menu .ui-select-trigger{width:100%;justify-content:space-between;font-size:16px}
+.panel-switcher-control{display:none}
+.cad-toolbar{flex-wrap:wrap}
+.cad-toolbar>.ui-select{flex:1 1 100px;max-width:165px}
+.cad-toolbar>.ui-select>.ui-select-trigger{font-size:14px;padding:5px 7px;min-height:32px;background:transparent;border-color:transparent}
+.cad-toolbar>.ui-select[data-control="section"]{max-width:135px}
+.cad-status:empty{display:none}
+.cad-parts .cad-show-all{width:100%;justify-content:flex-start;margin:5px 0 7px;padding:6px 8px;font-size:12px;background:#243945;border-color:#405866}
+.cad-parts .cad-show-all:disabled{opacity:.45}
+.cad-rotation-gizmo{position:absolute;left:12px;top:12px;width:78px;height:78px;z-index:4;border-radius:50%;background:#101820b8;border:1px solid #55707e;box-shadow:0 3px 14px #0008;pointer-events:none}
+.cad-rotation-gizmo[hidden]{display:none}
+.cad-rotation-gizmo .cad-axis-center{position:absolute;left:50%;top:50%;width:8px;height:8px;transform:translate(-50%,-50%);border-radius:50%;background:#d8e5ea}
+.cad-rotation-gizmo .cad-axis-arm{position:absolute;left:50%;top:50%;height:2px;transform-origin:left center;pointer-events:none}
+.cad-rotation-gizmo .cad-axis-button{position:absolute;left:50%;top:50%;width:24px;height:24px;padding:0;border:0;border-radius:50%;color:#081016;font:700 11px ui-monospace,monospace;pointer-events:auto;box-shadow:0 1px 5px #0009}
+.cad-rotation-gizmo .cad-axis-x{background:#ff6868}.cad-rotation-gizmo .cad-axis-y{background:#61e88b}.cad-rotation-gizmo .cad-axis-z{background:#6fa8ff}
+.cad-section-row{display:grid;grid-template-columns:44px minmax(130px,1fr);gap:5px 8px;padding:7px 8px;border-top:1px solid #304550}
+.cad-section-row:first-of-type{border-top:0}
+.cad-section-row>.ui-check{grid-row:1/3;align-self:center;padding:0!important;font-weight:700}
+.cad-section-row.cad-section-x>.ui-check{color:#ff7777}.cad-section-row.cad-section-y>.ui-check{color:#69e891}.cad-section-row.cad-section-z>.ui-check{color:#78adff}
+.cad-dual-range{position:relative;height:22px}.cad-dual-range input[type=range]{position:absolute;inset:0;width:100%;margin:0;background:transparent;pointer-events:none}
+.cad-dual-range input[type=range]::-webkit-slider-thumb{pointer-events:auto}.cad-dual-range input[type=range]::-moz-range-thumb{pointer-events:auto}
+.cad-section-numbers{display:grid;grid-template-columns:1fr 1fr;gap:6px}.cad-section-numbers input{min-width:0;width:100%;margin:0;padding:4px;font-size:13px}
+.cad-toolbar .ui-menu input[type=color]{width:42px;height:28px;margin:0;padding:2px}.cad-toolbar .ui-menu input[type=number]{width:96px;margin:0;padding:5px}
+.file-drop-active{outline:2px solid var(--ui-accent,#7fdbc5);outline-offset:-3px;position:relative}
+.file-drop-active::after{content:'Drop to upload';position:absolute;inset:8px;z-index:20;display:grid;place-items:center;border:2px dashed var(--ui-accent,#7fdbc5);border-radius:8px;background:color-mix(in srgb,var(--ui-bg,#10151b) 90%,transparent);color:var(--ui-accent,#7fdbc5);font-size:18px;pointer-events:none}
+input[type=checkbox]{appearance:none;-webkit-appearance:none;display:inline-grid;place-content:center;vertical-align:middle;flex:0 0 auto;width:17px;height:17px;min-width:17px;margin:0 6px 0 0;padding:0;border:1px solid var(--ui-border,#617481);border-radius:4px;background:var(--ui-control,#253541);cursor:pointer}
+input[type=checkbox]:checked{background:var(--ui-accent,#7fdbc5);border-color:var(--ui-accent,#7fdbc5)}
+input[type=checkbox]:checked::before{content:'';width:8px;height:5px;border-left:2px solid var(--ui-bg,#10151b);border-bottom:2px solid var(--ui-bg,#10151b);transform:translateY(-1px) rotate(-45deg)}
+input[type=checkbox]:focus-visible,input[type=range]:focus-visible{outline:2px solid var(--ui-accent,#7fdbc5);outline-offset:3px}
+input[type=range]{appearance:none;-webkit-appearance:none;border:0;background:transparent;padding:6px 0;cursor:pointer;accent-color:var(--ui-accent,#7fdbc5)}
+input[type=range]::-webkit-slider-runnable-track{height:5px;background:var(--ui-control,#344854);border-radius:4px}
+input[type=range]::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:15px;height:15px;margin-top:-5px;border-radius:50%;background:var(--ui-accent,#7fdbc5);border:2px solid var(--ui-surface,#192730)}
+input[type=range]::-moz-range-track{height:5px;background:var(--ui-control,#344854);border-radius:4px}
+input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--ui-accent,#7fdbc5);border:2px solid var(--ui-surface,#192730)}
+input[type=range]:disabled{opacity:.4;cursor:default}
+input[type=file]:not([hidden]){padding:6px;font-size:14px}
+input[type=file]::file-selector-button{font:inherit;color:var(--ui-fg,#e4edf2);background:var(--ui-control,#253541);border:1px solid var(--ui-border,#617481);border-radius:5px;padding:6px 9px;margin-right:8px;cursor:pointer}
+@media(pointer:coarse),(max-width:760px){.ui-select-trigger{min-height:38px;font-size:16px}.ui-select-options .ui-select-option,.cad-toolbar .ui-menu .ui-select-option{min-height:42px;font-size:16px}.panel-switcher-control{display:flex;flex:0 0 auto;width:calc(100% - 8px);margin:4px 4px 0}.panel-switcher-control>.ui-select-trigger{padding:6px 9px}.cad-toolbar{gap:3px}.cad-toolbar>.ui-select{flex:1 1 calc(33% - 6px);max-width:none}.cad-toolbar>.ui-select>.ui-select-trigger{font-size:16px;padding:5px;min-height:36px}}

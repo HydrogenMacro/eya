@@ -1,4 +1,5 @@
 const { chromium } = require('playwright');
+const { reveal } = require('./ui-helpers.cjs');
 const { pathToFileURL } = require('node:url');
 const path = require('node:path');
 (async () => {
@@ -13,10 +14,14 @@ const path = require('node:path');
   await page.keyboard.type("printf '\\103\\110\\122\\117\\115\\105\\137\\106\\111\\114\\105\\137\\117\\113\\n'");
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => document.querySelector('.xterm-screen').innerText.includes('CHROME_FILE_OK'), null, {timeout: 5000});
-  await page.locator('#disconnect').click();
+  await (await reveal(page, '#disconnect')).click();
   await page.locator('#status').filter({ hasText: 'Disconnected' }).waitFor();
   if (!await page.locator('body').evaluate(body => body.classList.contains('connection-offline'))) throw Error('Disconnected UI was not dimmed');
-  await page.waitForFunction(() => document.querySelector('.xterm-screen').innerText.includes('[Disconnected]'));
+  await page.locator('#connection-notice').filter({ hasText: 'Session retained' }).waitFor({ state: 'visible' });
+  await page.locator('#connect').click(); await page.locator('#start-connection').click();
+  await page.locator('#status').filter({ hasText: 'session resumed' }).waitFor();
+  await page.evaluate(() => document.getElementById('end-session').click());
+  await page.locator('#status').filter({ hasText: 'ended explicitly' }).waitFor();
   console.log('Chromium client connected, terminal worked, and disconnect state was clearly announced');
   await browser.close();
 })().catch(error => { console.error(error); process.exit(1); });

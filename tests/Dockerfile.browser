@@ -1,5 +1,5 @@
 FROM node:24-alpine3.22
-RUN apk add --no-cache chromium font-dejavu
+RUN apk add --no-cache chromium chromium-swiftshader font-dejavu
 WORKDIR /app
 COPY client/package*.json ./client/
 RUN npm ci --prefix client --ignore-scripts

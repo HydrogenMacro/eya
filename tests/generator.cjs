@@ -2,6 +2,7 @@ const { chromium } = require('playwright');
 const { pathToFileURL } = require('node:url');
 const fs = require('node:fs');
 const path = require('node:path');
+const { reveal, selectControl, controlValue } = require('./ui-helpers.cjs');
 (async () => {
   const browser = await chromium.launch({ headless: true, executablePath: process.env.EYA_BROWSER_EXECUTABLE, args: process.env.EYA_BROWSER_NO_SANDBOX ? ['--no-sandbox'] : [] });
   try {
@@ -30,6 +31,8 @@ const path = require('node:path');
     await page.keyboard.type("printf '\110\117\123\124\105\104\137\123\126\107\137\117\113\n'");
     await page.keyboard.press('Enter');
     await page.locator('.xterm-screen').filter({ hasText: 'HOSTED_SVG_OK' }).waitFor({ timeout: 5000 });
+    await page.evaluate(() => document.getElementById('end-session').click());
+    await page.locator('#status').filter({ hasText: 'ended explicitly' }).waitFor();
     await page.goto('http://127.0.0.1:18765/');
     await page.locator('#key').fill(key);
     const defaultCommand = "printf '\\104\\105\\106\\101\\125\\114\\124\\137\\103\\117\\115\\115\\101\\116\\104\\n'";
@@ -86,14 +89,17 @@ const path = require('node:path');
     await page.keyboard.type("head -c 400000 /dev/zero | tr '\\0' x; printf '\\n\\106\\114\\117\\127\\137\\124\\105\\123\\124\\137\\120\\101\\123\\123\\105\\104\\n'");
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => document.querySelector('.xterm-screen').innerText.includes('FLOW_TEST_PASSED'), null, { timeout: 20000 });
-    await page.locator('#settings').click();
+    await (await reveal(page, '#settings')).click();
     await page.locator('#font-size').fill('21');
     await page.locator('#font-size').blur();
-    await page.locator('#local-echo').check();
+    await selectControl(page, '#theme', 'midnight');
+    await selectControl(page, '#ui-style', 'rounded');
     await page.locator('#close-settings').click();
+    await page.evaluate(() => document.getElementById('end-session').click());
+    await page.locator('#status').filter({ hasText: 'ended explicitly' }).waitFor();
     await page.reload();
     if (await page.locator('#font-size').inputValue() !== '21') throw Error('Display settings were not saved');
-    if (!await page.locator('#local-echo').isChecked()) throw Error('Instant settings were not saved');
+    if (await controlValue(page.locator('#theme')) !== 'midnight' || await controlValue(page.locator('#ui-style')) !== 'rounded') throw Error('Appearance settings were not saved');
     await page.goto(pathToFileURL(svgFilename).href);
     const svgUrl = await page.locator('#url').evaluate(element => ({ value: element.value, namespace: element.namespaceURI, type: element.constructor.name }));
     if (svgUrl.value !== 'ws://127.0.0.1:18765/ws') {
@@ -110,6 +116,8 @@ const path = require('node:path');
     await page.keyboard.type("printf '\123\126\107\137\103\114\111\105\116\124\137\117\113\n'");
     await page.keyboard.press('Enter');
     await page.locator('.xterm-screen').filter({ hasText: 'SVG_CLIENT_OK' }).waitFor({ timeout: 5000 });
+    await page.evaluate(() => document.getElementById('end-session').click());
+    await page.locator('#status').filter({ hasText: 'ended explicitly' }).waitFor();
     console.log('Hosted credential inheritance, HTML/SVG/data-URL generation, compression, encrypted terminal and large output passed');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exit(1); });

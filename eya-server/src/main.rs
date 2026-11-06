@@ -1,4 +1,6 @@
 mod files;
+mod resume;
+mod system;
 
 use axum::{
     Router,
@@ -17,6 +19,7 @@ use std::{
     env,
     ffi::OsString,
     io::{self, Read, Write},
+    os::unix::fs::MetadataExt,
     path::PathBuf,
     sync::Arc,
     time::Duration,
@@ -40,6 +43,10 @@ struct App {
     slots: Arc<Semaphore>,
     terminal: Arc<CommandBuilder>,
     files: Arc<files::FileManager>,
+    sessions: resume::Registry,
+    session_slots: Arc<Semaphore>,
+    resume_limits: resume::Limits,
+    machine_slots: Arc<Semaphore>,
 }
 
 #[tokio::main]
@@ -66,6 +73,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         slots: Arc::new(Semaphore::new(8)),
         terminal: Arc::new(terminal),
         files: Arc::new(files),
+        sessions: Arc::new(std::sync::Mutex::new(HashMap::new())),
+        session_slots: Arc::new(Semaphore::new(8)),
+        resume_limits: resume::Limits::from_env()?,
+        machine_slots: Arc::new(Semaphore::new(8)),
     };
     let router = Router::new()
         .route("/", get(|| async { Html(GENERATOR) }))
@@ -154,6 +165,7 @@ async fn session(socket: WebSocket, app: App) {
             app.terminal.clone(),
             app.files.clone(),
             slot,
+            app.clone(),
         ),
     )
     .await
@@ -167,6 +179,7 @@ async fn handshake_and_run(
     terminal: Arc<CommandBuilder>,
     files: Arc<files::FileManager>,
     slot: tokio::sync::OwnedSemaphorePermit,
+    app: App,
 ) {
     let Ok(params) = PROTOCOL.parse() else { return };
     let Ok(mut noise) = snow::Builder::new(params)
@@ -203,14 +216,23 @@ async fn handshake_and_run(
     let Ok(n) = noise.read_message(&confirm, &mut buf) else {
         return;
     };
+    if let Some(ready) = buf[..n].strip_prefix(b"eya-ready-v4:") {
+        drop(slot);
+        resume::attach(socket, noise, ready, app).await;
+        return;
+    }
     let flow_control = match &buf[..n] {
         b"eya-ready" => false,
         b"eya-ready-v2" | b"eya-ready-v3" => true,
         _ => return,
     };
     // The timeout applies to the handshake only, not the interactive session.
+    let Ok(session_slot) = app.session_slots.try_acquire_owned() else {
+        return;
+    };
     tokio::spawn(async move {
         let _slot = slot;
+        let _session_slot = session_slot;
         run_terminal(socket, noise, flow_control, terminal, files).await;
     });
 }
@@ -367,6 +389,15 @@ async fn handle_file_request(
         .unwrap_or("");
     let result: io::Result<()> = async {
         match op {
+            op if op.starts_with("system.") || op.starts_with("docker.") || op.starts_with("compose.") => {
+                let mut response = system::handle(op, &request, files).await?;
+                response["id"] = id.into(); response["ok"] = true.into(); response["op"] = op.into();
+                send_file_json(response, sender, noise, cipher).await
+            }
+            "stat" => {
+                let (path, metadata) = files.metadata(path).await?;
+                send_file_json(serde_json::json!({"id": id, "ok": true, "op": op, "path": path, "size": metadata.len(), "version": file_version(&metadata)}), sender, noise, cipher).await
+            }
             "list" => {
                 let show_hidden = request.get("showHidden").and_then(|value| value.as_bool()).unwrap_or(false);
                 let (path, entries) = files.list(path, show_hidden).await?;
@@ -395,16 +426,19 @@ async fn handle_file_request(
                 send_file_json(serde_json::json!({"id": id, "ok": true, "op": op}), sender, noise, cipher).await
             }
             "read" => {
-                let (logical, metadata) = files.metadata(path).await?;
+                let (logical, initial_metadata) = files.metadata(path).await?;
+                if !initial_metadata.is_file() { return Err(invalid_config("only regular files can be opened")); }
+                let mut file = files.open(path).await?;
+                let metadata = file.metadata().await?;
                 if !metadata.is_file() { return Err(invalid_config("only regular files can be opened")); }
                 if metadata.len() > files.max_file_bytes { return Err(invalid_config("file exceeds the configured transfer limit")); }
-                send_file_json(serde_json::json!({"id": id, "ok": true, "op": op, "path": logical, "size": metadata.len(), "modified": metadata.modified().ok().and_then(|value| value.duration_since(std::time::UNIX_EPOCH).ok()).and_then(|value| u64::try_from(value.as_millis()).ok()).unwrap_or(0)}), sender, noise, cipher).await?;
-                let mut file = files.open(path).await?;
+                send_file_json(serde_json::json!({"id": id, "ok": true, "op": op, "path": logical, "size": metadata.len(), "version": file_version(&metadata), "modified": metadata.modified().ok().and_then(|value| value.duration_since(std::time::UNIX_EPOCH).ok()).and_then(|value| u64::try_from(value.as_millis()).ok()).unwrap_or(0)}), sender, noise, cipher).await?;
                 let mut buffer = vec![0u8; 60_000];
                 if metadata.len() == 0 { send_file_chunk(id, true, &[], sender, noise, cipher).await?; }
                 let mut remaining = metadata.len();
                 while remaining > 0 {
-                    let read = file.read(&mut buffer).await?;
+                    let limit = remaining.min(buffer.len() as u64) as usize;
+                    let read = file.read(&mut buffer[..limit]).await?;
                     if read == 0 { return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "file changed while it was being read")); }
                     remaining -= read as u64;
                     send_file_chunk(id, remaining == 0, &buffer[..read], sender, noise, cipher).await?;
@@ -415,6 +449,7 @@ async fn handle_file_request(
                 let size = request.get("size").and_then(|value| value.as_u64()).ok_or_else(|| invalid_config("upload size is required"))?;
                 let overwrite = request.get("overwrite").and_then(|value| value.as_bool()).unwrap_or(false);
                 if uploads.contains_key(&id) { return Err(invalid_config("upload id is already active")); }
+                if uploads.len() >= 8 { return Err(invalid_config("too many active uploads; finish or reconnect before starting more")); }
                 let upload = files.begin_upload(id, path, size, overwrite).await?;
                 uploads.insert(id, upload);
                 send_file_json(serde_json::json!({"id": id, "ok": true, "op": op, "ready": true}), sender, noise, cipher).await
@@ -426,6 +461,19 @@ async fn handle_file_request(
         send_file_error(id, &err.to_string(), sender, noise, cipher).await?;
     }
     Ok(())
+}
+
+fn file_version(metadata: &std::fs::Metadata) -> String {
+    format!(
+        "{}:{}:{}:{}:{}:{}:{}",
+        metadata.dev(),
+        metadata.ino(),
+        metadata.len(),
+        metadata.mtime(),
+        metadata.mtime_nsec(),
+        metadata.ctime(),
+        metadata.ctime_nsec()
+    )
 }
 
 async fn send_file_error(
@@ -499,10 +547,13 @@ async fn send_encrypted(
     let size = noise
         .write_message(data, cipher)
         .map_err(|_| invalid_config("could not encrypt file response"))?;
-    sender
-        .send(Message::Binary(cipher[..size].to_vec().into()))
-        .await
-        .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "connection closed"))
+    timeout(
+        Duration::from_secs(5),
+        sender.send(Message::Binary(cipher[..size].to_vec().into())),
+    )
+    .await
+    .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "connection send timed out"))?
+    .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "connection closed"))
 }
 
 fn terminal_command() -> io::Result<CommandBuilder> {

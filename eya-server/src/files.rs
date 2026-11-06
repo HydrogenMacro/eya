@@ -4,6 +4,7 @@ use std::{
     ffi::OsString,
     fs as stdfs, io,
     os::unix::ffi::OsStrExt,
+    os::unix::fs::{OpenOptionsExt, PermissionsExt},
     path::{Component, Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
     time::UNIX_EPOCH,
@@ -11,6 +12,9 @@ use std::{
 use tokio::{fs, io::AsyncWriteExt};
 
 pub const DEFAULT_MAX_FILE_BYTES: u64 = 256 * 1024 * 1024;
+const MAX_DIRECTORY_ENTRIES: usize = 20_000;
+const MAX_SEARCH_ENTRIES: usize = 100_000;
+const MAX_SEARCH_DIRECTORIES: usize = 4096;
 static UPLOAD_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone)]
@@ -108,13 +112,24 @@ impl FileManager {
         let result_path = logical.clone();
         let entries = blocking(self.identity.clone(), "directory listing", move || {
             let mut entries = Vec::new();
-            for item in stdfs::read_dir(physical)? {
-                let item = item?;
+            for (index, item) in stdfs::read_dir(physical)?.enumerate() {
+                if index >= MAX_DIRECTORY_ENTRIES {
+                    return Err(invalid(
+                        "directory exceeds 20000 entries; narrow the path or use search",
+                    ));
+                }
+                let Ok(item) = item else {
+                    continue;
+                };
                 let name = item.file_name().to_string_lossy().into_owned();
                 if !show_hidden && name.starts_with('.') {
                     continue;
                 }
-                entries.push(entry(&logical, name, item.metadata()?));
+                // Files can disappear or become inaccessible during a live listing.
+                let Ok(metadata) = item.metadata() else {
+                    continue;
+                };
+                entries.push(entry(&logical, name, metadata));
             }
             entries.sort_by(|a, b| {
                 (a.kind != "directory", a.name.to_lowercase())
@@ -154,10 +169,27 @@ impl FileManager {
     pub async fn open(&self, path: &str) -> io::Result<fs::File> {
         let (_, physical) = self.resolve(path, &self.initial);
         let file = blocking(self.identity.clone(), "open file", move || {
-            stdfs::File::open(physical)
+            // A path can change between stat and open. Never wait for a FIFO
+            // writer, and validate the actual opened descriptor before reading.
+            let file = stdfs::OpenOptions::new()
+                .read(true)
+                .custom_flags(libc::O_NONBLOCK)
+                .open(physical)?;
+            if !file.metadata()?.is_file() {
+                return Err(invalid("only regular files can be opened"));
+            }
+            Ok(file)
         })
         .await?;
         Ok(fs::File::from_std(file))
+    }
+
+    pub async fn read_link(&self, path: &str) -> io::Result<PathBuf> {
+        let (_, physical) = self.resolve(path, &self.initial);
+        blocking(self.identity.clone(), "read symbolic link", move || {
+            stdfs::read_link(physical)
+        })
+        .await
     }
 
     pub async fn mkdir(&self, path: &str) -> io::Result<String> {
@@ -173,7 +205,7 @@ impl FileManager {
         let (logical, physical) = self.resolve(path, &self.initial);
         let (new_logical, new_physical) = self.resolve(new_path, parent(&logical));
         blocking(self.identity.clone(), "rename file", move || {
-            stdfs::rename(physical, new_physical)
+            rename_upload(&physical, &new_physical, false)
         })
         .await?;
         Ok(new_logical)
@@ -218,22 +250,36 @@ impl FileManager {
                     "a file already exists at that path",
                 ));
             }
-            let name = target_for_open
-                .file_name()
-                .and_then(|value| value.to_str())
-                .unwrap_or("file");
+            let permissions = if overwrite {
+                stdfs::metadata(&target_for_open)
+                    .ok()
+                    .filter(|value| value.is_file())
+                    .map(|value| stdfs::Permissions::from_mode(value.permissions().mode() & 0o777))
+            } else {
+                None
+            };
             loop {
                 let sequence = UPLOAD_SEQUENCE.fetch_add(1, Ordering::Relaxed);
                 let temporary = target_for_open.with_file_name(format!(
-                    ".{name}.eya-upload-{}-{id}-{sequence}.tmp",
+                    ".eya-upload-{}-{id}-{sequence}.tmp",
                     std::process::id()
                 ));
                 match stdfs::OpenOptions::new()
                     .create_new(true)
                     .write(true)
+                    .mode(0o600)
                     .open(&temporary)
                 {
-                    Ok(file) => return Ok((file, temporary)),
+                    Ok(file) => {
+                        if let Some(permissions) = permissions.clone() {
+                            if let Err(error) = file.set_permissions(permissions) {
+                                drop(file);
+                                let _ = stdfs::remove_file(&temporary);
+                                return Err(error);
+                            }
+                        }
+                        return Ok((file, temporary));
+                    }
                     Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
                     Err(error) => return Err(error),
                 }
@@ -311,9 +357,9 @@ fn rename_upload(source: &Path, target: &Path, overwrite: bool) -> io::Result<()
         return stdfs::rename(source, target);
     }
     let source = CString::new(source.as_os_str().as_bytes())
-        .map_err(|_| invalid("upload path contains a NUL byte"))?;
+        .map_err(|_| invalid("path contains a NUL byte"))?;
     let target = CString::new(target.as_os_str().as_bytes())
-        .map_err(|_| invalid("upload path contains a NUL byte"))?;
+        .map_err(|_| invalid("path contains a NUL byte"))?;
     let result = unsafe {
         libc::syscall(
             libc::SYS_renameat2,
@@ -499,14 +545,30 @@ fn search_tree(
 ) -> io::Result<Vec<Entry>> {
     let mut found = Vec::new();
     let mut pending = vec![(root.to_path_buf(), logical_root.to_owned(), 0usize)];
+    let mut visited = 0usize;
+    let mut examined = 0usize;
     while let Some((directory, logical, depth)) = pending.pop() {
+        visited += 1;
+        if visited > MAX_SEARCH_DIRECTORIES {
+            return Err(invalid(
+                "search scope exceeds 4096 directories; choose a narrower folder",
+            ));
+        }
         if depth > 24 {
             continue;
         }
-        let Ok(items) = stdfs::read_dir(directory) else {
-            continue;
+        let items = match stdfs::read_dir(directory) {
+            Ok(items) => items,
+            Err(error) if depth == 0 => return Err(error),
+            Err(_) => continue,
         };
         for item in items.flatten() {
+            examined += 1;
+            if examined > MAX_SEARCH_ENTRIES {
+                return Err(invalid(
+                    "search scope exceeds 100000 entries; choose a narrower folder",
+                ));
+            }
             let name = item.file_name().to_string_lossy().into_owned();
             if !show_hidden && name.starts_with('.') {
                 continue;
@@ -523,6 +585,11 @@ fn search_tree(
                 return Ok(found);
             }
             if let Some(path) = child {
+                if pending.len() >= MAX_SEARCH_DIRECTORIES {
+                    return Err(invalid(
+                        "search scope exceeds 4096 directories; choose a narrower folder",
+                    ));
+                }
                 pending.push((item.path(), path, depth + 1));
             }
         }
@@ -615,6 +682,118 @@ mod tests {
         rename_upload(&source, &target, true).unwrap();
         assert_eq!(fs::read_to_string(&target).unwrap(), "new");
         assert!(!source.exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn browser_rename_preserves_existing_destination() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-browser-rename");
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("source"), "new").unwrap();
+        fs::write(root.join("target"), "old").unwrap();
+        let manager = super::FileManager {
+            root: root.clone(),
+            initial: "/".into(),
+            identity: None,
+            max_file_bytes: super::DEFAULT_MAX_FILE_BYTES,
+        };
+        assert_eq!(
+            manager
+                .rename("/source", "/target")
+                .await
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::AlreadyExists
+        );
+        assert_eq!(fs::read_to_string(root.join("source")).unwrap(), "new");
+        assert_eq!(fs::read_to_string(root.join("target")).unwrap(), "old");
+        assert_eq!(
+            manager.rename("/source", "/renamed").await.unwrap(),
+            "/renamed"
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn uploads_support_long_names_and_preserve_executable_modes() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-upload-edge-cases");
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let manager = super::FileManager {
+            root: root.clone(),
+            initial: "/".into(),
+            identity: None,
+            max_file_bytes: 1024,
+        };
+        let name = "a".repeat(255);
+        let mut upload = manager
+            .begin_upload(1, &format!("/{name}"), 3, false)
+            .await
+            .unwrap();
+        upload.write(b"new").await.unwrap();
+        upload.finish().await.unwrap();
+        assert_eq!(fs::read(root.join(&name)).unwrap(), b"new");
+        fs::set_permissions(root.join(&name), fs::Permissions::from_mode(0o751)).unwrap();
+        let mut upload = manager
+            .begin_upload(2, &format!("/{name}"), 4, true)
+            .await
+            .unwrap();
+        upload.write(b"edit").await.unwrap();
+        upload.finish().await.unwrap();
+        assert_eq!(
+            fs::metadata(root.join(&name)).unwrap().permissions().mode() & 0o777,
+            0o751
+        );
+        let mut upload = manager
+            .begin_upload(3, "/unfinished", 2, false)
+            .await
+            .unwrap();
+        assert!(upload.write(b"too many").await.is_err());
+        upload.cancel().await;
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn opening_special_files_is_rejected_without_waiting_for_fifo_writer() {
+        let root =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-file-open-edge-cases");
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let path =
+            std::ffi::CString::new(root.join("pipe").as_os_str().as_encoded_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(path.as_ptr(), 0o600) }, 0);
+        let manager = super::FileManager {
+            root: root.clone(),
+            initial: "/".into(),
+            identity: None,
+            max_file_bytes: 1024,
+        };
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_secs(1), manager.open("/pipe"))
+                .await
+                .unwrap()
+                .is_err()
+        );
+        assert!(manager.open("/").await.is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn search_reports_missing_root_and_does_not_follow_symlink_loops() {
+        use std::os::unix::fs::symlink;
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-search-edge-cases");
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("child")).unwrap();
+        symlink("..", root.join("child/loop")).unwrap();
+        assert!(super::search_tree(&root.join("missing"), "/missing", "no-match", true).is_err());
+        assert!(
+            super::search_tree(&root, "/", "no-match", true)
+                .unwrap()
+                .is_empty()
+        );
         fs::remove_dir_all(root).unwrap();
     }
 }

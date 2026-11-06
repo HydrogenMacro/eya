@@ -4,18 +4,20 @@ Eya's file workspace is a browser-based file manager and viewer carried over the
 
 ## Opening and arranging the workspace
 
-Select **Files** in the main header to show or hide the workspace. The preference is saved locally. In **Settings → Files and editor**, choose:
+Select **Files** in the main header to show or hide the primary browser panel. Use **+ → File browser** for additional independent instances with their own path, search, history, and selection. Use direct split buttons and sashes to place and resize panels. In **Settings → Files** and **Editor**, choose:
 
-- **Show file panel after connecting** to retain its visibility between launches.
-- **Terminal/file split** for a side-by-side or stacked desktop layout.
-- **File panel size** from 25–75% of the workspace.
 - **Starting directory**. An empty value uses `EYA_CWD`, then the server user's home, then `/`.
-- **Automatic refresh** from off through 2, 5, 10, or 30 seconds.
-- **Show hidden files**, editor line wrapping and line numbers, and delete confirmation.
+- **Refresh** from off through 2, 5, 10, or 30 seconds.
+- **Hidden files**, file detail columns, and delete confirmation.
+- Editor font size, tab size, line wrapping, and line numbers.
 
 The settings dialog has a search field. Its filter matches section names, setting names, and descriptions. Settings are stored in the browser's local storage; they do not alter the generated client or server configuration.
 
-On narrow or touch layouts, Files fills the workspace rather than squeezing the terminal. Closing Files returns to the terminal and its mobile key bar. Path, search, and settings fields use a 16 px input size to avoid the automatic focus zoom used by mobile Safari and other browsers. Native pinch zoom remains available.
+Open Settings from the header's **Workspace menu** or with `Ctrl+,` / `Cmd+,`. Secondary browser controls such as New folder, Refresh, Forward, and Close files are in **File browser menu**. See [interface.md](interface.md) for the compact toolbar layout and keyboard controls.
+
+File previews are independent workbench panels rather than children of the browser interface. They can share a tab group with Files, be dragged to another group, or be split right/down with the group controls. See [panels.md](panels.md) for the complete panel model and API.
+
+On narrow or touch layouts, the active panel group fills the workspace rather than squeezing groups together. Closing Files returns to the terminal and its mobile key bar. Path, search, settings, and CodeMirror editing surfaces use a 16 px size to avoid automatic focus zoom used by mobile Safari and other browsers. Editor focus also keeps the fixed workbench dimensions stable while the software keyboard changes the visual viewport. Native pinch zoom remains available.
 
 ## File browser operations
 
@@ -27,13 +29,19 @@ The Browser tab provides:
 - Folder-first directory listings with sizes and modification times.
 - Optional hidden files.
 - New folder and multi-file upload controls, with Open, Download, Rename, and Delete in the menu beside each file.
-- Keyboard navigation: focus a row and press Enter to open it.
+- Keyboard navigation: arrows/Home/End select rows; Enter opens; F2 renames; Delete/Backspace deletes the selected file; Alt+Up navigates to the parent. Ctrl/Cmd+L focuses the path; Ctrl/Cmd+F focuses search. Text inputs keep their normal editing behavior.
 
 Select an item once to enable its actions. Double-click a folder to enter it or a file to open it. Deleting a directory is recursive after confirmation. Deletes are not moved to an operating-system trash and cannot be undone.
 
-Uploads are written to a temporary file in the destination directory, flushed, and atomically renamed when the final encrypted chunk arrives. An interrupted upload is removed. Existing files are not replaced without a second confirmation in the client. Editor saves use the same atomic upload path.
+Renaming refuses an existing destination instead of overwriting it. Open editors follow file/folder renames while preserving edits and undo history. Renaming waits for active saves to finish and refuses conflicts with another open destination editor.
 
-Downloads are assembled in browser memory before the browser's download flow starts. Uploads likewise originate from a browser `File` or an editor buffer. `EYA_MAX_FILE_BYTES` limits each transfer and opened file; its default is 268,435,456 bytes (256 MiB). Set it before starting the server, for example:
+Upload through the icon button or drag files onto a browser panel. Uploads are written to a temporary file in the destination directory, flushed, and atomically renamed when the final encrypted chunk arrives. An interrupted upload is removed. Existing files are not replaced without a second confirmation in the client. Editor saves use the same atomic upload path.
+
+At most eight uploads may be active per connection. Temporary files use short independent names, including when the destination filename reaches the filesystem's name limit. New uploads are private to the account (mode `0600`); overwriting an existing regular file preserves its ordinary permission/execute bits while clearing special set-ID bits. The opened descriptor must be a regular file; a path swapped to a FIFO cannot leave the server waiting for a writer.
+
+Directory listing rejects directories beyond 20,000 entries rather than allocating an unbounded response. Recursive search additionally stops with an explicit error beyond 100,000 examined entries or 4,096 directories; choose a narrower starting directory in that case. Files disappearing during an ordinary directory listing are skipped. Search reports an inaccessible/missing starting directory rather than presenting it as empty.
+
+Downloads are assembled in browser memory before the browser's download flow starts. Local uploads read bounded slices from the browser `File` after the server accepts its size; editor saves use an existing text buffer. `EYA_MAX_FILE_BYTES` limits each transfer and opened file; its default is 268,435,456 bytes (256 MiB). Set it before starting the server, for example:
 
 ```sh
 EYA_MAX_FILE_BYTES=536870912 EYA_KEY='your password' ./eya-server/target/release/eya-server
@@ -41,20 +49,22 @@ EYA_MAX_FILE_BYTES=536870912 EYA_KEY='your password' ./eya-server/target/release
 
 ## Tabs, editor, and viewers
 
-Every opened file receives a tab. The Browser tab always remains available. A dot on a file tab indicates unsaved editor changes; closing such a tab asks for confirmation.
+Every opened file receives a generic workbench tab. The Files tab remains available until explicitly closed. A dot on a file tab indicates unsaved editor changes; closing such a tab asks for confirmation.
 
 Text files up to 5 MiB open in CodeMirror. Eya detects UTF-8 text and common text extensions, supplies modes for JSON, JavaScript/TypeScript/JSX, HTML, CSS, and Markdown, and supports undo history, indentation, selection, line numbers, wrapping, and `Ctrl`/`Cmd`+`S`. Files above the editor limit can still be downloaded.
 
 PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, and SVG files use an image view. Common MP4, WebM, Ogg video, QuickTime, 3GP, and Matroska extensions use a native `<video>` view with controls and inline mobile playback. MP3, WAV, Ogg/Opus, M4A, AAC, FLAC, and WebM audio use a native `<audio>` view. Actual container and codec support depends on the browser. Unknown or complex formats use the generic viewer, which reports the file size and offers Download.
 
-The client viewer selection is an ordered registry in `client/app.js` named `fileViewers`. To add a complex viewer, add a provider before `generic` with:
+STL, GLB, and glTF files open in the [CAD viewer](cad.md), with wireframe/edge display, orbit controls, measurements, and independent live reload. Relative glTF buffers and textures are read through the same encrypted file connection and included in live-reload checks. GLB is the recommended single-file build123d preview export; exact STEP/BRep analysis is not provided.
+
+The client viewer selection is an ordered registry. Trusted future viewers can register before the generic fallback through `EyaPanels.registerViewer`:
 
 ```js
-{
+EyaPanels.registerViewer({
   name: 'example',
   supports: tab => extension(tab.path) === 'example',
   render: tab => renderExample(tab),
-}
+});
 ```
 
 The renderer owns a tab-local DOM node and may create object URLs or other browser-native resources. Follow the existing viewers' cleanup pattern when adding long-lived resources.
@@ -75,7 +85,7 @@ Paths are normalized to an absolute logical path. `..` cannot move above `/`, an
 
 ## Wire protocol and limits
 
-Protocol v3 retains v2 terminal flow control and adds encrypted message types:
+File messages introduced in protocol v3 are also used by resumable protocol v4. The terminal/session framing is documented in [reconnection.md](reconnection.md). File messages are:
 
 | Type | Direction | Purpose |
 | --- | --- | --- |
@@ -83,7 +93,7 @@ Protocol v3 retains v2 terminal flow control and adds encrypted message types:
 | `5` | both | file bytes: request id, final flag, and payload |
 | `6` | server → client | chunked JSON for unusually large directory/search results |
 
-Requests use monotonically increasing 32-bit IDs so transfers can be matched independently. Binary payloads are at most 60,000 bytes, below the Noise/WebSocket frame limit. The server supports `list`, `search`, `mkdir`, `rename`, `delete`, `read`, and `write`; errors are returned to the matching request without terminating the terminal session. Older v1/v2 clients continue to work as terminals and simply do not send file messages.
+Requests use monotonically increasing 32-bit IDs so transfers can be matched independently. Binary payloads are at most 60,000 bytes, below the Noise/WebSocket frame limit. The server supports `list`, `stat`, `search`, `mkdir`, `rename`, `delete`, `read`, and `write`; errors are returned to the matching request without terminating the terminal session. `stat` returns file size and an opaque high-resolution `version` token; `read` includes the same token from its open file descriptor. Older v1/v2 clients continue to work as terminals and simply do not send file messages.
 
 ## Troubleshooting
 

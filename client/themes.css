@@ -1,0 +1,31 @@
+:root{--ui-bg:#10151b;--ui-surface:#192730;--ui-control:#253541;--ui-border:#344854;--ui-fg:#e4edf2;--ui-muted:#9bb0bc;--ui-accent:#7fdbc5;--ui-radius:5px;color-scheme:dark}
+:root[data-theme=light]{--ui-bg:#f4f5f1;--ui-surface:#e9ece8;--ui-control:#fff;--ui-border:#b9c8c7;--ui-fg:#1c2830;--ui-muted:#526776;color-scheme:light}
+:root[data-theme=midnight]{--ui-bg:#0c1022;--ui-surface:#151b32;--ui-control:#222c48;--ui-border:#354362;--ui-fg:#d5ddff;--ui-muted:#9caad0}
+:root[data-theme=solarized]{--ui-bg:#002b36;--ui-surface:#073642;--ui-control:#104451;--ui-border:#34636e;--ui-fg:#c0cdcd;--ui-muted:#93a1a1}
+:root[data-accent=blue]{--ui-accent:#72b8ff}:root[data-accent=violet]{--ui-accent:#c3a0ff}:root[data-accent=amber]{--ui-accent:#f5c96b}:root[data-theme=light][data-accent=mint]{--ui-accent:#257a69}
+:root[data-ui-style=rounded]{--ui-radius:12px}:root[data-ui-style=square]{--ui-radius:0}
+html,body,#workspace,.panel-group,.viewer,.viewer-body,.cad-stage,.file-browser-view,.file-instance{background:var(--ui-bg);color:var(--ui-fg)}
+body>.app-header,.panel-group-header,dialog,.ui-menu,#file-entry-menu,#terminal-menu,#keybar,.file-list th,.settings-search,.cad-parts{background:var(--ui-surface);color:var(--ui-fg);border-color:var(--ui-border)}
+button,input,textarea,select{background:var(--ui-control);color:var(--ui-fg);border-color:var(--ui-border);border-radius:var(--ui-radius)}
+button:hover,.file-list tr:hover,.file-list tr.selected,.panel-tab[aria-selected=true],.ui-menu button:hover{background:color-mix(in srgb,var(--ui-accent) 14%,var(--ui-surface));color:var(--ui-fg)}
+.app-header>button.primary,.primary{background:var(--ui-accent);color:#112028;border-color:var(--ui-accent)}
+.panel-group,.panel-group-header,.file-list td,.file-list th,#file-toolbar,#path-toolbar,.viewer-actions,.file-status,.cad-toolbar,.cad-stats,.panel-sash,.settings-section,.ui-menu-heading:not(:first-child){border-color:var(--ui-border)}
+.panel-tab[aria-selected=true]{border-top-color:var(--ui-accent)}.panel-tab,.panel-tab>.ui-icon,#status,.file-status,.viewer-path,.cad-stats,.ui-menu-heading,small,.settings-section h3{color:var(--ui-muted)}
+.panel-tab[aria-selected=true],.entry-name>.ui-icon{color:var(--ui-fg)}.panel-tab-dirty{color:var(--ui-accent)}
+button:focus-visible,[tabindex]:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--ui-accent);outline-offset:-2px}
+#file-toolbar .path-input,#path-toolbar .file-search{background:var(--ui-bg);color:var(--ui-fg)}
+.editor-host .cm-editor,.editor-host .cm-content{font-size:var(--editor-font-size,16px)}
+.hide-file-details .file-list .size,.hide-file-details .file-list .modified{display:none}
+:root[data-density=compact] .file-list td,:root[data-density=compact] .file-list th{padding-block:3px}
+:root[data-density=compact] .app-header{min-height:40px;padding-block:3px}
+:root[data-density=compact] .panel-group-header{height:31px}
+.reduce-motion *{transition:none!important;animation:none!important;scroll-behavior:auto!important}
+.file-instance{display:flex;flex:1;min-width:0;min-height:0;flex-direction:column}
+.file-instance-toolbar,.file-instance-search{display:flex;align-items:center;gap:4px;padding:5px;border-bottom:1px solid var(--ui-border);flex:0 0 auto}
+.file-instance-toolbar>input:not([type=file]){flex:1;min-width:0;width:0;margin:0;padding:5px;font:16px ui-monospace,monospace}
+.file-instance-search>input{min-width:0;margin:0;border:0;background:transparent;flex:1}
+.file-instance-view{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain}
+.file-instance .file-status{flex:0 0 auto}
+[hidden]{display:none!important}
+body.connection-offline #workspace{opacity:1;filter:none}body.connection-offline #terminal-pane,body.connection-offline #file-panel,body.connection-offline .file-instance,body.connection-offline .machine-panel{opacity:.5;filter:grayscale(.8)}
+@media(pointer:coarse),(max-width:760px){.editor-host .cm-editor,.editor-host .cm-content{font-size:max(16px,var(--editor-font-size))!important}:root[data-density=compact] .panel-group-header{height:38px}:root[data-density=compact] .file-list td{padding-block:6px}.file-instance-toolbar>.icon-button{width:34px;height:36px}}

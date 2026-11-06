@@ -1,0 +1,12 @@
+# Keep generated and dependency-heavy files out of default ripgrep discovery.
+# They can still be inspected by passing an explicit path or using --no-ignore.
+client.html
+client/generator.html
+client/package-lock.json
+eya-server/Cargo.lock
+tests/*.bundle.cjs
+
+# These are already ignored by Git; listing them here documents the search boundary.
+client/node_modules/
+eya-server/target/
+*.log

@@ -22,7 +22,7 @@
       foreignObject.replaceChildren(client);
       Object.defineProperties(document, {
         queryCommandSupported: { configurable: true, value: () => false },
-        createElement: { configurable: true, value: (name, options) => document.createElementNS(xhtml, name, options) },
+        createElement: { configurable: true, value: (name, options) => document.createElementNS(xhtml, String(name).toLowerCase(), options) },
       });
       for (const program of programs) Function(program)();
     } catch (error) {

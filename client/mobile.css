@@ -1,0 +1,20 @@
+/* UI chrome is touch-native, while document content remains selectable. */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+:root,html,body{overscroll-behavior:none;overflow:hidden}
+body{touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+button,[role=button],[role=tab],[role=combobox],summary,.panel-group-header,.app-header,.machine-toolbar,.docker-nav,.docker-tools,.machine-table th,.file-list th,.ui-menu,.live-chart,.task-core,.task-summary-strip,.docker-overview{touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+.file-list td,.machine-table td,.docker-table td{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+input,textarea,[contenteditable=true],.cm-content,.xterm-selection,.docker-detail-content pre,.docker-properties dd,.task-inspector dd,.viewer-body pre,.machine-status,.docker-status,#error,[role=alert]{user-select:text;-webkit-user-select:text;-webkit-touch-callout:default}
+.task-dashboard,.task-inspector-body,.docker-detail-content,.machine-scroll,.file-instance-view,.file-browser-view,.viewer-body,.ui-menu{overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y}
+.task-manager-v2 .task-dashboard{min-height:0;grid-auto-rows:max-content;align-content:start}
+.task-manager-v2[data-view=performance] .task-dashboard{flex:1 1 0;min-height:0;max-height:none;overflow:auto}
+.task-dashboard .task-chart-card{min-height:0;align-self:start}
+.task-manager-v2[data-view=performance] .task-dashboard .task-chart-card{min-height:0}
+.task-manager-v2 .task-dashboard .live-chart-plot,.task-manager-v2[data-view=performance] .task-dashboard .task-chart-card .live-chart-plot{min-height:0;max-height:none}
+.live-chart-svg{touch-action:pan-y}
+#keybar{grid-template-columns:repeat(7,minmax(0,1fr));grid-template-rows:repeat(2,40px);height:calc(93px + env(safe-area-inset-bottom));gap:4px;overscroll-behavior:none;touch-action:none}
+#keybar button{display:flex;flex-direction:column;gap:2px;padding:3px 1px;line-height:1;overflow:hidden;touch-action:none}
+#keybar .ui-icon{width:17px;height:17px}#keybar .button-label{font-size:10px;font-weight:550}
+#keybar #arrow-pad{font-size:inherit}#keybar #arrow-pad::before{content:none!important}
+.task-manager-v2 .task-core{min-width:0;overflow:hidden}.task-manager-v2 .task-core>strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(pointer:coarse),(max-width:760px){.task-manager-v2[data-view=performance] .task-dashboard{grid-template-columns:minmax(0,1fr);grid-auto-rows:max-content}.task-chart-stat strong{font-size:16px}.task-chart-card .live-chart{border:0}.task-dashboard .live-chart-plot{min-height:0;max-height:none}.task-manager-v2 .task-inspector{max-height:55%;flex-shrink:1}.docker-detail{min-height:0;max-height:65%}}

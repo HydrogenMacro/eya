@@ -79,6 +79,8 @@ const timer = setTimeout(() => { console.error('File protocol test timed out'); 
   if (!listing.entries.some(entry => entry.name === 'seed.txt')) throw Error('seed file not listed');
   const seed = await read(`${listing.path}/seed.txt`);
   if (decoder.decode(seed.bytes) !== 'seed contents\n') throw Error('seed file contents differed');
+  const stat = await request('stat', { path: `${listing.path}/seed.txt` });
+  if (typeof stat.version !== 'string' || !stat.version || stat.version !== seed.meta.version || stat.size !== seed.bytes.length) throw Error('File stat version does not match the opened file');
   await write(`${listing.path}/protocol.txt`, encoder.encode('protocol contents'));
   await request('rename', { path: `${listing.path}/protocol.txt`, newPath: 'renamed.txt' });
   const results = await request('search', { path: listing.path, query: 'renamed', showHidden: false });
