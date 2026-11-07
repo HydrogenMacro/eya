@@ -1,3 +1,6 @@
+mod browser;
+mod browser_egress;
+mod browser_render;
 mod files;
 mod resume;
 mod system;
@@ -47,10 +50,17 @@ struct App {
     session_slots: Arc<Semaphore>,
     resume_limits: resume::Limits,
     machine_slots: Arc<Semaphore>,
+    browser_slots: Arc<Semaphore>,
+    browser_render_slots: Arc<Semaphore>,
+    browser: Arc<browser::Proxy>,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if browser_render::cgroup_exec_requested() {
+        browser_render::exec_browser_in_cgroup_from_args().map_err(io::Error::other)?;
+        return Ok(());
+    }
     if let Err(error) = dotenvy::dotenv()
         && !error.not_found()
     {
@@ -77,9 +87,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         session_slots: Arc::new(Semaphore::new(8)),
         resume_limits: resume::Limits::from_env()?,
         machine_slots: Arc::new(Semaphore::new(8)),
+        browser_slots: Arc::new(Semaphore::new(4)),
+        browser_render_slots: Arc::new(Semaphore::new(1)),
+        browser: Arc::new(browser::Proxy::new()?),
     };
     let router = Router::new()
         .route("/", get(|| async { Html(GENERATOR) }))
+        .route(
+            "/fonts/{name}",
+            get(
+                |axum::extract::Path(name): axum::extract::Path<String>| async move {
+                    let font: Option<&'static [u8]> = match name.as_str() {
+                        "0xproto" => Some(include_bytes!("../../client/fonts/0xProto.woff2")),
+                        "jetbrains" => {
+                            Some(include_bytes!("../../client/fonts/JetBrainsMono.woff2"))
+                        }
+                        "firacode" => Some(include_bytes!("../../client/fonts/FiraCode.woff2")),
+                        "cascadia" => Some(include_bytes!("../../client/fonts/CascadiaCove.woff2")),
+                        "iosevka" => Some(include_bytes!("../../client/fonts/Iosevka.woff2")),
+                        "inconsolata" => {
+                            Some(include_bytes!("../../client/fonts/Inconsolata.woff2"))
+                        }
+                        "sourcecodepro" => {
+                            Some(include_bytes!("../../client/fonts/SourceCodePro.woff2"))
+                        }
+                        _ => None,
+                    };
+                    font.map(|bytes| ([("content-type", "font/woff2")], bytes))
+                        .ok_or(axum::http::StatusCode::NOT_FOUND)
+                },
+            ),
+        )
         .route("/client.html", get(hosted_client))
         .route(
             "/client-template.html",
@@ -106,6 +144,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }),
         )
         .route("/ws", get(upgrade))
+        .route("/browser-ws", get(browser::upgrade))
+        .route("/browser-render-ws", get(browser_render::upgrade))
         .with_state(app);
     let listener = tokio::net::TcpListener::bind(&bind).await?;
     eprintln!("Eya listening on {bind}");

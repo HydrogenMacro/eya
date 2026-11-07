@@ -38,6 +38,8 @@ function svgPrelude() {
   Object.defineProperties(document, {
     queryCommandSupported: { configurable: true, value: () => false },
     createElement: { configurable: true, value: (name, options) => document.createElementNS('http://www.w3.org/1999/xhtml', String(name).toLowerCase(), options) },
+    head: { configurable: true, get: () => document.querySelector('foreignObject')?.querySelector('head') || null },
+    body: { configurable: true, get: () => document.querySelector('foreignObject')?.querySelector('body') || null },
   });
 }
 function serialize(output) { return '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(output); }
@@ -87,7 +89,13 @@ async function configuredHtml() {
   if (!key) throw Error('Enter the shared password.');
   if (!Number.isInteger(fontSize) || fontSize < 8 || fontSize > 36 || !Number.isInteger(scrollback) || scrollback < 0 || scrollback > 50000) throw Error('Choose a valid font size and scrollback limit.');
   if (defaultCommand.length > 8192 || defaultCommand.includes('\0')) throw Error('Default command must be at most 8192 characters and cannot contain a NUL byte.');
-  const config = { url: endpoint(el('server').value.trim()), key, defaultCommand, font: await fontData(el('font').files[0]), fontSize, scrollback, theme: el('theme').value, cursorBlink: el('cursor-blink').checked, cursorStyle: el('cursor-style').value, scrollOnUserInput: el('scroll-on-input').checked };
+  const fontFamilies = ['0xproto', 'jetbrains', 'firacode', 'cascadia', 'iosevka', 'inconsolata', 'sourcecodepro'];
+  const choice = fontFamilies.includes(el('font-family').value) ? el('font-family').value : '0xproto';
+  const custom = el('font').files[0];
+  const response = custom ? null : await fetch(new URL('fonts/' + choice, location.href));
+  if (response && !response.ok) throw Error('Could not download the selected font.');
+  const selected = custom || new File([await response.blob()], choice + '.woff2', { type: 'font/woff2' });
+  const config = { url: endpoint(el('server').value.trim()), key, defaultCommand, font: await fontData(selected), fontSize, scrollback, theme: el('theme').value, cursorBlink: el('cursor-blink').checked, cursorStyle: el('cursor-style').value, scrollOnUserInput: el('scroll-on-input').checked };
   templatePromise ||= fetch(new URL('client-template.html', location.href), { cache: 'no-store' }).then(response => { if (!response.ok) throw Error('Could not download the client template.'); return response.text(); }).catch(error => { templatePromise = undefined; throw error; });
   const html = await templatePromise; if (!html.includes(marker)) throw Error('The client template is incompatible with this generator.');
   return html.replace(marker, () => '<script id="eya-config" type="application/json">' + JSON.stringify(config).replace(/</g, '\\u003c') + '</' + 'script>');

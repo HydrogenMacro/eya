@@ -1,0 +1,32 @@
+const assert = require('node:assert/strict');
+const Module = require('node:module');
+const path = require('node:path');
+const { buildSync } = require('esbuild');
+
+const source = path.resolve(__dirname, '../client/browser-panel.js');
+const bundle = buildSync({ entryPoints: [source], bundle: true, platform: 'node', format: 'cjs', write: false });
+const loaded = new Module(source, module);
+loaded.filename = source;
+loaded.paths = Module._nodeModulePaths(path.dirname(source));
+loaded._compile(bundle.outputFiles[0].text, source);
+const { createConsoleCommandHistory } = loaded.exports;
+
+const history = createConsoleCommandHistory(3);
+history.add('first()');
+history.add('second()');
+assert.equal(history.move(-1, 'draft text'), 'second()');
+assert.equal(history.move(-1, 'second()'), 'first()');
+assert.equal(history.move(-1, 'first()'), 'first()', 'history should stop at its oldest command');
+assert.equal(history.move(1, 'first()'), 'second()');
+assert.equal(history.move(1, 'second()'), 'draft text', 'moving past newest should restore the current draft');
+history.add('third()');
+history.add('fourth()');
+assert.equal(history.size, 3, 'history should evict commands beyond its bound');
+assert.equal(history.move(-1, ''), 'fourth()');
+history.add('fourth()');
+assert.equal(history.size, 3, 'consecutive duplicate commands should be coalesced');
+history.clear();
+assert.equal(history.size, 0);
+assert.equal(history.move(-1, 'draft'), 'draft');
+assert.throws(() => createConsoleCommandHistory(0), RangeError);
+console.log('Browser console command history passed.');

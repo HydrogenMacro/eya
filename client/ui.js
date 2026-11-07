@@ -3,7 +3,7 @@ import {
   Settings, Unplug, Plug, Folder, FolderOpen, FolderPlus, Upload, Download, RefreshCw,
   Search, Save, Copy, File, FileCode, Image, Box, Link, Columns2, Rows2, MoveRight,
   Maximize, Ruler, SlidersHorizontal, Layers, Terminal, ChevronDown, Check, Pencil, Trash2,
-  Plus, Cpu, Container, Play, Square, Activity, Palette, ListFilter, Pause, Logs, Info,
+  Plus, Cpu, Container, Play, Square, Activity, Palette, ListFilter, Pause, Logs, Info, Globe,
   CornerDownLeft, ClipboardPaste, Delete, Command, Move, ChevronsUp, ChevronsDown, ChevronFirst, ChevronLast, LogOut, IndentIncrease, ArrowDown,
 } from 'lucide';
 
@@ -11,7 +11,7 @@ const icons = { ArrowLeft, ArrowRight, ArrowUp, CornerUpLeft, X, Ellipsis, Ellip
   Settings, Unplug, Plug, Folder, FolderOpen, FolderPlus, Upload, Download, RefreshCw,
   Search, Save, Copy, File, FileCode, Image, Box, Link, Columns2, Rows2, MoveRight,
   Maximize, Ruler, SlidersHorizontal, Layers, Terminal, ChevronDown, Check, Pencil, Trash2,
-  Plus, Cpu, Container, Play, Square, Activity, Palette, ListFilter, Pause, Logs, Info,
+  Plus, Cpu, Container, Play, Square, Activity, Palette, ListFilter, Pause, Logs, Info, Globe,
   CornerDownLeft, ClipboardPaste, Delete, Command, Move, ChevronsUp, ChevronsDown, ChevronFirst, ChevronLast, LogOut, IndentIncrease, ArrowDown };
 
 export function icon(name) {

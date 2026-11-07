@@ -57,6 +57,8 @@ PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, and SVG files use an image view. Common MP
 
 STL, GLB, and glTF files open in the [CAD viewer](cad.md), with wireframe/edge display, orbit controls, measurements, and independent live reload. Relative glTF buffers and textures are read through the same encrypted file connection and included in live-reload checks. GLB is the recommended single-file build123d preview export; exact STEP/BRep analysis is not provided.
 
+HTML and HTM files open in a local document viewer with back/forward navigation, reload, and zoom controls. Relative links to other local documents are resolved against the current file and loaded through the encrypted file connection. Relative stylesheets, images, and fonts use the same connection. Scripts, embedded frames, and external resources are disabled. The server's file root and file access checks continue to apply.
+
 The client viewer selection is an ordered registry. Trusted future viewers can register before the generic fallback through `EyaPanels.registerViewer`:
 
 ```js

@@ -23,6 +23,8 @@
       Object.defineProperties(document, {
         queryCommandSupported: { configurable: true, value: () => false },
         createElement: { configurable: true, value: (name, options) => document.createElementNS(xhtml, String(name).toLowerCase(), options) },
+        head: { configurable: true, get: () => foreignObject.querySelector('head') },
+        body: { configurable: true, get: () => foreignObject.querySelector('body') },
       });
       for (const program of programs) Function(program)();
     } catch (error) {

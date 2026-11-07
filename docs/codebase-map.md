@@ -31,7 +31,8 @@ Never diagnose source behavior from minified generated output unless the issue i
 | Independent terminal panels | `client/terminal-panel.js`, `client/app.js` | `panels.md`; `panel-factories.cjs` |
 | Resume/replay/backpressure | `client/app.js`, `client/terminal-panel.js`, `eya-server/src/resume.rs` | `reconnection.md`; `reconnect.cjs` |
 | File protocol and host identity | `client/app.js`, `eya-server/src/main.rs`, `eya-server/src/files.rs` | `file-manager.md`; `file-protocol.js` |
-| File browser/editor/viewers | `client/file-browser.js`, viewer/editor sections of `client/app.js` | `file-manager.md`; file/viewer suites |
+| File browser/editor/viewers | `client/file-browser.js`, `client/html-viewer.js`, viewer/editor sections of `client/app.js` | `file-manager.md`; file/viewer suites, including `browser-html-viewer.cjs` |
+| Web browser panel | `client/browser-panel.js`, `client/browser-transport.js`, `client/browser-eventsource.js`, `eya-server/src/browser.rs`, `eya-server/src/browser_render.rs`, `eya-server/src/browser_egress.rs` | `browser.md` |
 | Tabs, splits, panel factories | `client/panels.js`, registrations in `client/app.js` | `panels.md`; `panels.cjs`, `panel-factories.cjs` |
 | Shared controls and themes | `client/ui.js`, `components.css`, `themes.css`, `mobile.css` | `interface.md`; `polish.cjs`, mobile suites |
 | Task Manager | `client/task-manager.js`, `eya-server/src/system.rs` | `task-manager.md`, `system-panels.md`; `task-manager.cjs` |

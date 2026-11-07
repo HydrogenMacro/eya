@@ -7,6 +7,7 @@ This directory is the source of the standalone client and generator. It uses bro
 - `app.js`: application integration, the primary connection, settings, editor/viewers, file request routing, and panel registration.
 - `panels.js`: generic split/tab workbench and panel type registry.
 - `terminal-panel.js`: independent terminal panel connection and resumable transport.
+- `browser-panel.js`, `browser-transport.js`, `browser-eventsource.js`: sandboxed browser panel, Noise WebSocket relay, and bounded EventSource parsing.
 - `file-browser.js`: reusable browser panel UI; file transport and editor/viewers remain integrated through `app.js`.
 - `cad.js`: Three.js STL/glTF viewer and CAD controls.
 - `task-manager.js`, `docker-panel.js`: system panels; `system-panels.js` is their small export surface.

@@ -7,6 +7,7 @@ Use this page to open only the document relevant to a change. For a compact arch
 | Architecture | [codebase-map.md](codebase-map.md) | Runtime flow, source ownership, generated boundaries, and feature routing |
 | UI conventions | [interface.md](interface.md) | Toolbars, icons, menus, CAD controls, and shortcuts |
 | Panel framework | [panels.md](panels.md) | Workbench layout, lifecycle, and public factory API |
+| Browser panel | [browser.md](browser.md) | Web proxy panel, sandbox boundary, transport, and compatibility limits |
 | Files/editors | [file-manager.md](file-manager.md) | File operations, transfers, viewers, permissions, and limits |
 | Reconnection | [reconnection.md](reconnection.md) | Protocol v4 offsets, buffering, detach/resume, and expiry |
 | Machine APIs | [system-panels.md](system-panels.md) | Shared Task Manager/Docker transport, authentication, and server limits |

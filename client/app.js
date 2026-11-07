@@ -16,6 +16,9 @@ import { PanelWorkbench } from './panels.js';
 import { createCadViewer, isCadFile } from './cad.js';
 import { createTerminalPanel } from './terminal-panel.js';
 import { createFileBrowser } from './file-browser.js';
+import { createHtmlViewer } from './html-viewer.js';
+import { createBrowserPanel } from './browser-panel.js';
+import { createBrowserRenderTransport, createBrowserTransport } from './browser-transport.js';
 import { createTaskManager, createDockerPanel } from './system-panels.js';
 import { icon, buttonIcon, createMenu, menuAction, menuHeading, closeMenus, notify, startControlEnhancement, attachFileDropzone } from './ui.js';
 
@@ -567,7 +570,7 @@ for (const type of ['pointerup', 'pointercancel']) $('terminal').addEventListene
 scheduleResize();
 
 function terminalOptions() {
-  return { fontSize: Number($('font-size').value), scrollback: Number($('scrollback').value),
+  return { fontFamily: embeddedFontLoaded ? 'EyaEmbeddedFont, monospace' : 'monospace', fontSize: Number($('font-size').value), scrollback: Number($('scrollback').value),
     theme: themes[$('theme').value] || themes.dark, cursorBlink: $('cursor-blink').checked,
     cursorStyle: $('cursor-style').value, scrollOnUserInput: $('scroll-on-input').checked };
 }
@@ -705,10 +708,13 @@ endSessionButton.onclick = () => {
 };
 setConnectionAppearance(false);
 
+let embeddedFontLoaded = false;
 if (config.font) {
   const face = new FontFace('EyaEmbeddedFont', `url(${JSON.stringify(config.font)})`);
   face.load().then(loaded => {
     document.fonts.add(loaded);
+    embeddedFontLoaded = true;
+    for (const panel of workbench.panels.values()) if (panel.id !== 'terminal' && panel.kind === 'terminal') panel.api?.updateOptions?.(terminalOptions());
     terminal.options.fontFamily = 'EyaEmbeddedFont, monospace';
     resize();
   }).catch(() => error('The embedded font could not be loaded. Using the browser’s monospace font.'));
@@ -1078,6 +1084,7 @@ function languageFor(path) {
 
 const fileViewers = [
   { name: 'cad', supports: tab => isCadFile(tab.path), render: renderCadViewer },
+  { name: 'html', supports: tab => ['html', 'htm'].includes(extension(tab.path)), render: renderHtmlViewer },
   { name: 'image', supports: tab => imageExtensions.has(extension(tab.path)), render: renderImageViewer },
   { name: 'video', supports: tab => videoExtensions.has(extension(tab.path)), render: renderVideoViewer },
   { name: 'audio', supports: tab => audioExtensions.has(extension(tab.path)), render: renderAudioViewer },
@@ -1108,6 +1115,15 @@ workbench.registerType({ id: 'files', title: 'File browser', icon: 'FolderOpen',
   id, request: fileRequest, read: readFile, upload: uploadBytes, openFile, download: downloadBlob,
   preferences: browserPreferences, onDelete: closeFileTab, rename: renameFile,
 }) });
+workbench.registerType({ id: 'web-browser', title: 'Browser', icon: 'Globe', category: 'Workspace', order: 25,
+  description: 'Browse through isolated server Chromium, or use fast client proxy mode.', keywords: ['web', 'internet', 'proxy', 'devtools'], create: async ({ id }) => {
+  const connection = validateConnection();
+  if (!connection) { openConnection(); throw Error('Connect to Eya before opening the browser.'); }
+  const transport = await createBrowserTransport({ url: connection.url.href, key: $('key').value });
+  const openRemoteBrowser = handlers => createBrowserRenderTransport({ url: connection.url.href, key: $('key').value, ...handlers });
+  const panel = createBrowserPanel({ request: transport.request, openWebSocket: transport.openWebSocket, openRemoteBrowser, readLocalFile: readFile, openLocalFile: openFile });
+  return { ...panel, id, title: 'Browser', onClose() { panel.onClose?.(); transport.close(); } };
+} });
 workbench.registerType({ id: 'task-manager', title: 'Task Manager', icon: 'Activity', category: 'System', order: 30,
   description: 'Inspect processes and live machine resource usage.', keywords: ['processes', 'cpu', 'memory', 'system'], create: ({ id }) => ({
   id, title: 'Task Manager', kind: 'system', ...createTaskManager({ request: fileRequest, openFile: openMachinePath, openTerminal: command => workbench.create('terminal', { command }) }),
@@ -1211,6 +1227,7 @@ function createViewerShell(tab, save = false) {
 }
 
 function renderTabContent(tab) {
+  tab.htmlViewer?.dispose(); tab.htmlViewer = null;
   tab.cad?.dispose(); tab.cad = null;
   tab.view?.destroy(); tab.view = null;
   if (tab.url) URL.revokeObjectURL(tab.url);
@@ -1244,6 +1261,7 @@ function renderTabContent(tab) {
       },
       onClose: () => {
         tab.shellMenu?.destroy();
+        tab.htmlViewer?.dispose(); tab.htmlViewer = null;
         tab.cad?.dispose(); tab.cad = null;
         tab.view?.destroy();
         if (tab.url) URL.revokeObjectURL(tab.url);
@@ -1344,6 +1362,13 @@ function renderAudioViewer(tab) {
   const shell = createViewerShell(tab);
   tab.url = URL.createObjectURL(new Blob([tab.bytes], { type: mediaType(tab.path) }));
   const audio = document.createElement('audio'); audio.src = tab.url; audio.controls = true; audio.preload = 'metadata'; shell.body.append(audio); return shell.root;
+}
+function renderHtmlViewer(tab) {
+  const shell = createViewerShell(tab);
+  const viewer = createHtmlViewer(tab, { readResource: path => readFile(path), openFile: path => openFile(path) });
+  tab.htmlViewer = viewer;
+  shell.body.append(viewer.element);
+  return shell.root;
 }
 function renderGenericViewer(tab) {
   const shell = createViewerShell(tab);

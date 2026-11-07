@@ -1,12 +1,14 @@
 # Client artifacts and size checks
 
-The client remains self-contained and works offline after download. No features or languages were removed. The build uses esbuild plus a conservative Terser pass, and exposes only the pinned sodium primitives used by Noise rather than bundling the forwarding module's unrelated algorithms. `tests/crypto-bundle.cjs` compares seeded keys, X25519, BLAKE2b, AEAD boundary cases, and tamper rejection against the full pinned provider.
+The client remains self-contained and works offline after download. No features or languages were removed. The build uses esbuild's minifier and exposes only the pinned sodium primitives used by Noise rather than bundling the forwarding module's unrelated algorithms. `tests/crypto-bundle.cjs` compares seeded keys, X25519, BLAKE2b, AEAD boundary cases, and tamper rejection against the full pinned provider.
 
 Generated SVGs use one SVG2 script reference per program. The previous generator repeated each complete base64 program in both `href` and `xlink:href`. Inline CDATA was evaluated and rejected because it did not execute consistently in Chromium. Compressed HTML/SVG use gzip and require browser `DecompressionStream` support; ordinary HTML/SVG remain available. Fonts and configuration add to the sizes below.
 
-These measurements compare the previous esbuild-only pipeline with the optimized pipeline using **identical current features and CSS**, without a custom font or embedded configuration:
+The table preserves a historical comparison between the previous esbuild-only pipeline and the Terser-optimized pipeline, with identical features and CSS, without a custom font or embedded configuration. It predates the bundled Nerd Font choices below and the removal of Terser. With current sources, the esbuild-only output is 1.4% larger uncompressed and 3.5% larger with gzip level 9 than the Terser output.
 
-| Artifact | Previous bytes | Current bytes | Reduction |
+The generator downloads the selected WOFF2 font from the server and embeds only that font in the generated client. The client template contains no bundled font faces.
+
+| Artifact | Previous bytes | Terser pipeline bytes | Reduction |
 | --- | ---: | ---: | ---: |
 | Standalone HTML | 1,905,462 | 1,814,877 | 4.8% |
 | HTML, gzip level 9 | 556,917 | 515,986 | 7.3% |

@@ -14,7 +14,7 @@ Tabs show a content-type icon, name, unsaved marker, and close button. **+**, **
 
 The **+** button opens the searchable **New panel** app launcher, which groups Terminal, File browser, Task Manager, Docker, and future registered types by category. The catalog scrolls independently in small panels and filters across names, descriptions, categories, and keywords. Terminal and File browser create independent instances; factories and their discovery metadata register through `EyaPanels.registerType`. See [panels.md](panels.md) and [system-panels.md](system-panels.md).
 
-Settings groups Appearance, Terminal, Editor, and Files. Four themes, accents, density, UI style, and reduced motion apply to the workspace, editors, terminals, and custom controls. Settings persist locally. Adaptive local echo and initial file-panel placement/size settings have been removed.
+Settings groups Appearance, Terminal, Editor, and Files. The client generator offers seven Nerd Font families and embeds the selected font in the generated client, defaulting to 0xProto. Settings persist locally and apply to existing terminal panels. Four themes, accents, density, UI style, and reduced motion apply to the workspace, editors, terminals, and custom controls. Adaptive local echo and initial file-panel placement/size settings have been removed.
 
 Editor toolbars keep the current directory and Save visible. The **File actions** menu contains Download and Copy path. Save and copy operations provide brief status messages without interrupting typing. Unsaved edits remain marked if a save fails or if more edits arrive during a save.
 
