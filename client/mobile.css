@@ -1,5 +1,6 @@
 /* UI chrome is touch-native, while document content remains selectable. */
-html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;touch-action:pan-x pan-y}
+@media(pointer:coarse),(max-width:760px){input,select,textarea,[contenteditable]:not([contenteditable=false]){font-size:16px!important}}
 :root,html,body{overscroll-behavior:none;overflow:hidden}
 body{touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
 button,[role=button],[role=tab],[role=combobox],summary,.panel-group-header,.app-header,.machine-toolbar,.docker-nav,.docker-tools,.machine-table th,.file-list th,.ui-menu,.live-chart,.task-core,.task-summary-strip,.docker-overview{touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
@@ -12,9 +13,53 @@ input,textarea,[contenteditable=true],.cm-content,.xterm-selection,.docker-detai
 .task-manager-v2[data-view=performance] .task-dashboard .task-chart-card{min-height:0}
 .task-manager-v2 .task-dashboard .live-chart-plot,.task-manager-v2[data-view=performance] .task-dashboard .task-chart-card .live-chart-plot{min-height:0;max-height:none}
 .live-chart-svg{touch-action:pan-y}
-#keybar{grid-template-columns:repeat(7,minmax(0,1fr));grid-template-rows:repeat(2,40px);height:calc(93px + env(safe-area-inset-bottom));gap:4px;overscroll-behavior:none;touch-action:none}
-#keybar button{display:flex;flex-direction:column;gap:2px;padding:3px 1px;line-height:1;overflow:hidden;touch-action:none}
-#keybar .ui-icon{width:17px;height:17px}#keybar .button-label{font-size:10px;font-weight:550}
+#keybar{grid-template-columns:minmax(0,1fr);grid-template-rows:46px;height:calc(54px + env(safe-area-inset-bottom));gap:2px;overscroll-behavior:none;touch-action:none}
+#keybar button{display:flex;align-items:center;justify-content:center;gap:0;padding:2px 1px;min-height:0;border-radius:5px;box-shadow:0 1px 1px #0003;line-height:1;overflow:hidden;touch-action:none}
+#keybar .ui-icon{width:17px;height:17px}#keybar .button-label{display:none}
 #keybar #arrow-pad{font-size:inherit}#keybar #arrow-pad::before{content:none!important}
 .task-manager-v2 .task-core{min-width:0;overflow:hidden}.task-manager-v2 .task-core>strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(pointer:coarse),(max-width:760px){.task-manager-v2[data-view=performance] .task-dashboard{grid-template-columns:minmax(0,1fr);grid-auto-rows:max-content}.task-chart-stat strong{font-size:16px}.task-chart-card .live-chart{border:0}.task-dashboard .live-chart-plot{min-height:0;max-height:none}.task-manager-v2 .task-inspector{max-height:55%;flex-shrink:1}.docker-detail{min-height:0;max-height:65%}}
+
+#keybar [data-key=delete] .ui-icon{transform:rotate(180deg)}
+
+#keybar .aux-row{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:2px;min-width:0;height:46px}
+#keybar .aux-row[hidden]{display:none}
+#keybar .aux-glyph{width:100%;max-width:36px;height:26px;overflow:visible}
+#keybar [data-key^=f]{font-size:11px;font-weight:550}
+
+#keybar .aux-symbol-active{color:var(--ui-accent,#7fdbc5)}
+#keybar .aux-locked{font-weight:800}
+#keybar .aux-locked .ui-icon{stroke-width:3}
+#keybar button[data-direction]:not([data-key=shift-alt])>.ui-icon,#keybar button[data-direction]>.aux-glyph{color:var(--ui-accent,#7fdbc5)}
+#keybar [data-key^=f]:not([data-key=fn]){gap:2px;font-size:9px}
+
+#keybar .browser-keyboard-activate{display:none;width:100%;font-size:13px;touch-action:manipulation}
+#keybar.browser-keyboard-inactive .aux-row{display:none}
+#keybar.browser-keyboard-inactive .browser-keyboard-activate{display:flex}
+
+#keybar button{position:relative}
+#keybar button,#keybar button:hover{background:var(--ui-control,#253541);color:var(--ui-fg,#e4edf2)}
+#keybar button.aux-symbol-active{color:var(--ui-accent,#7fdbc5)}
+#keybar button.aux-press,#keybar button:active{background:color-mix(in srgb,var(--ui-accent,#7fdbc5) 20%,var(--ui-control,#253541))}
+#keybar .aux-number-primary{font-size:18px}
+#keybar .aux-number-up,#keybar .aux-number-down{position:absolute;left:50%;transform:translateX(-50%);font-size:10px;color:#92979c;line-height:1}
+#keybar .aux-number-up{top:3px}#keybar .aux-number-down{bottom:3px}
+#keybar .aux-preview{display:none;position:absolute;left:50%;top:50%;pointer-events:none;font-size:16px;font-weight:600;line-height:1;white-space:nowrap}
+#keybar .aux-swiping>.aux-preview{display:block}
+#keybar .aux-swiping>:not(.aux-preview){opacity:var(--aux-fade,1)}
+#keybar .aux-swiping>.aux-preview{transition:color 40ms linear}
+@media(prefers-reduced-motion:reduce){#keybar .aux-preview{transition:none!important;transform:translate(-50%,-50%)!important}}
+.reduce-motion #keybar .aux-preview{transition:none!important;transform:translate(-50%,-50%)!important}
+#keybar #arrow-pad[data-direction]{background:color-mix(in srgb,var(--ui-accent,#7fdbc5) 20%,var(--ui-control,#253541))}
+
+/* File labels and viewer text support ordinary device text selection. */
+.file-list .entry-name>span,.file-list td.modified,.file-list td.size,.file-list td.file-type,.viewer-body pre,.viewer-message,.eya-browser-status{user-select:text;-webkit-user-select:text;-webkit-touch-callout:default}
+@media(max-width:760px){.file-list .file-type{display:none}}
+
+/* Shared keyboard geometry: follow both visible height and browser focus pan. */
+body{top:var(--eya-viewport-top,0px)}
+dialog:not(.mobile-workspace-dialog){top:var(--eya-viewport-top,0px);bottom:calc(100% - var(--eya-viewport-top,0px) - var(--eya-viewport-height));max-height:calc(var(--eya-viewport-height) - 24px);margin-block:auto}
+#settings-dialog{max-height:calc(var(--eya-viewport-height) - 24px)}
+
+#keybar [data-key=shift-alt] .ui-icon{width:42%;min-width:0}
+#keybar [data-key=shift-alt] .aux-locked{stroke-width:3}

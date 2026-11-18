@@ -1,0 +1,2502 @@
+{
+  "schema": 1,
+  "collectedAt": "2026-11-16T23:00:03.720Z",
+  "note": "Three independent runs collected concurrently; local timings are observations, not isolated performance comparisons.",
+  "summary": {
+    "total": 60,
+    "usable": 52,
+    "unsupported": 8,
+    "failed": 0,
+    "directClientRequests": 0,
+    "consoleExceptions": 0
+  },
+  "runs": {
+    "desktop": {
+      "schema": 1,
+      "generatedAt": "2026-11-16T22:58:47.641Z",
+      "methodology": "Production source panel, bounded Node fixture broker; native engine reference. Excludes Noise, server egress, remote capture, WAN, login and physical-device behavior.",
+      "configuration": {
+        "engines": [
+          "chromium",
+          "firefox",
+          "webkit"
+        ],
+        "formats": [
+          "html",
+          "svg"
+        ],
+        "coarse": false,
+        "absentNavigation": false,
+        "viewport": {
+          "width": 1000,
+          "height": 700
+        }
+      },
+      "rows": [
+        {
+          "engine": "chromium",
+          "mode": "native",
+          "format": "html",
+          "case": "documentation",
+          "public": false,
+          "url": "fixture:/documentation",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET"
+            }
+          ],
+          "firstContentMs": 124,
+          "interaction": "documentation ok",
+          "interactionMs": 230,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1112,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "native",
+          "format": "html",
+          "case": "forms",
+          "public": false,
+          "url": "fixture:/forms",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "POST"
+            }
+          ],
+          "firstContentMs": 46,
+          "interaction": "post ok",
+          "interactionMs": 179,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1968,
+          "uploadedBodyBytes": 19,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "native",
+          "format": "html",
+          "case": "module-spa",
+          "public": false,
+          "url": "fixture:/module-spa",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "GET"
+            }
+          ],
+          "firstContentMs": 56,
+          "interaction": "module ok:api ok",
+          "interactionMs": 254,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1175,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "native",
+          "format": "html",
+          "case": "websocket",
+          "public": false,
+          "url": "fixture:/websocket",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET"
+            }
+          ],
+          "firstContentMs": 66,
+          "interaction": "socket ok",
+          "interactionMs": 183,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1207,
+          "uploadedBodyBytes": 4,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "native",
+          "format": "html",
+          "case": "streaming",
+          "public": false,
+          "url": "fixture:/streaming",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "GET"
+            }
+          ],
+          "firstContentMs": 44,
+          "interaction": "first:second",
+          "interactionMs": 158,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1228,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 2,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "native",
+          "format": "html",
+          "case": "assets",
+          "public": false,
+          "url": "fixture:/assets",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "GET"
+            }
+          ],
+          "firstContentMs": 85,
+          "interaction": "assets ok",
+          "interactionMs": 247,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 981226,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "native",
+          "format": "html",
+          "case": "large-list",
+          "public": false,
+          "url": "fixture:/large-list",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET"
+            }
+          ],
+          "firstContentMs": 160,
+          "interaction": "list ok",
+          "interactionMs": 310,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 37483,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "native",
+          "format": "html",
+          "case": "media",
+          "public": false,
+          "url": "fixture:/media",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "GET"
+            }
+          ],
+          "firstContentMs": 64,
+          "interaction": "media ok",
+          "interactionMs": 154,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 17192,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "native",
+          "format": "html",
+          "case": "third-party-frame",
+          "public": false,
+          "url": "fixture:/third-party-frame",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "GET"
+            }
+          ],
+          "firstContentMs": 66,
+          "interaction": "frame ok",
+          "interactionMs": 304,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1320,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "html",
+          "case": "documentation",
+          "public": false,
+          "url": "fixture:/documentation",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/documentation"
+            }
+          ],
+          "firstContentMs": 147,
+          "interaction": "documentation ok",
+          "interactionMs": 281,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1112,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "panelStatus": "http://127.0.0.1:34927/documentationReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "html",
+          "case": "forms",
+          "public": false,
+          "url": "fixture:/forms",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/forms"
+            },
+            {
+              "status": 200,
+              "method": "POST",
+              "url": "/submitted"
+            }
+          ],
+          "firstContentMs": 122,
+          "interaction": "post ok",
+          "interactionMs": 350,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1968,
+          "uploadedBodyBytes": 19,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "panelStatus": "http://127.0.0.1:34927/submittedReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "html",
+          "case": "module-spa",
+          "public": false,
+          "url": "fixture:/module-spa",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/module-spa"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/app.js"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/dependency.js"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/api"
+            }
+          ],
+          "firstContentMs": 134,
+          "interaction": "module ok:api ok",
+          "interactionMs": 434,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1175,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "panelStatus": "http://127.0.0.1:34927/module-routeReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "html",
+          "case": "websocket",
+          "public": false,
+          "url": "fixture:/websocket",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/websocket"
+            },
+            {
+              "status": 101,
+              "method": "WEBSOCKET"
+            }
+          ],
+          "firstContentMs": 99,
+          "interaction": "socket ok",
+          "interactionMs": 291,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1207,
+          "uploadedBodyBytes": 4,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "panelStatus": "http://127.0.0.1:34927/websocketReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "html",
+          "case": "streaming",
+          "public": false,
+          "url": "fixture:/streaming",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/streaming"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/stream"
+            }
+          ],
+          "firstContentMs": 117,
+          "interaction": "first:second",
+          "interactionMs": 342,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1228,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 2,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "panelStatus": "http://127.0.0.1:34927/streamingReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "html",
+          "case": "assets",
+          "public": false,
+          "url": "fixture:/assets",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/assets"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/style.css"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/image.svg"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/base.css"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/font.woff2"
+            }
+          ],
+          "firstContentMs": 164,
+          "interaction": "assets ok",
+          "interactionMs": 756,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 981226,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "panelStatus": "http://127.0.0.1:34927/assetsReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "html",
+          "case": "large-list",
+          "public": false,
+          "url": "fixture:/large-list",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/large-list"
+            }
+          ],
+          "firstContentMs": 252,
+          "interaction": "list ok",
+          "interactionMs": 463,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 37483,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "panelStatus": "http://127.0.0.1:34927/large-listReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "html",
+          "case": "media",
+          "public": false,
+          "url": "fixture:/media",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/media"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/audio.wav"
+            }
+          ],
+          "firstContentMs": 171,
+          "interaction": "media ok",
+          "interactionMs": 359,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 17192,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "panelStatus": "http://127.0.0.1:34927/mediaReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "html",
+          "case": "third-party-frame",
+          "public": false,
+          "url": "fixture:/third-party-frame",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/third-party-frame"
+            }
+          ],
+          "firstContentMs": 147,
+          "interaction": null,
+          "interactionMs": null,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1238,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [
+            "Nested third-party frames are unavailable"
+          ],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "panelStatus": "http://127.0.0.1:34927/third-party-frameReconnect",
+          "outcome": "unsupported"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "svg",
+          "case": "documentation",
+          "public": false,
+          "url": "fixture:/documentation",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/documentation"
+            }
+          ],
+          "firstContentMs": 172,
+          "interaction": "documentation ok",
+          "interactionMs": 319,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1112,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "panelStatus": "http://127.0.0.1:34927/documentationReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "svg",
+          "case": "forms",
+          "public": false,
+          "url": "fixture:/forms",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/forms"
+            },
+            {
+              "status": 200,
+              "method": "POST",
+              "url": "/submitted"
+            }
+          ],
+          "firstContentMs": 131,
+          "interaction": "post ok",
+          "interactionMs": 364,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1968,
+          "uploadedBodyBytes": 19,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "panelStatus": "http://127.0.0.1:34927/submittedReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "svg",
+          "case": "module-spa",
+          "public": false,
+          "url": "fixture:/module-spa",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/module-spa"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/app.js"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/dependency.js"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/api"
+            }
+          ],
+          "firstContentMs": 149,
+          "interaction": "module ok:api ok",
+          "interactionMs": 448,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1175,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "panelStatus": "http://127.0.0.1:34927/module-routeReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "svg",
+          "case": "websocket",
+          "public": false,
+          "url": "fixture:/websocket",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/websocket"
+            },
+            {
+              "status": 101,
+              "method": "WEBSOCKET"
+            }
+          ],
+          "firstContentMs": 145,
+          "interaction": "socket ok",
+          "interactionMs": 341,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1207,
+          "uploadedBodyBytes": 4,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "panelStatus": "http://127.0.0.1:34927/websocketReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "svg",
+          "case": "streaming",
+          "public": false,
+          "url": "fixture:/streaming",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/streaming"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/stream"
+            }
+          ],
+          "firstContentMs": 129,
+          "interaction": "first:second",
+          "interactionMs": 378,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1228,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 2,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "panelStatus": "http://127.0.0.1:34927/streamingReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "svg",
+          "case": "assets",
+          "public": false,
+          "url": "fixture:/assets",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/assets"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/style.css"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/image.svg"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/base.css"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/font.woff2"
+            }
+          ],
+          "firstContentMs": 140,
+          "interaction": "assets ok",
+          "interactionMs": 916,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 981226,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "panelStatus": "http://127.0.0.1:34927/assetsReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "svg",
+          "case": "large-list",
+          "public": false,
+          "url": "fixture:/large-list",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/large-list"
+            }
+          ],
+          "firstContentMs": 418,
+          "interaction": "list ok",
+          "interactionMs": 637,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 37483,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "panelStatus": "http://127.0.0.1:34927/large-listReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "svg",
+          "case": "media",
+          "public": false,
+          "url": "fixture:/media",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/media"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/audio.wav"
+            }
+          ],
+          "firstContentMs": 131,
+          "interaction": "media ok",
+          "interactionMs": 321,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 17192,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "panelStatus": "http://127.0.0.1:34927/mediaReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "svg",
+          "case": "third-party-frame",
+          "public": false,
+          "url": "fixture:/third-party-frame",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/third-party-frame"
+            }
+          ],
+          "firstContentMs": 87,
+          "interaction": null,
+          "interactionMs": null,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1238,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [
+            "Nested third-party frames are unavailable"
+          ],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "panelStatus": "http://127.0.0.1:34927/third-party-frameReconnect",
+          "outcome": "unsupported"
+        }
+      ],
+      "skipped": [
+        {
+          "engine": "firefox",
+          "reason": "browserType.launch: Executable doesn't exist at /home/hydro/.cache/ms-playwright/firefox-1555/firefox/firefox"
+        },
+        {
+          "engine": "webkit",
+          "reason": "browserType.launch: Executable doesn't exist at /home/hydro/.cache/ms-playwright/webkit-2370/pw_run.sh"
+        },
+        {
+          "scope": "public sites",
+          "reason": "Opt-in EYA_PROXY_PUBLIC_SITES was not supplied; no public requests made."
+        }
+      ],
+      "node": "v22.23.2",
+      "sourceSha256": {
+        "client/browser-panel.js": "047179e9319dd2cbf4e2f81e829eaad9eb7bafeaf713035c8952f97b0668f1d3",
+        "tests/browser-proxy-compatibility.cjs": "5187978608fb732cf17a33ce395fd531e13d484d3b8d77dfcfad9353c9ef83db",
+        "tests/browser-proxy-corpus-fixture.cjs": "c581d4e9f1826f6bc30524019e51325d615ca099fd6d2ef9a7e4f408f240089f"
+      },
+      "summary": {
+        "total": 27,
+        "usable": 25,
+        "contentOnly": 0,
+        "unsupported": 2,
+        "failed": 0,
+        "essentialRegressions": [],
+        "directRequestRows": 0
+      }
+    },
+    "coarse": {
+      "schema": 1,
+      "generatedAt": "2026-11-16T22:58:46.788Z",
+      "methodology": "Production source panel, bounded Node fixture broker; native engine reference. Excludes Noise, server egress, remote capture, WAN, login and physical-device behavior.",
+      "configuration": {
+        "engines": [
+          "chromium"
+        ],
+        "formats": [
+          "html",
+          "svg"
+        ],
+        "coarse": true,
+        "absentNavigation": false,
+        "viewport": {
+          "width": 1000,
+          "height": 700
+        }
+      },
+      "rows": [
+        {
+          "engine": "chromium",
+          "mode": "native",
+          "format": "html",
+          "case": "documentation",
+          "public": false,
+          "url": "fixture:/documentation",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET"
+            }
+          ],
+          "firstContentMs": 97,
+          "interaction": "documentation ok",
+          "interactionMs": 186,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1112,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "native",
+          "format": "html",
+          "case": "forms",
+          "public": false,
+          "url": "fixture:/forms",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "POST"
+            }
+          ],
+          "firstContentMs": 59,
+          "interaction": "post ok",
+          "interactionMs": 227,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1968,
+          "uploadedBodyBytes": 19,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "native",
+          "format": "html",
+          "case": "module-spa",
+          "public": false,
+          "url": "fixture:/module-spa",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "GET"
+            }
+          ],
+          "firstContentMs": 62,
+          "interaction": "module ok:api ok",
+          "interactionMs": 274,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1175,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "native",
+          "format": "html",
+          "case": "websocket",
+          "public": false,
+          "url": "fixture:/websocket",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET"
+            }
+          ],
+          "firstContentMs": 59,
+          "interaction": "socket ok",
+          "interactionMs": 184,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1207,
+          "uploadedBodyBytes": 4,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "native",
+          "format": "html",
+          "case": "streaming",
+          "public": false,
+          "url": "fixture:/streaming",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "GET"
+            }
+          ],
+          "firstContentMs": 88,
+          "interaction": "first:second",
+          "interactionMs": 203,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1228,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 2,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "native",
+          "format": "html",
+          "case": "assets",
+          "public": false,
+          "url": "fixture:/assets",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "GET"
+            }
+          ],
+          "firstContentMs": 107,
+          "interaction": "assets ok",
+          "interactionMs": 305,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 981226,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "native",
+          "format": "html",
+          "case": "large-list",
+          "public": false,
+          "url": "fixture:/large-list",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET"
+            }
+          ],
+          "firstContentMs": 137,
+          "interaction": "list ok",
+          "interactionMs": 267,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 37483,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "native",
+          "format": "html",
+          "case": "media",
+          "public": false,
+          "url": "fixture:/media",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "GET"
+            }
+          ],
+          "firstContentMs": 77,
+          "interaction": "media ok",
+          "interactionMs": 187,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 17192,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "native",
+          "format": "html",
+          "case": "third-party-frame",
+          "public": false,
+          "url": "fixture:/third-party-frame",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "GET"
+            }
+          ],
+          "firstContentMs": 67,
+          "interaction": "frame ok",
+          "interactionMs": 324,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1320,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "html",
+          "case": "documentation",
+          "public": false,
+          "url": "fixture:/documentation",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/documentation"
+            }
+          ],
+          "firstContentMs": 173,
+          "interaction": "documentation ok",
+          "interactionMs": 311,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1112,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "panelStatus": "http://127.0.0.1:32903/documentationReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "html",
+          "case": "forms",
+          "public": false,
+          "url": "fixture:/forms",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/forms"
+            },
+            {
+              "status": 200,
+              "method": "POST",
+              "url": "/submitted"
+            }
+          ],
+          "firstContentMs": 134,
+          "interaction": "post ok",
+          "interactionMs": 331,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1968,
+          "uploadedBodyBytes": 19,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "panelStatus": "http://127.0.0.1:32903/submittedReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "html",
+          "case": "module-spa",
+          "public": false,
+          "url": "fixture:/module-spa",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/module-spa"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/app.js"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/dependency.js"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/api"
+            }
+          ],
+          "firstContentMs": 97,
+          "interaction": "module ok:api ok",
+          "interactionMs": 381,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1175,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "panelStatus": "http://127.0.0.1:32903/module-routeReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "html",
+          "case": "websocket",
+          "public": false,
+          "url": "fixture:/websocket",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/websocket"
+            },
+            {
+              "status": 101,
+              "method": "WEBSOCKET"
+            }
+          ],
+          "firstContentMs": 128,
+          "interaction": "socket ok",
+          "interactionMs": 301,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1207,
+          "uploadedBodyBytes": 4,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "panelStatus": "http://127.0.0.1:32903/websocketReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "html",
+          "case": "streaming",
+          "public": false,
+          "url": "fixture:/streaming",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/streaming"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/stream"
+            }
+          ],
+          "firstContentMs": 124,
+          "interaction": "first:second",
+          "interactionMs": 326,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1228,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 2,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "panelStatus": "http://127.0.0.1:32903/streamingReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "html",
+          "case": "assets",
+          "public": false,
+          "url": "fixture:/assets",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/assets"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/style.css"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/image.svg"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/base.css"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/font.woff2"
+            }
+          ],
+          "firstContentMs": 111,
+          "interaction": "assets ok",
+          "interactionMs": 723,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 981226,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "panelStatus": "http://127.0.0.1:32903/assetsReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "html",
+          "case": "large-list",
+          "public": false,
+          "url": "fixture:/large-list",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/large-list"
+            }
+          ],
+          "firstContentMs": 238,
+          "interaction": "list ok",
+          "interactionMs": 433,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 37483,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "panelStatus": "http://127.0.0.1:32903/large-listReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "html",
+          "case": "media",
+          "public": false,
+          "url": "fixture:/media",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/media"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/audio.wav"
+            }
+          ],
+          "firstContentMs": 147,
+          "interaction": "media ok",
+          "interactionMs": 321,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 17192,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "panelStatus": "http://127.0.0.1:32903/mediaReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "html",
+          "case": "third-party-frame",
+          "public": false,
+          "url": "fixture:/third-party-frame",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/third-party-frame"
+            }
+          ],
+          "firstContentMs": 132,
+          "interaction": null,
+          "interactionMs": null,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1238,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [
+            "Nested third-party frames are unavailable"
+          ],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "panelStatus": "http://127.0.0.1:32903/third-party-frameReconnect",
+          "outcome": "unsupported"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "svg",
+          "case": "documentation",
+          "public": false,
+          "url": "fixture:/documentation",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/documentation"
+            }
+          ],
+          "firstContentMs": 152,
+          "interaction": "documentation ok",
+          "interactionMs": 324,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1112,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "panelStatus": "http://127.0.0.1:32903/documentationReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "svg",
+          "case": "forms",
+          "public": false,
+          "url": "fixture:/forms",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/forms"
+            },
+            {
+              "status": 200,
+              "method": "POST",
+              "url": "/submitted"
+            }
+          ],
+          "firstContentMs": 135,
+          "interaction": "post ok",
+          "interactionMs": 346,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1968,
+          "uploadedBodyBytes": 19,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "panelStatus": "http://127.0.0.1:32903/submittedReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "svg",
+          "case": "module-spa",
+          "public": false,
+          "url": "fixture:/module-spa",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/module-spa"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/app.js"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/dependency.js"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/api"
+            }
+          ],
+          "firstContentMs": 129,
+          "interaction": "module ok:api ok",
+          "interactionMs": 425,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1175,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "panelStatus": "http://127.0.0.1:32903/module-routeReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "svg",
+          "case": "websocket",
+          "public": false,
+          "url": "fixture:/websocket",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/websocket"
+            },
+            {
+              "status": 101,
+              "method": "WEBSOCKET"
+            }
+          ],
+          "firstContentMs": 138,
+          "interaction": "socket ok",
+          "interactionMs": 310,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1207,
+          "uploadedBodyBytes": 4,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "panelStatus": "http://127.0.0.1:32903/websocketReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "svg",
+          "case": "streaming",
+          "public": false,
+          "url": "fixture:/streaming",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/streaming"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/stream"
+            }
+          ],
+          "firstContentMs": 158,
+          "interaction": "first:second",
+          "interactionMs": 359,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1228,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 2,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "panelStatus": "http://127.0.0.1:32903/streamingReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "svg",
+          "case": "assets",
+          "public": false,
+          "url": "fixture:/assets",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/assets"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/style.css"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/image.svg"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/base.css"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/font.woff2"
+            }
+          ],
+          "firstContentMs": 132,
+          "interaction": "assets ok",
+          "interactionMs": 908,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 981226,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "panelStatus": "http://127.0.0.1:32903/assetsReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "svg",
+          "case": "large-list",
+          "public": false,
+          "url": "fixture:/large-list",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/large-list"
+            }
+          ],
+          "firstContentMs": 325,
+          "interaction": "list ok",
+          "interactionMs": 646,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 37483,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "panelStatus": "http://127.0.0.1:32903/large-listReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "svg",
+          "case": "media",
+          "public": false,
+          "url": "fixture:/media",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/media"
+            },
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/audio.wav"
+            }
+          ],
+          "firstContentMs": 235,
+          "interaction": "media ok",
+          "interactionMs": 428,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 17192,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "panelStatus": "http://127.0.0.1:32903/mediaReconnect",
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "svg",
+          "case": "third-party-frame",
+          "public": false,
+          "url": "fixture:/third-party-frame",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET",
+              "url": "/third-party-frame"
+            }
+          ],
+          "firstContentMs": 114,
+          "interaction": null,
+          "interactionMs": null,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1238,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [
+            "Nested third-party frames are unavailable"
+          ],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": true
+          },
+          "panelStatus": "http://127.0.0.1:32903/third-party-frameReconnect",
+          "outcome": "unsupported"
+        }
+      ],
+      "skipped": [
+        {
+          "scope": "public sites",
+          "reason": "Opt-in EYA_PROXY_PUBLIC_SITES was not supplied; no public requests made."
+        }
+      ],
+      "node": "v22.23.2",
+      "sourceSha256": {
+        "client/browser-panel.js": "047179e9319dd2cbf4e2f81e829eaad9eb7bafeaf713035c8952f97b0668f1d3",
+        "tests/browser-proxy-compatibility.cjs": "5187978608fb732cf17a33ce395fd531e13d484d3b8d77dfcfad9353c9ef83db",
+        "tests/browser-proxy-corpus-fixture.cjs": "c581d4e9f1826f6bc30524019e51325d615ca099fd6d2ef9a7e4f408f240089f"
+      },
+      "summary": {
+        "total": 27,
+        "usable": 25,
+        "contentOnly": 0,
+        "unsupported": 2,
+        "failed": 0,
+        "essentialRegressions": [],
+        "directRequestRows": 0
+      }
+    },
+    "withoutNavigation": {
+      "schema": 1,
+      "generatedAt": "2026-11-16T22:58:45.963Z",
+      "methodology": "Production source panel, bounded Node fixture broker; native engine reference. Excludes Noise, server egress, remote capture, WAN, login and physical-device behavior.",
+      "configuration": {
+        "engines": [
+          "chromium"
+        ],
+        "formats": [
+          "html",
+          "svg"
+        ],
+        "coarse": false,
+        "absentNavigation": true,
+        "viewport": {
+          "width": 1000,
+          "height": 700
+        }
+      },
+      "rows": [
+        {
+          "engine": "chromium",
+          "mode": "native",
+          "format": "html",
+          "case": "documentation",
+          "public": false,
+          "url": "fixture:/documentation",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET"
+            }
+          ],
+          "firstContentMs": 112,
+          "interaction": "documentation ok",
+          "interactionMs": 201,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1112,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "native",
+          "format": "html",
+          "case": "module-spa",
+          "public": false,
+          "url": "fixture:/module-spa",
+          "status": 200,
+          "statuses": [
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "GET"
+            },
+            {
+              "status": 200,
+              "method": "GET"
+            }
+          ],
+          "firstContentMs": 68,
+          "interaction": "module ok:api ok",
+          "interactionMs": 312,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 1175,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "logicalViewport": {
+            "width": 1000,
+            "height": 700,
+            "coarse": false
+          },
+          "outcome": "usable"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "html",
+          "case": "documentation",
+          "public": false,
+          "url": "fixture:/documentation",
+          "status": null,
+          "statuses": [],
+          "firstContentMs": null,
+          "interaction": null,
+          "interactionMs": null,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 0,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [
+            "Navigation API absent: internet page refused"
+          ],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "panelStatus": "Proxy browsing requires the Navigation API. Use the Browser panel for this site; Local HTML remains available.Reconnect",
+          "outcome": "unsupported"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "html",
+          "case": "module-spa",
+          "public": false,
+          "url": "fixture:/module-spa",
+          "status": null,
+          "statuses": [],
+          "firstContentMs": null,
+          "interaction": null,
+          "interactionMs": null,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 0,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [
+            "Navigation API absent: internet page refused"
+          ],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "panelStatus": "Proxy browsing requires the Navigation API. Use the Browser panel for this site; Local HTML remains available.Reconnect",
+          "outcome": "unsupported"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "svg",
+          "case": "documentation",
+          "public": false,
+          "url": "fixture:/documentation",
+          "status": null,
+          "statuses": [],
+          "firstContentMs": null,
+          "interaction": null,
+          "interactionMs": null,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 0,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [
+            "Navigation API absent: internet page refused"
+          ],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "panelStatus": "Proxy browsing requires the Navigation API. Use the Browser panel for this site; Local HTML remains available.Reconnect",
+          "outcome": "unsupported"
+        },
+        {
+          "engine": "chromium",
+          "mode": "proxy",
+          "format": "svg",
+          "case": "module-spa",
+          "public": false,
+          "url": "fixture:/module-spa",
+          "status": null,
+          "statuses": [],
+          "firstContentMs": null,
+          "interaction": null,
+          "interactionMs": null,
+          "firstContentMethod": "fixture DOMContentLoaded + requestAnimationFrame message",
+          "responseBodyBytes": 0,
+          "uploadedBodyBytes": 0,
+          "consoleExceptions": [],
+          "unsupportedCalls": [
+            "Navigation API absent: internet page refused"
+          ],
+          "directClientRequests": [],
+          "streamedChunks": 0,
+          "errors": [],
+          "browserVersion": "156.0.8078.4",
+          "panelStatus": "Proxy browsing requires the Navigation API. Use the Browser panel for this site; Local HTML remains available.Reconnect",
+          "outcome": "unsupported"
+        }
+      ],
+      "skipped": [
+        {
+          "scope": "public sites",
+          "reason": "Opt-in EYA_PROXY_PUBLIC_SITES was not supplied; no public requests made."
+        }
+      ],
+      "node": "v22.23.2",
+      "sourceSha256": {
+        "client/browser-panel.js": "047179e9319dd2cbf4e2f81e829eaad9eb7bafeaf713035c8952f97b0668f1d3",
+        "tests/browser-proxy-compatibility.cjs": "5187978608fb732cf17a33ce395fd531e13d484d3b8d77dfcfad9353c9ef83db",
+        "tests/browser-proxy-corpus-fixture.cjs": "c581d4e9f1826f6bc30524019e51325d615ca099fd6d2ef9a7e4f408f240089f"
+      },
+      "summary": {
+        "total": 6,
+        "usable": 2,
+        "contentOnly": 0,
+        "unsupported": 4,
+        "failed": 0,
+        "essentialRegressions": [],
+        "directRequestRows": 0
+      }
+    }
+  }
+}

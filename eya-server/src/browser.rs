@@ -5,7 +5,7 @@
 //! can be long lived and must not stall the resumable terminal actor.
 use super::*;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{SinkExt, Stream, StreamExt};
 use reqwest::{
     Client, Method, Url,
     header::{HeaderMap, HeaderName, HeaderValue},
@@ -13,8 +13,11 @@ use reqwest::{
 use std::{
     collections::{HashMap, HashSet},
     future::Future,
+    io::{self, BufRead, Read},
     net::{IpAddr, SocketAddr},
+    pin::Pin,
     sync::Mutex,
+    task::{Context, Poll},
     time::Instant,
 };
 use tokio::{
@@ -59,6 +62,9 @@ const UPLOAD_BUDGET_UNIT: usize = 64 * 1024;
 const MAX_UPLOAD_BUDGET_UNITS: usize = 256;
 const UPLOAD_WINDOW_CHUNKS: u32 = 4;
 const MAX_RESPONSE_BODY: usize = 64 * 1024 * 1024;
+// Bound gzip optional headers and streams spending input without producing
+// output, independently of the encoded/decoded response limits.
+const MAX_COMPRESSED_INPUT_WITHOUT_OUTPUT: usize = 128 * 1024;
 const MAX_CACHE_ENTRY_BYTES: usize = 1024 * 1024;
 const MAX_CACHE_ENTRY_OVERHEAD: usize = 32 * 1024;
 const MAX_CACHE_BYTES: usize = 16 * 1024 * 1024;
@@ -526,7 +532,7 @@ async fn session(
     mut socket: WebSocket,
     key: Arc<[u8; 32]>,
     proxy: Arc<Proxy>,
-    slots: Arc<Semaphore>,
+    slots: Arc<crate::server_config::Slots>,
 ) {
     let Ok(_slot) = slots.try_acquire_owned() else {
         return;
@@ -657,9 +663,7 @@ async fn session(
                         CREDIT if count == 9 => {
                             let id = u32::from_be_bytes(plain[1..5].try_into().unwrap());
                             let bytes = u32::from_be_bytes(plain[5..9].try_into().unwrap());
-                            if bytes == 0 || bytes as usize > CHUNK_BYTES { break; }
-                            let Some(sender) = credit_senders.get(&id) else { break };
-                            if sender.try_send(bytes).is_err() { break; }
+                            if accept_response_credit(&credit_senders, id, bytes).is_err() { break; }
                         }
                         UPLOAD_CHUNK if count >= 10 => {
                             let id = u32::from_be_bytes(plain[1..5].try_into().unwrap());
@@ -976,8 +980,8 @@ async fn fetch(
             .request(method.clone(), url.clone())
             .headers(headers.clone())
             // The client rebuilds browser Response objects from these bytes. Ask
-            // upstreams for identity bytes so their body and representation
-            // headers stay valid without a decompressor in this constrained relay.
+            // upstreams for identity bytes, while tolerating servers that return
+            // gzip/deflate anyway through the bounded decoder below.
             .header(reqwest::header::ACCEPT_ENCODING, "identity");
         if let Some(bytes) = body.clone() {
             builder = builder.body(bytes);
@@ -1103,14 +1107,9 @@ async fn fetch(
         }
 
         let status = response.status();
-        if response
-            .headers()
-            .get(reqwest::header::CONTENT_ENCODING)
-            .and_then(|value| value.to_str().ok())
-            .is_some_and(|value| !is_identity_encoding(value))
-        {
-            return Err("The upstream returned an unsupported content encoding".into());
-        }
+        let coding = response_coding(response.headers())?;
+        let has_body = method != Method::HEAD && !matches!(status.as_u16(), 204 | 205 | 304);
+        validate_decoded_range(coding, has_body, status, response.headers())?;
         let mut response_headers = serde_json::Map::new();
         for name in [
             "content-type",
@@ -1140,6 +1139,9 @@ async fn fetch(
             {
                 response_headers.insert(name.into(), value.into());
             }
+        }
+        if coding != ResponseCoding::Identity {
+            normalize_decoded_headers(&mut response_headers);
         }
         let set_cookies = collect_set_cookies(response.headers());
         let cache_policy = if redirect == 0
@@ -1171,11 +1173,24 @@ async fn fetch(
         tx.send(encode_meta(meta))
             .await
             .map_err(|_| "The browser connection closed")?;
-        let mut stream = response.bytes_stream();
+        let stream: ResponseBodyStream = Box::pin(
+            response
+                .bytes_stream()
+                .map(|part| part.map_err(|_| "The upstream response stream failed".to_owned())),
+        );
+        let mut stream = decode_response_stream(
+            stream,
+            if has_body {
+                coding
+            } else {
+                ResponseCoding::Identity
+            },
+            MAX_RESPONSE_BODY,
+        );
         let mut total = 0usize;
         let mut buffered = Vec::with_capacity(CHUNK_BYTES);
         while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|_| "The upstream response stream failed")?;
+            let chunk = chunk?;
             total = total.saturating_add(chunk.len());
             if total > MAX_RESPONSE_BODY {
                 return Err("Upstream response exceeds the browser proxy limit".into());
@@ -1803,6 +1818,314 @@ fn is_identity_encoding(value: &str) -> bool {
     value.trim().eq_ignore_ascii_case("identity")
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ResponseCoding {
+    Identity,
+    Gzip,
+    Deflate,
+}
+
+fn response_coding(headers: &HeaderMap) -> Result<ResponseCoding, String> {
+    let values = headers.get_all(reqwest::header::CONTENT_ENCODING);
+    let mut values = values.iter();
+    let Some(value) = values.next() else {
+        return Ok(ResponseCoding::Identity);
+    };
+    if values.next().is_some() {
+        return Err("The upstream returned stacked content encodings".into());
+    }
+    let value = value
+        .to_str()
+        .map_err(|_| "The upstream returned an invalid content encoding")?
+        .trim();
+    if is_identity_encoding(value) {
+        Ok(ResponseCoding::Identity)
+    } else if value.eq_ignore_ascii_case("gzip") || value.eq_ignore_ascii_case("x-gzip") {
+        Ok(ResponseCoding::Gzip)
+    } else if value.eq_ignore_ascii_case("deflate") {
+        Ok(ResponseCoding::Deflate)
+    } else {
+        Err("The upstream returned an unsupported content encoding".into())
+    }
+}
+
+fn normalize_decoded_headers(headers: &mut serde_json::Map<String, serde_json::Value>) {
+    // These describe the encoded representation. Freshness still applies to the
+    // decoded cached bytes, but retaining encoded validators could make a 304
+    // revalidation or a caller's range request describe the wrong representation.
+    for name in [
+        "content-encoding",
+        "content-length",
+        "content-range",
+        "accept-ranges",
+        "etag",
+        "last-modified",
+    ] {
+        headers.remove(name);
+    }
+}
+
+fn validate_decoded_range(
+    coding: ResponseCoding,
+    has_body: bool,
+    status: reqwest::StatusCode,
+    headers: &HeaderMap,
+) -> Result<(), String> {
+    if coding != ResponseCoding::Identity
+        && has_body
+        && (status == reqwest::StatusCode::PARTIAL_CONTENT
+            || headers.contains_key(reqwest::header::CONTENT_RANGE))
+    {
+        return Err("The upstream returned compressed partial content".into());
+    }
+    Ok(())
+}
+
+type ResponseBodyStream =
+    Pin<Box<dyn Stream<Item = Result<bytes::Bytes, String>> + Send + 'static>>;
+
+struct DecodeInput {
+    receiver: mpsc::Receiver<Result<bytes::Bytes, io::Error>>,
+    current: bytes::Bytes,
+    offset: usize,
+    without_output: usize,
+    eof: bool,
+}
+
+impl DecodeInput {
+    fn new(receiver: mpsc::Receiver<Result<bytes::Bytes, io::Error>>) -> Self {
+        Self {
+            receiver,
+            current: bytes::Bytes::new(),
+            offset: 0,
+            without_output: 0,
+            eof: false,
+        }
+    }
+}
+
+impl Read for DecodeInput {
+    fn read(&mut self, into: &mut [u8]) -> io::Result<usize> {
+        let available = self.fill_buf()?;
+        let count = into.len().min(available.len());
+        into[..count].copy_from_slice(&available[..count]);
+        self.consume(count);
+        Ok(count)
+    }
+}
+
+impl BufRead for DecodeInput {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        while self.offset == self.current.len() && !self.eof {
+            match self.receiver.blocking_recv() {
+                Some(Ok(bytes)) => {
+                    self.current = bytes;
+                    self.offset = 0;
+                }
+                Some(Err(error)) => return Err(error),
+                None => self.eof = true,
+            }
+        }
+        if self.eof {
+            return Ok(&[]);
+        }
+        let remaining = MAX_COMPRESSED_INPUT_WITHOUT_OUTPUT.saturating_sub(self.without_output);
+        if remaining == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Compressed response header or input-without-output limit exceeded",
+            ));
+        }
+        let end = self.current.len().min(self.offset + remaining);
+        Ok(&self.current[self.offset..end])
+    }
+
+    fn consume(&mut self, count: usize) {
+        self.offset += count;
+        self.without_output += count;
+    }
+}
+
+enum DecodeReader {
+    Gzip(flate2::bufread::MultiGzDecoder<DecodeInput>),
+    Deflate(flate2::bufread::ZlibDecoder<DecodeInput>),
+}
+
+impl DecodeReader {
+    fn input_mut(&mut self) -> &mut DecodeInput {
+        match self {
+            Self::Gzip(reader) => reader.get_mut(),
+            Self::Deflate(reader) => reader.get_mut(),
+        }
+    }
+
+    fn read(&mut self, into: &mut [u8]) -> io::Result<usize> {
+        match self {
+            Self::Gzip(reader) => reader.read(into),
+            Self::Deflate(reader) => reader.read(into),
+        }
+    }
+}
+
+struct DecodedResponseStream {
+    receiver: mpsc::Receiver<Result<bytes::Bytes, String>>,
+    feeder: tokio::task::JoinHandle<()>,
+    worker: tokio::task::JoinHandle<()>,
+    worker_done: bool,
+    finished: bool,
+}
+
+impl Stream for DecodedResponseStream {
+    type Item = Result<bytes::Bytes, String>;
+
+    fn poll_next(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let stream = self.get_mut();
+        if stream.finished {
+            return Poll::Ready(None);
+        }
+        match stream.receiver.poll_recv(context) {
+            Poll::Ready(None) => {}
+            event => return event,
+        }
+        if !stream.worker_done {
+            match Pin::new(&mut stream.worker).poll(context) {
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(Ok(())) => stream.worker_done = true,
+                Poll::Ready(Err(_)) => {
+                    stream.finished = true;
+                    return Poll::Ready(Some(Err("The upstream response decoder failed".into())));
+                }
+            }
+        }
+        match Pin::new(&mut stream.feeder).poll(context) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(result) => {
+                stream.finished = true;
+                Poll::Ready(
+                    result
+                        .err()
+                        .map(|_| Err("The upstream response feeder failed".into())),
+                )
+            }
+        }
+    }
+}
+
+impl Drop for DecodedResponseStream {
+    fn drop(&mut self) {
+        // Dropping the output receiver wakes blocking_send; aborting the feeder
+        // closes its input channel and wakes blocking_recv. No worker waits on
+        // an abandoned upstream/client after request cancellation or failure.
+        self.feeder.abort();
+        self.worker.abort();
+    }
+}
+
+fn decode_response_stream(
+    stream: ResponseBodyStream,
+    coding: ResponseCoding,
+    limit: usize,
+) -> ResponseBodyStream {
+    if coding == ResponseCoding::Identity {
+        return stream;
+    }
+    let (input_tx, input_rx) = mpsc::channel(2);
+    let (output_tx, output_rx) = mpsc::channel(2);
+    let feeder = tokio::spawn(async move {
+        let mut stream = stream;
+        let mut total = 0usize;
+        while let Some(part) = stream.next().await {
+            let part = match part {
+                Ok(part) if part.len() <= limit.saturating_sub(total) => part,
+                Ok(_) => {
+                    let _ = input_tx
+                        .send(Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "Encoded upstream response exceeds the browser proxy limit",
+                        )))
+                        .await;
+                    return;
+                }
+                Err(_) => {
+                    let _ = input_tx
+                        .send(Err(io::Error::other("The upstream response stream failed")))
+                        .await;
+                    return;
+                }
+            };
+            total += part.len();
+            for offset in (0..part.len()).step_by(CHUNK_BYTES) {
+                let end = (offset + CHUNK_BYTES).min(part.len());
+                if input_tx
+                    .send(Ok(bytes::Bytes::copy_from_slice(&part[offset..end])))
+                    .await
+                    .is_err()
+                {
+                    return;
+                }
+            }
+        }
+    });
+    let worker = tokio::task::spawn_blocking(move || {
+        let input = DecodeInput::new(input_rx);
+        let mut reader = match coding {
+            ResponseCoding::Gzip => DecodeReader::Gzip(flate2::bufread::MultiGzDecoder::new(input)),
+            ResponseCoding::Deflate => {
+                DecodeReader::Deflate(flate2::bufread::ZlibDecoder::new(input))
+            }
+            ResponseCoding::Identity => unreachable!(),
+        };
+        let mut total = 0usize;
+        let result = loop {
+            // One extra byte distinguishes exact-limit EOF from an inflated
+            // body exceeding its limit without allocating an extra body buffer.
+            let mut output =
+                vec![0; CHUNK_BYTES.min(limit.saturating_sub(total).saturating_add(1))];
+            match reader.read(&mut output) {
+                Ok(0) => {
+                    break reader.input_mut().fill_buf().and_then(|trailing| {
+                        if trailing.is_empty() {
+                            Ok(())
+                        } else {
+                            Err(io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                "Trailing bytes after compressed response",
+                            ))
+                        }
+                    });
+                }
+                Ok(count) if count <= limit.saturating_sub(total) => {
+                    total += count;
+                    reader.input_mut().without_output = 0;
+                    output.truncate(count);
+                    if output_tx.blocking_send(Ok(output.into())).is_err() {
+                        return;
+                    }
+                }
+                Ok(_) => {
+                    break Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "Decoded upstream response exceeds the browser proxy limit",
+                    ));
+                }
+                Err(error) => break Err(error),
+            }
+        };
+        if let Err(error) = result {
+            let _ = output_tx.blocking_send(Err(format!(
+                "Could not decode the upstream response: {error}"
+            )));
+        }
+    });
+    Box::pin(DecodedResponseStream {
+        receiver: output_rx,
+        feeder,
+        worker,
+        worker_done: false,
+        finished: false,
+    })
+}
+
 fn is_forwardable_browser_header(name: &str) -> bool {
     !matches!(
         name,
@@ -1951,6 +2274,26 @@ fn default_cookie_path(path: &str) -> String {
         .map(|(parent, _)| if parent.is_empty() { "/" } else { parent })
         .unwrap_or("/")
         .to_owned()
+}
+
+fn accept_response_credit(
+    credit_senders: &HashMap<u32, mpsc::Sender<u32>>,
+    id: u32,
+    bytes: u32,
+) -> Result<(), ()> {
+    if id == 0 || bytes == 0 || bytes as usize > CHUNK_BYTES {
+        return Err(());
+    }
+    // Reading the last nonfinal chunk can return credit after the response's
+    // final marker was queued or sent, or after cancellation. Such credit has
+    // no remaining consumer and must not close unrelated multiplexed requests.
+    let Some(sender) = credit_senders.get(&id) else {
+        return Ok(());
+    };
+    match sender.try_send(bytes) {
+        Ok(()) | Err(mpsc::error::TrySendError::Closed(_)) => Ok(()),
+        Err(mpsc::error::TrySendError::Full(_)) => Err(()),
+    }
 }
 
 async fn send_credited_chunk(
@@ -2230,6 +2573,297 @@ mod tests {
         assert!(!is_identity_encoding("gzip"));
         assert!(!is_identity_encoding("br"));
         assert!(!is_identity_encoding("gzip, br"));
+    }
+
+    fn compressed_test_body(coding: ResponseCoding, body: &[u8]) -> Vec<u8> {
+        use std::io::Write;
+        match coding {
+            ResponseCoding::Gzip => {
+                let mut encoder =
+                    flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+                encoder.write_all(body).unwrap();
+                encoder.finish().unwrap()
+            }
+            ResponseCoding::Deflate => {
+                let mut encoder =
+                    flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::fast());
+                encoder.write_all(body).unwrap();
+                encoder.finish().unwrap()
+            }
+            ResponseCoding::Identity => body.to_vec(),
+        }
+    }
+
+    async fn decode_test_body(
+        coding: ResponseCoding,
+        encoded: &[u8],
+        split: usize,
+        limit: usize,
+    ) -> Result<Vec<u8>, String> {
+        let chunks: Vec<_> = encoded
+            .chunks(split)
+            .map(|bytes| Ok(bytes::Bytes::copy_from_slice(bytes)))
+            .collect();
+        let mut stream =
+            decode_response_stream(Box::pin(futures_util::stream::iter(chunks)), coding, limit);
+        let mut body = Vec::new();
+        while let Some(part) = stream.next().await {
+            let part = part?;
+            assert!(part.len() <= CHUNK_BYTES);
+            body.extend_from_slice(&part);
+        }
+        Ok(body)
+    }
+
+    #[tokio::test]
+    async fn compressed_responses_stream_exactly_across_headers_members_and_chunk_boundaries() {
+        let body = "Swift π docs and ordinary binary bytes.\0"
+            .repeat(8000)
+            .into_bytes();
+        for coding in [ResponseCoding::Gzip, ResponseCoding::Deflate] {
+            let encoded = compressed_test_body(coding, &body);
+            for split in [1, 11, CHUNK_BYTES] {
+                assert_eq!(
+                    decode_test_body(coding, &encoded, split, body.len())
+                        .await
+                        .unwrap(),
+                    body
+                );
+            }
+        }
+        let first = compressed_test_body(ResponseCoding::Gzip, b"first member ");
+        let second = compressed_test_body(ResponseCoding::Gzip, b"second member");
+        assert_eq!(
+            decode_test_body(
+                ResponseCoding::Gzip,
+                &[first, second].concat(),
+                3,
+                MAX_RESPONSE_BODY,
+            )
+            .await
+            .unwrap(),
+            b"first member second member"
+        );
+    }
+
+    #[tokio::test]
+    async fn compressed_response_integrity_truncation_and_both_size_limits_are_enforced() {
+        let body = vec![b'x'; 4096];
+        for coding in [ResponseCoding::Gzip, ResponseCoding::Deflate] {
+            let encoded = compressed_test_body(coding, &body);
+            for truncated in [1, encoded.len() - 1, encoded.len() - 4] {
+                assert!(
+                    decode_test_body(coding, &encoded[..truncated], 5, MAX_RESPONSE_BODY)
+                        .await
+                        .is_err()
+                );
+            }
+            let mut corrupt = encoded.clone();
+            let end = corrupt.len() - 1;
+            corrupt[end] ^= 0x80;
+            assert!(
+                decode_test_body(coding, &corrupt, 17, MAX_RESPONSE_BODY)
+                    .await
+                    .is_err()
+            );
+            let mut trailing = encoded.clone();
+            trailing.extend_from_slice(b"not a member");
+            assert!(
+                decode_test_body(coding, &trailing, CHUNK_BYTES, MAX_RESPONSE_BODY)
+                    .await
+                    .is_err()
+            );
+            let error = decode_test_body(coding, &encoded, CHUNK_BYTES, 1000)
+                .await
+                .unwrap_err();
+            assert!(
+                error.contains("Decoded upstream response exceeds"),
+                "{error}"
+            );
+            let error = decode_test_body(coding, &encoded, CHUNK_BYTES, encoded.len() - 1)
+                .await
+                .unwrap_err();
+            assert!(
+                error.contains("Encoded upstream response exceeds"),
+                "{error}"
+            );
+        }
+        // A valid gzip prefix with an unterminated, oversized optional filename
+        // must not make the header parser allocate up to the body-size limit.
+        let mut header = vec![0x1f, 0x8b, 8, 8, 0, 0, 0, 0, 0, 255];
+        header.extend(vec![b'n'; MAX_COMPRESSED_INPUT_WITHOUT_OUTPUT + 1]);
+        let error = decode_test_body(
+            ResponseCoding::Gzip,
+            &header,
+            CHUNK_BYTES,
+            MAX_RESPONSE_BODY,
+        )
+        .await
+        .unwrap_err();
+        assert!(error.contains("header field too long"), "{error}");
+        // Empty members produce no body bytes; bound work across their headers,
+        // trailers and decoder resets instead of allowing millions of members.
+        let empty = compressed_test_body(ResponseCoding::Gzip, b"");
+        let empty_members = empty.repeat(MAX_COMPRESSED_INPUT_WITHOUT_OUTPUT / empty.len() + 2);
+        let error = decode_test_body(
+            ResponseCoding::Gzip,
+            &empty_members,
+            CHUNK_BYTES,
+            MAX_RESPONSE_BODY,
+        )
+        .await
+        .unwrap_err();
+        assert!(error.contains("input-without-output limit"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn compressed_response_backpressure_and_cancellation_bound_the_feeder() {
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+        struct ObservedStream {
+            stream: ResponseBodyStream,
+            dropped: Arc<AtomicBool>,
+        }
+        impl Stream for ObservedStream {
+            type Item = Result<bytes::Bytes, String>;
+            fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+                self.get_mut().stream.as_mut().poll_next(cx)
+            }
+        }
+        impl Drop for ObservedStream {
+            fn drop(&mut self) {
+                self.dropped.store(true, Ordering::SeqCst);
+            }
+        }
+        let mut seed = 0x3141_5926u32;
+        let body: Vec<_> = (0..1024 * 1024)
+            .map(|_| {
+                seed ^= seed << 13;
+                seed ^= seed >> 17;
+                seed ^= seed << 5;
+                seed as u8
+            })
+            .collect();
+        let encoded = compressed_test_body(ResponseCoding::Gzip, &body);
+        assert!(encoded.len() > 512 * 1024);
+        let chunks: Vec<_> = encoded
+            .chunks(4096)
+            .map(|part| Ok(bytes::Bytes::copy_from_slice(part)))
+            .collect();
+        let chunk_count = chunks.len();
+        let polled = Arc::new(AtomicUsize::new(0));
+        let dropped = Arc::new(AtomicBool::new(false));
+        let counter = polled.clone();
+        let source = ObservedStream {
+            stream: Box::pin(futures_util::stream::iter(chunks).inspect(move |_| {
+                counter.fetch_add(1, Ordering::SeqCst);
+            })),
+            dropped: dropped.clone(),
+        };
+        let decoded =
+            decode_response_stream(Box::pin(source), ResponseCoding::Gzip, MAX_RESPONSE_BODY);
+        // The client consumes nothing. Decoding and upstream reads must stop
+        // behind their bounded channels instead of buffering the complete body.
+        timeout(Duration::from_secs(2), async {
+            while polled.load(Ordering::SeqCst) < 3 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        assert!(polled.load(Ordering::SeqCst) < chunk_count);
+        assert!(!dropped.load(Ordering::SeqCst));
+        drop(decoded);
+        timeout(Duration::from_secs(2), async {
+            while !dropped.load(Ordering::SeqCst) {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+    }
+
+    #[test]
+    fn response_codings_and_transformed_representation_headers_are_explicit() {
+        let mut headers = HeaderMap::new();
+        assert!(matches!(
+            response_coding(&headers),
+            Ok(ResponseCoding::Identity)
+        ));
+        for (name, coding) in [
+            ("identity", ResponseCoding::Identity),
+            (" GZIP ", ResponseCoding::Gzip),
+            ("x-gzip", ResponseCoding::Gzip),
+            ("deflate", ResponseCoding::Deflate),
+        ] {
+            headers.insert(reqwest::header::CONTENT_ENCODING, name.parse().unwrap());
+            assert!(response_coding(&headers).unwrap() == coding);
+        }
+        for unsupported in ["br", "gzip, br", "gzip, gzip", "", "garbage"] {
+            headers.insert(
+                reqwest::header::CONTENT_ENCODING,
+                unsupported.parse().unwrap(),
+            );
+            assert!(response_coding(&headers).is_err());
+        }
+        headers.insert(reqwest::header::CONTENT_ENCODING, "gzip".parse().unwrap());
+        headers.append(
+            reqwest::header::CONTENT_ENCODING,
+            "identity".parse().unwrap(),
+        );
+        assert!(response_coding(&headers).is_err());
+        let mut decoded = serde_json::json!({
+            "content-encoding":"gzip", "content-length":"72", "content-range":"bytes 0-71/100",
+            "accept-ranges":"bytes", "etag":"\"encoded-tag\"", "last-modified":"Tue, 17 Nov 2026 00:00:00 GMT",
+            "content-type":"text/html", "cache-control":"public, max-age=60", "vary":"Accept-Encoding"
+        }).as_object().unwrap().clone();
+        normalize_decoded_headers(&mut decoded);
+        assert_eq!(decoded.len(), 3);
+        assert_eq!(decoded["content-type"], "text/html");
+        assert_eq!(decoded["cache-control"], "public, max-age=60");
+        assert_eq!(decoded["vary"], "Accept-Encoding");
+        let now = Instant::now();
+        assert_eq!(cache_stale_deadline(now, &decoded), now);
+        let range = HeaderMap::from_iter([(
+            reqwest::header::CONTENT_RANGE,
+            "bytes 0-71/100".parse().unwrap(),
+        )]);
+        assert!(
+            validate_decoded_range(
+                ResponseCoding::Gzip,
+                true,
+                reqwest::StatusCode::PARTIAL_CONTENT,
+                &HeaderMap::new()
+            )
+            .is_err()
+        );
+        assert!(
+            validate_decoded_range(
+                ResponseCoding::Deflate,
+                true,
+                reqwest::StatusCode::OK,
+                &range
+            )
+            .is_err()
+        );
+        assert!(
+            validate_decoded_range(
+                ResponseCoding::Identity,
+                true,
+                reqwest::StatusCode::PARTIAL_CONTENT,
+                &range
+            )
+            .is_ok()
+        );
+        assert!(
+            validate_decoded_range(
+                ResponseCoding::Gzip,
+                false,
+                reqwest::StatusCode::PARTIAL_CONTENT,
+                &range
+            )
+            .is_ok()
+        );
     }
 
     #[test]
@@ -2627,6 +3261,76 @@ mod tests {
             headers.get(reqwest::header::COOKIE).unwrap(),
             "keep=yes; session=new"
         );
+    }
+
+    #[tokio::test]
+    async fn completed_response_credit_does_not_interrupt_other_requests() {
+        let (completed_tx, mut completed_rx) = mpsc::channel(4);
+        let (active_tx, mut active_rx) = mpsc::channel(4);
+        let mut senders = HashMap::from([(71, completed_tx), (72, active_tx)]);
+        let (event_tx, mut event_rx) = mpsc::channel(4);
+
+        let mut available = CHUNK_BYTES;
+        send_credited_chunk(
+            71,
+            b"last bytes",
+            &mut completed_rx,
+            &mut available,
+            &event_tx,
+        )
+        .await
+        .unwrap();
+        event_tx.send(event_chunk(71, true, &[])).await.unwrap();
+        drop(completed_rx);
+        // The fetch future can finish before the session sends its final marker.
+        assert_eq!(accept_response_credit(&senders, 71, 10), Ok(()));
+        assert_eq!(
+            event_rx.recv().await.unwrap(),
+            event_chunk(71, false, b"last bytes")
+        );
+        assert_eq!(event_rx.recv().await.unwrap(), event_chunk(71, true, &[]));
+        // The final marker removes the sender before the client's credit arrives.
+        senders.remove(&71);
+        assert_eq!(accept_response_credit(&senders, 71, 10), Ok(()));
+        assert_eq!(accept_response_credit(&senders, 72, 7), Ok(()));
+        let mut available = 0;
+        send_credited_chunk(72, b"next ok", &mut active_rx, &mut available, &event_tx)
+            .await
+            .unwrap();
+        assert_eq!(
+            event_rx.recv().await.unwrap(),
+            event_chunk(72, false, b"next ok")
+        );
+        assert_eq!(available, 0);
+        assert!(
+            event_rx.try_recv().is_err(),
+            "Late credit must not replay a response"
+        );
+    }
+
+    #[test]
+    fn response_credit_bounds_still_apply_after_completion() {
+        let (sender, mut receiver) = mpsc::channel(4);
+        let senders = HashMap::from([(71, sender)]);
+        for id in [71, 72] {
+            assert_eq!(accept_response_credit(&senders, id, 0), Err(()));
+            assert_eq!(
+                accept_response_credit(&senders, id, CHUNK_BYTES as u32 + 1),
+                Err(())
+            );
+        }
+        assert_eq!(accept_response_credit(&senders, 0, 1), Err(()));
+        for _ in 0..4 {
+            assert_eq!(
+                accept_response_credit(&senders, 71, CHUNK_BYTES as u32),
+                Ok(())
+            );
+        }
+        assert_eq!(accept_response_credit(&senders, 71, 1), Err(()));
+        for _ in 0..4 {
+            assert_eq!(receiver.try_recv(), Ok(CHUNK_BYTES as u32));
+        }
+        assert!(receiver.try_recv().is_err());
     }
 
     #[tokio::test]

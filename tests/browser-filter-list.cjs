@@ -12,7 +12,7 @@ loaded._compile(bundle.outputFiles[0].text, source);
 
 const { compileFilterList, matchFilterList, shouldBlockByFilterList, cosmeticCssForPage, serializeCosmeticStyleScript, remoteNetworkFilterSnapshot, proxyNavigationAvailable } = loaded.exports;
 assert.equal(proxyNavigationAvailable({ navigation: { addEventListener() {} } }), true);
-assert.equal(proxyNavigationAvailable({}), false, 'Proxy mode must fail closed on engines without cancellable navigation events');
+assert.equal(proxyNavigationAvailable({}), false, 'Engines without navigation events use reader mode');
 const filters = compileFilterList([
   '! basic EasyList-style test rules',
   '||ads.example^',

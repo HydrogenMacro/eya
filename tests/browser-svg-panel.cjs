@@ -7,7 +7,7 @@ const { buildSync } = require('esbuild');
 async function main() {
   const bundle = buildSync({ entryPoints: ['client/browser-panel.js'], bundle: true, platform: 'browser', format: 'iife', globalName: 'EyaBrowserPanel', write: false }).outputFiles[0].text;
   const svg = fs.readFileSync('client/hosted.svg');
-  const generator = fs.readFileSync('client/generator.js', 'utf8');
+  const generator = fs.readFileSync('client/client-artifacts.js', 'utf8');
   const prelude = generator.match(/function svgPrelude\(\) \{[\s\S]*?\n\}/)?.[0];
   assert.ok(prelude, 'standalone SVG prelude must exist');
   const standalone = `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><foreignObject width="100%" height="100%"><html xmlns="http://www.w3.org/1999/xhtml"><head/><body/></html></foreignObject><script><![CDATA[(${prelude})();]]></script></svg>`;
@@ -33,10 +33,10 @@ async function main() {
       }, bundle);
       assert.deepEqual(result, { namespace: 'http://www.w3.org/1999/xhtml', styles: true, mounted: true }, name);
       await page.getByLabel('Address or search').fill('https://example.test/');
-      await page.getByTitle('Navigate').click();
+      await page.getByLabel('Address or search').press('Enter');
       await page.waitForFunction(() => window.svgNavigations.includes('https://example.test/'));
       await page.getByLabel('Browser tabs').click();
-      await page.getByTitle('New tab').click();
+      await page.getByTitle('New tab', { exact: true }).click();
       assert.equal(await page.locator('.eya-browser-tab').count(), 2, name);
     }
     console.log('Browser panel mounts in hosted and standalone SVG clients.');

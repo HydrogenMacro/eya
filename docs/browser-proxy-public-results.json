@@ -1,0 +1,2761 @@
+{
+  "schema": 1,
+  "generatedAt": "2026-11-17T13:39:24.499Z",
+  "version": "2.5.1",
+  "summary": {
+    "total": 15,
+    "nativeControls": 6,
+    "nativeUsable": 6,
+    "proxyRows": 9,
+    "proxyUsable": 0,
+    "proxyPartial": 5,
+    "proxyUnreadable": 4,
+    "proxyConnectionClosures": 0,
+    "directRequestsBlockedByHarness": 0,
+    "cspRejectedRequests": 60
+  },
+  "upstreamEncodingProbe": {
+    "url": "https://docs.swift.org/latest/documentation/the-swift-programming-language/",
+    "requestHeaders": {
+      "Accept-Encoding": "identity",
+      "User-Agent": "Mozilla/5.0 (compatible; EyaBrowser/1.0)"
+    },
+    "status": 200,
+    "contentEncoding": "gzip",
+    "contentType": "text/html; charset=UTF-8",
+    "responseDate": "Tue, 17 Nov 2026 13:24:10 GMT",
+    "responseBodyBytes": 1713,
+    "responseBodyPrefixHex": "1f8b080000000000",
+    "responseBodySha256": "8d9623bce91fded90f7802a38eb1600df403afd6a81b8d20c020016cec8da0ef",
+    "note": "curl sent these headers without --compressed; saved raw encoded bytes. No production decoding or egress policy changed."
+  },
+  "builtBinaries": {
+    "debugSha256": "cea1386432acd6aecf841a8988e5518e5c1dcbbe9dca051273be9bd8b770319e",
+    "releaseSha256": "a475bba231d895a6053c7ca602222fb44cdaab02ffdb2b1c6a7c87c930aaef20"
+  },
+  "runs": [
+    {
+      "schema": 1,
+      "generatedAt": "2026-11-17T13:34:08.082Z",
+      "version": "2.5.1",
+      "node": "v22.23.2",
+      "methodology": "Built standalone client, actual authenticated Noise transport and Rust public egress; fresh native Chromium controls. Read/navigation/search/selection checks, no accounts, credentials, purchases or application forms. Proxy direct HTTP attempts blocked and counted, never used as fallback. Search and ordinary page scripts may send site telemetry. One sequential sample; timings include host load and test waits, not performance benchmarks.",
+      "configuration": {
+        "format": "html",
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "contentDeadlineMs": 40000,
+        "interactionDeadlineMs": 10000,
+        "styling": "Loaded sheets plus computed body font matches the native control (known family fallback for proxy-only runs); screenshots supplement, not pixel equivalence",
+        "captures": "/tmp/eya-proxy-public-verified-html-captures"
+      },
+      "sourceSha256": {
+        "client.html": "e75639370b332ca5afb1d6ccc8ad2191cdff0ea3a3991d565412cc352ff996b8",
+        "client/browser-panel.js": "9b86809ce21c311088abbc287fb7a368ac6e03be51db2cf38c817931f224708f",
+        "client/browser-transport.js": "bd207e0ef71a2f1b848104a4a94eb221b1a007c5d194ac68fc32122a556f1b34",
+        "eya-server/src/browser.rs": "eb254fefa91ea86d3f1dbbd85b3eaa7681705a73980c97502d57498df304585b",
+        "tests/browser-proxy-public.cjs": "997e9ab12d1f7589c60f48c39fc75cff900f812de93471d9461bc4da69b54b77"
+      },
+      "rows": [
+        {
+          "site": "react",
+          "mode": "native",
+          "format": "native",
+          "url": "https://react.dev/learn",
+          "checks": {
+            "reading": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "Quick Start",
+                "contentMs": 824
+              },
+              "elapsedMs": 211
+            },
+            "styling": {
+              "outcome": "passed",
+              "detail": {
+                "sheets": 2,
+                "font": "\"Optimistic Text\", -apple-system, ui-sans-serif, system-ui, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+                "links": [
+                  {
+                    "loaded": true,
+                    "href": "https://react.dev/_next/static/css/f647474d5749a6d8.css"
+                  }
+                ]
+              },
+              "elapsedMs": 56
+            },
+            "retainedContent": {
+              "outcome": "passed",
+              "detail": {
+                "textCharacters": 13326
+              },
+              "elapsedMs": 14
+            },
+            "selection": {
+              "outcome": "passed",
+              "detail": {
+                "selectedCharacters": 17
+              },
+              "elapsedMs": 552
+            },
+            "navigation": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "Thinking in React"
+              },
+              "elapsedMs": 676
+            },
+            "back": {
+              "outcome": "passed",
+              "detail": "Original article restored",
+              "elapsedMs": 159
+            },
+            "search": {
+              "outcome": "passed",
+              "detail": {
+                "results": 9,
+                "query": "useState"
+              },
+              "elapsedMs": 1984
+            }
+          },
+          "browserErrors": [],
+          "consoleErrors": [],
+          "directClientRequests": [],
+          "clientRequestFailures": [],
+          "nativeHttpErrors": [],
+          "socketStates": [],
+          "encryptedDownBytes": 0,
+          "encryptedUpBytes": 0,
+          "initial": {
+            "title": "Quick Start – React",
+            "textCharacters": 13326,
+            "headings": [
+              "Quick Start",
+              "Creating and nesting components",
+              "Writing markup with JSX",
+              "Adding styles",
+              "Displaying data",
+              "Conditional rendering",
+              "Rendering lists",
+              "Responding to events",
+              "Updating the screen",
+              "Using Hooks",
+              "Sharing data between components",
+              "Next Steps",
+              "On this page"
+            ],
+            "styleSheets": 2,
+            "bodyFont": "\"Optimistic Text\", -apple-system, ui-sans-serif, system-ui, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+            "images": {
+              "total": 9,
+              "loaded": 1
+            },
+            "nestedFrames": 5
+          },
+          "styleDiagnostics": {
+            "sheets": 2,
+            "font": "\"Optimistic Text\", -apple-system, ui-sans-serif, system-ui, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+            "links": [
+              {
+                "loaded": true,
+                "href": "https://react.dev/_next/static/css/f647474d5749a6d8.css"
+              }
+            ]
+          },
+          "settled": {
+            "title": "Quick Start – React",
+            "textCharacters": 13326,
+            "headings": [
+              "Quick Start",
+              "Creating and nesting components",
+              "Writing markup with JSX",
+              "Adding styles",
+              "Displaying data",
+              "Conditional rendering",
+              "Rendering lists",
+              "Responding to events",
+              "Updating the screen",
+              "Using Hooks",
+              "Sharing data between components",
+              "Next Steps",
+              "On this page"
+            ],
+            "styleSheets": 2,
+            "bodyFont": "\"Optimistic Text\", -apple-system, ui-sans-serif, system-ui, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\""
+          },
+          "selectionGeometry": {
+            "box": {
+              "x": 368,
+              "y": 188,
+              "width": 896,
+              "height": 65
+            },
+            "point": {
+              "x": 0,
+              "y": 3,
+              "width": 849,
+              "height": 25
+            },
+            "prose": "Welcome to the React documentation! This page will give you an introduction to 80% of the React concepts that you will use on a daily basis."
+          },
+          "finalAddress": "https://react.dev/learn",
+          "elapsedMs": 7705,
+          "outcome": "usable"
+        },
+        {
+          "site": "react",
+          "mode": "proxy",
+          "format": "html",
+          "url": "https://react.dev/learn",
+          "checks": {
+            "reading": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "Quick Start",
+                "contentMs": 2049
+              },
+              "elapsedMs": 596
+            },
+            "styling": {
+              "outcome": "passed",
+              "detail": {
+                "sheets": 1,
+                "font": "\"Optimistic Text\", -apple-system, ui-sans-serif, system-ui, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+                "links": [
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  }
+                ]
+              },
+              "elapsedMs": 2952
+            },
+            "retainedContent": {
+              "outcome": "failed",
+              "error": "Article remains visible after scripts and styles load",
+              "elapsedMs": 5
+            }
+          },
+          "browserErrors": [
+            "Loading chunk 809 failed.",
+            "Minified React error #418; visit https://react.dev/errors/418?args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings.",
+            "Loading chunk 809 failed."
+          ],
+          "consoleErrors": [
+            "Loading the script 'https://react.dev/_next/static/chunks/4ad82c5e.aa059996e264f809.js' violates the following Content Security Policy directive: \"script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:[omitted] Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+            "Loading the script 'https://react.dev/_next/static/chunks/811.b2e5ca620a3f883e.js' violates the following Content Security Policy directive: \"script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:[omitted] Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+            "Loading the script 'https://react.dev/_next/static/chunks/972.d10c430071e5a41c.js' violates the following Content Security Policy directive: \"script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:[omitted] Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+            "Loading the font 'https://react.dev/fonts/Source-Code-Pro-Regular.woff2' violates the following Content Security Policy directive: \"font-src blob: data:[omitted] The action has been blocked.",
+            "Loading the font 'https://react.dev/fonts/Source-Code-Pro-Bold.woff2' violates the following Content Security Policy directive: \"font-src blob: data:[omitted] The action has been blocked.",
+            "Loading the font 'https://react.dev/fonts/Optimistic_Display_W_Md.woff2' violates the following Content Security Policy directive: \"font-src blob: data:[omitted] The action has been blocked.",
+            "Loading the font 'https://react.dev/fonts/Optimistic_Display_W_SBd.woff2' violates the following Content Security Policy directive: \"font-src blob: data:[omitted] The action has been blocked.",
+            "Loading the font 'https://react.dev/fonts/Optimistic_Display_W_Bd.woff2' violates the following Content Security Policy directive: \"font-src blob: data:[omitted] The action has been blocked.",
+            "Loading the font 'https://react.dev/fonts/Optimistic_Text_W_Md.woff2' violates the following Content Security Policy directive: \"font-src blob: data:[omitted] The action has been blocked.",
+            "Loading the font 'https://react.dev/fonts/Optimistic_Text_W_Bd.woff2' violates the following Content Security Policy directive: \"font-src blob: data:[omitted] The action has been blocked.",
+            "Loading the font 'https://react.dev/fonts/Optimistic_Text_W_Rg.woff2' violates the following Content Security Policy directive: \"font-src blob: data:[omitted] The action has been blocked.",
+            "Loading the font 'https://react.dev/fonts/Optimistic_Text_W_It.woff2' violates the following Content Security Policy directive: \"font-src blob: data:[omitted] The action has been blocked.",
+            "Loading the image 'https://react.dev/_next/image?url=%2Fimages%2Fuwu.png&w=64&q=75' violates the following Content Security Policy directive: \"img-src blob: data:[omitted] The action has been blocked.",
+            "Fetching content from 'https://react.dev/_next/static/chunks/668-9be9de6fa7660277.js' violates the following Content Security Policy directive: \"default-src 'none'\". The action has been blocked.",
+            "Fetching content from 'https://react.dev/_next/static/chunks/928-22de2b840e40e9ed.js' violates the following Content Security Policy directive: \"default-src 'none'\". The action has been blocked.",
+            "Fetching content from 'https://react.dev/_next/static/chunks/pages/%5B%5B...markdownPath%5D%5D-3f4d3fa908e59b5a.js' violates the following Content Security Policy directive: \"default-src 'none'\". The action has been blocked.",
+            "Loading the script 'https://react.dev/_next/static/chunks/4ad82c5e.aa059996e264f809.js' violates the following Content Security Policy directive: \"script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:[omitted] Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+            "Loading the script 'https://react.dev/_next/static/chunks/811.b2e5ca620a3f883e.js' violates the following Content Security Policy directive: \"script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:[omitted] Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+            "Loading the script 'https://react.dev/_next/static/chunks/972.d10c430071e5a41c.js' violates the following Content Security Policy directive: \"script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:[omitted] Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+            "ChunkLoadError: Loading chunk 809 failed.\n(error: https://react.dev/_next/static/chunks/4ad82c5e.aa059996e264f809.js)\n    at r.f.j (data:[omitted] charset=utf-8;base64,KCgpPT57InVzZSBzdHJpY3QiO3ZhciBlPXt9LHQ9e307ZnVuY3Rpb24gcihhKXt2YXIgbz10W2FdO2lmKHZvaWQgMCE9PW8pcmV0dXJuIG8uZXhwb3J0czt2YXIgbj10W2FdPXtpZDphLGxvYWRlZDohMSxleHBvcnRzOnt9fSxjPSEwO3RyeXtlW2FdLmNhbGwobi5leHBvcnRzLG4sbi5leHBvcnRzLHIpLGM9ITF9ZmluYWxseXtjJiZkZWxldGUgdFthXX1yZXR1cm4gbi5sb2FkZWQ9ITAsbi5leHBvcnRzfXIubT1lLCgoKT0+e3ZhciBlPVtdO3IuTz0odCxhLG8sbik9PntpZihhKXtuPW58fDA7Zm9yKHZhciBjPWUubGVuZ3RoO2M+MCYmZVtjLTFdWzJdPm47Yy0tKWVbY109ZVtjLTFdO2VbY109W2EsbyxuXTtyZXR1cm59Zm9yKHZhciBkPTEvMCxjPTA7YzxlLmxlbmd0aDtjKyspe2Zvcih2YXJbYSxvLG5d",
+            "ChunkLoadError: Loading chunk 809 failed.\n(error: https://react.dev/_next/static/chunks/4ad82c5e.aa059996e264f809.js)\n    at r.f.j (data:[omitted] charset=utf-8;base64,KCgpPT57InVzZSBzdHJpY3QiO3ZhciBlPXt9LHQ9e307ZnVuY3Rpb24gcihhKXt2YXIgbz10W2FdO2lmKHZvaWQgMCE9PW8pcmV0dXJuIG8uZXhwb3J0czt2YXIgbj10W2FdPXtpZDphLGxvYWRlZDohMSxleHBvcnRzOnt9fSxjPSEwO3RyeXtlW2FdLmNhbGwobi5leHBvcnRzLG4sbi5leHBvcnRzLHIpLGM9ITF9ZmluYWxseXtjJiZkZWxldGUgdFthXX1yZXR1cm4gbi5sb2FkZWQ9ITAsbi5leHBvcnRzfXIubT1lLCgoKT0+e3ZhciBlPVtdO3IuTz0odCxhLG8sbik9PntpZihhKXtuPW58fDA7Zm9yKHZhciBjPWUubGVuZ3RoO2M+MCYmZVtjLTFdWzJdPm47Yy0tKWVbY109ZVtjLTFdO2VbY109W2EsbyxuXTtyZXR1cm59Zm9yKHZhciBkPTEvMCxjPTA7YzxlLmxlbmd0aDtjKyspe2Zvcih2YXJbYSxvLG5d",
+            "A client-side exception has occurred, see here for more info: https://nextjs.org/docs/messages/client-side-exception-occurred",
+            "Loading the script 'https://react.dev/_next/static/chunks/pages/_error-add665a7ef077506.js' violates the following Content Security Policy directive: \"script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:[omitted] Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+            "Error rendering page:  Error: Failed to load script: /_next/static/chunks/pages/_error-add665a7ef077506.js\n    at t.onerror (data:[omitted] charset=utf-8;base64,KHNlbGYud2VicGFja0NodW5rX05fRT1zZWxmLndlYnBhY2tDaHVua19OX0V8fFtdKS5wdXNoKFtbNzkyXSx7ODkyNTooZSx0KT0+eyJ1c2Ugc3RyaWN0IjtmdW5jdGlvbiByKCl7cmV0dXJuIiJ9T2JqZWN0LmRlZmluZVByb3BlcnR5KHQsIl9fZXNNb2R1bGUiLHt2YWx1ZTohMH0pLE9iamVjdC5kZWZpbmVQcm9wZXJ0eSh0LCJnZXREZXBsb3ltZW50SWRRdWVyeU9yRW1wdHlTdHJpbmciLHtlbnVtZXJhYmxlOiEwLGdldDpmdW5jdGlvbigpe3JldHVybiByfX0pfSw0NTk5OigpPT57InRyaW1TdGFydCJpbiBTdHJpbmcucHJvdG90eXBlfHwoU3RyaW5nLnByb3RvdHlwZS50cmltU3RhcnQ9U3RyaW5nLnByb3RvdHlwZS50cmltTGVmdCksInRyaW1FbmQiaW4gU3RyaW5nLnByb3RvdHlwZXx8KFN0cmluZy5wcm90b3R"
+          ],
+          "directClientRequests": [],
+          "clientRequestFailures": [
+            {
+              "url": "https://react.dev/_next/static/chunks/4ad82c5e.aa059996e264f809.js",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/_next/static/chunks/811.b2e5ca620a3f883e.js",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/_next/static/chunks/972.d10c430071e5a41c.js",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/fonts/Source-Code-Pro-Regular.woff2",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/fonts/Source-Code-Pro-Bold.woff2",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/fonts/Optimistic_Display_W_Md.woff2",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/fonts/Optimistic_Display_W_SBd.woff2",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/fonts/Optimistic_Display_W_Bd.woff2",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/fonts/Optimistic_Text_W_Md.woff2",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/fonts/Optimistic_Text_W_Bd.woff2",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/fonts/Optimistic_Text_W_Rg.woff2",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/fonts/Optimistic_Text_W_It.woff2",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/_next/image",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/_next/static/chunks/668-9be9de6fa7660277.js",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/_next/static/chunks/928-22de2b840e40e9ed.js",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/_next/static/chunks/pages/%5B%5B...markdownPath%5D%5D-3f4d3fa908e59b5a.js",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/_next/static/chunks/4ad82c5e.aa059996e264f809.js",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/_next/static/chunks/811.b2e5ca620a3f883e.js",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/_next/static/chunks/972.d10c430071e5a41c.js",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/_next/static/chunks/pages/_error-add665a7ef077506.js",
+              "error": "csp"
+            }
+          ],
+          "nativeHttpErrors": [],
+          "socketStates": [],
+          "encryptedDownBytes": 3534658,
+          "encryptedUpBytes": 20845,
+          "initial": {
+            "title": "",
+            "textCharacters": 0,
+            "headings": [],
+            "styleSheets": 0,
+            "bodyFont": "\"Times New Roman\"",
+            "images": {
+              "total": 0,
+              "loaded": 0
+            },
+            "nestedFrames": 0
+          },
+          "styleDiagnostics": {
+            "sheets": 1,
+            "font": "\"Optimistic Text\", -apple-system, ui-sans-serif, system-ui, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+            "links": [
+              {
+                "loaded": true,
+                "href": "data:"
+              }
+            ]
+          },
+          "settled": {
+            "title": "",
+            "textCharacters": 0,
+            "headings": [],
+            "styleSheets": 1,
+            "bodyFont": "\"Optimistic Text\", -apple-system, ui-sans-serif, system-ui, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\""
+          },
+          "sandbox": "allow-scripts",
+          "panelStatus": "https://react.dev/cdoc\nConnected",
+          "runtimeConsole": "8:34:21 AM {\"message\":\"Loading chunk 809 failed.\\n(error: https://react.dev/_next/static/chunks/4ad82c5e.aa059996e264f809.js)\",\"name\":\"ChunkLoadError\",\"type\":\"error\",\"request\":\"https://react.dev/_next/static/chunks/4ad82c5e.aa059996e264f809.js\"}\n8:34:21 AM {\"message\":\"Loading chunk 809 failed.\\n(error: https://react.dev/_next/static/chunks/4ad82c5e.aa059996e264f809.js)\",\"name\":\"ChunkLoadError\",\"type\":\"error\",\"request\":\"https://react.dev/_next/static/chunks/4ad82c5e.aa059996e264f809.js\"}\n8:34:21 AM A client-side exception has occurred, see here for more info: https://nextjs.org/docs/messages/client-side-exception-occurred\n8:34:21 AM Error rendering page:  {}",
+          "network": "GET 200 https://react.dev/learn 317 ms\nGET 200 https://react.dev/fonts/Source-Code-Pro-Regular.woff2 217 ms\nGET 200 https://react.dev/fonts/Source-Code-Pro-Bold.woff2 297 ms\nGET 200 https://www.googletagmanager.com/gtag/js?id=G-B1E83PJ3RT 809 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_W_Md.woff2 960 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_W_SBd.woff2 978 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_W_Bd.woff2 1026 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_W_Md.woff2 1049 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_W_Bd.woff2 1083 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_W_Rg.woff2 1099 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_W_It.woff2 1149 ms\nCACHE (panel) GET 200 https://react.dev/fonts/Source-Code-Pro-Regular.woff2\nCACHE (panel) GET 200 https://react.dev/fonts/Source-Code-Pro-Bold.woff2\nCACHE (panel) GET 200 https://react.dev/fonts/Optimistic_Display_W_Md.woff2\nCACHE (panel) GET 200 https://react.dev/fonts/Optimistic_Display_W_SBd.woff2\nCACHE (panel) GET 200 https://react.dev/fonts/Optimistic_Display_W_Bd.woff2\nCACHE (panel) GET 200 https://react.dev/fonts/Optimistic_Text_W_Rg.woff2\nCACHE (panel) GET 200 https://react.dev/fonts/Optimistic_Text_W_It.woff2\nCACHE (panel) GET 200 https://react.dev/fonts/Optimistic_Text_W_Md.woff2\nCACHE (panel) GET 200 https://react.dev/fonts/Optimistic_Text_W_Bd.woff2\nGET 200 https://react.dev/_next/static/chunks/webpack-95fc1f1713249e81.js 1267 ms\nGET 200 https://react.dev/_next/static/chunks/polyfills-42372ed130431b0a.js 1284 ms\nGET 200 https://react.dev/_next/static/chunks/framework-76ad44d61c11f057.js 1606 ms\nGET 200 https://react.dev/_next/static/chunks/main-8bc660a98b463b2d.js 1730 ms\nGET 200 https://react.dev/_next/static/chunks/pages/_app-6d7b64b3b21a9551.js 1783 ms\nGET 200 https://react.dev/_next/static/chunks/668-9be9de6fa7660277.js 1828 ms\nGET 200 https://react.dev/_next/static/chunks/pages/%5B%5B...markdownPath%5D%5D-3f4d3fa908e59b5a.js 1886 ms\nGET 200 https://react.dev/_next/static/FktEpVg7A3SOjIyUKbFBz/_buildManifest.js 2026 ms\nGET 200 https://react.dev/_next/static/FktEpVg7A3SOjIyUKbFBz/_ssgManifest.js 2335 ms\nGET 200 https://react.dev/_next/static/chunks/928-22de2b840e40e9ed.js 2337 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_W_MdIt.woff2 1381 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_W_SBdIt.woff2 1444 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_W_BdIt.woff2 1754 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_W_MdIt.woff2 1783 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_W_BdIt.woff2 1821 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Arbc_W_Md.woff2 1854 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Arbc_W_SBd.woff2 1874 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Arbc_W_Bd.woff2 1932 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Arbc_W_Rg.woff2 1943 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Arbc_W_Md.woff2 2007 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Arbc_W_Bd.woff2 2021 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Cyrl_W_Md.woff2 2081 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Cyrl_W_SBd.woff2 2103 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Cyrl_W_Bd.woff2 2151 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Cyrl_W_Rg.woff2 2173 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Cyrl_W_Md.woff2 2242 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Cyrl_W_Bd.woff2 2245 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Deva_W_Md.woff2 2364 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Deva_W_SBd.woff2 2365 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Deva_W_Rg.woff2 2431 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Deva_W_Bd.woff2 2487 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Deva_W_Md.woff2 2554 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Deva_W_Bd.woff2 2641 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Viet_W_Md.woff2 2651 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Viet_W_SBd.woff2 2696 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Viet_W_Bd.woff2 2713 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Viet_W_Rg.woff2 2750 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Viet_W_Md.woff2 2764 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Viet_W_Bd.woff2 2828 ms\nCACHE GET 200 https://react.dev/_next/static/css/f647474d5749a6d8.css 4056 ms\nGET 200 https://react.dev/apple-touch-icon.png 4105 ms\nGET 200 https://react.dev/favicon-32x32.png 4149 ms\nGET 200 https://react.dev/favicon-16x16.png 4189 ms\nGET 200 https://react.dev/site.webmanifest 4230 ms\nGET 200 https://react.dev/safari-pinned-tab.svg 4278 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fuwu.png&w=64&q=75 4350 ms\nCACHE (shared) GET 200 https://react.dev/_next/image?url=%2Fimages%2Fuwu.png&w=64&q=75\nCACHE (shared) GET 200 https://react.dev/_next/image?url=%2Fimages%2Fuwu.png&w=64&q=75\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fuwu.png&w=128&q=75 4413 ms\nCACHE (shared) GET 200 https://react.dev/_next/image?url=%2Fimages%2Fuwu.png&w=128&q=75\nCACHE (shared) GET 200 https://react.dev/_next/image?url=%2Fimages%2Fuwu.png&w=128&q=75\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_child.dark.png&w=640&q=75 4470 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_child.dark.png&w=828&q=75 4536 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_child.png&w=640&q=75 4599 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_child.png&w=828&q=75 4667 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_child_clicked.dark.png&w=640&q=75 4732 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_child_clicked.dark.png&w=828&q=75 4789 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_child_clicked.png&w=640&q=75 4854 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_child_clicked.png&w=828&q=75 4914 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_parent.dark.png&w=640&q=75 4983 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_parent.dark.png&w=828&q=75 5032 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_parent.png&w=640&q=75 5088 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_parent.png&w=828&q=75 5149 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_parent_clicked.dark.png&w=640&q=75 5205 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_parent_clicked.dark.png&w=828&q=75 5268 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_parent_clicked.png&w=640&q=75 5323 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_parent_clicked.png&w=828&q=75 5377 ms\nGET 200 https://react.dev/images/meta-gradient.png 4191 ms\nGET 200 https://react.dev/images/g_arrow.png 4236 ms\nGET 200 https://react.dev/images/meta-gradient-dark.png 4324 ms\nGET 200 https://react.dev/_next/static/css/f647474d5749a6d8.css 5620 ms",
+          "finalAddress": "https://react.dev/cdoc",
+          "elapsedMs": 8491,
+          "outcome": "unreadable"
+        },
+        {
+          "site": "swift",
+          "mode": "native",
+          "format": "native",
+          "url": "https://docs.swift.org/latest/documentation/the-swift-programming-language/",
+          "checks": {
+            "reading": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "The Swift Programming Language (6.4)",
+                "contentMs": 928
+              },
+              "elapsedMs": 447
+            },
+            "styling": {
+              "outcome": "passed",
+              "detail": {
+                "sheets": 3,
+                "font": "\"Helvetica Neue\", Helvetica, Arial, sans-serif",
+                "links": [
+                  {
+                    "loaded": true,
+                    "href": "https://docs.swift.org/latest/css/index.63be42cf.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://docs.swift.org/latest/css/671.47827da6.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://docs.swift.org/latest/css/documentation-topic.2b6fdee5.css"
+                  }
+                ]
+              },
+              "elapsedMs": 48
+            },
+            "retainedContent": {
+              "outcome": "passed",
+              "detail": {
+                "textCharacters": 3831
+              },
+              "elapsedMs": 14
+            },
+            "selection": {
+              "outcome": "passed",
+              "detail": {
+                "selectedCharacters": 16
+              },
+              "elapsedMs": 697
+            },
+            "navigation": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "A Swift Tour"
+              },
+              "elapsedMs": 651
+            },
+            "back": {
+              "outcome": "passed",
+              "detail": "Original article restored",
+              "elapsedMs": 29
+            },
+            "search": {
+              "outcome": "passed",
+              "detail": {
+                "query": "functions",
+                "matches": 2,
+                "kind": "DocC navigator filter (not global full-text search)"
+              },
+              "elapsedMs": 204
+            }
+          },
+          "browserErrors": [],
+          "consoleErrors": [],
+          "directClientRequests": [],
+          "clientRequestFailures": [],
+          "nativeHttpErrors": [],
+          "socketStates": [],
+          "encryptedDownBytes": 0,
+          "encryptedUpBytes": 0,
+          "initial": {
+            "title": "The Swift Programming Language (6.4) | Documentation",
+            "textCharacters": 3831,
+            "headings": [
+              "Documentation",
+              "Documentation",
+              "The Swift Programming Language",
+              "The Swift Programming Language (6.4)",
+              "Topics"
+            ],
+            "styleSheets": 3,
+            "bodyFont": "\"Helvetica Neue\", Helvetica, Arial, sans-serif",
+            "images": {
+              "total": 0,
+              "loaded": 0
+            },
+            "nestedFrames": 0
+          },
+          "styleDiagnostics": {
+            "sheets": 3,
+            "font": "\"Helvetica Neue\", Helvetica, Arial, sans-serif",
+            "links": [
+              {
+                "loaded": true,
+                "href": "https://docs.swift.org/latest/css/index.63be42cf.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://docs.swift.org/latest/css/671.47827da6.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://docs.swift.org/latest/css/documentation-topic.2b6fdee5.css"
+              }
+            ]
+          },
+          "settled": {
+            "title": "The Swift Programming Language (6.4) | Documentation",
+            "textCharacters": 3831,
+            "headings": [
+              "Documentation",
+              "Documentation",
+              "The Swift Programming Language",
+              "The Swift Programming Language (6.4)",
+              "Topics"
+            ],
+            "styleSheets": 3,
+            "bodyFont": "\"Helvetica Neue\", Helvetica, Arial, sans-serif"
+          },
+          "selectionGeometry": {
+            "box": {
+              "x": 40,
+              "y": 107,
+              "width": 147.140625,
+              "height": 23
+            },
+            "point": {
+              "x": 0,
+              "y": 0,
+              "width": 147.140625,
+              "height": 23
+            },
+            "prose": "Welcome to Swift"
+          },
+          "finalAddress": "https://docs.swift.org/latest/documentation/the-swift-programming-language/",
+          "elapsedMs": 5866,
+          "outcome": "usable"
+        },
+        {
+          "site": "swift",
+          "mode": "proxy",
+          "format": "html",
+          "url": "https://docs.swift.org/latest/documentation/the-swift-programming-language/",
+          "checks": {
+            "reading": {
+              "outcome": "failed",
+              "error": "Page unavailable",
+              "elapsedMs": 333
+            }
+          },
+          "browserErrors": [],
+          "consoleErrors": [],
+          "directClientRequests": [],
+          "clientRequestFailures": [],
+          "nativeHttpErrors": [],
+          "socketStates": [],
+          "encryptedDownBytes": 232,
+          "encryptedUpBytes": 328,
+          "sandbox": "allow-scripts",
+          "panelStatus": "The upstream returned an unsupported content encoding\nConnected",
+          "runtimeConsole": "8:34:31 AM The upstream returned an unsupported content encoding",
+          "network": "No requests yet.",
+          "finalAddress": "https://docs.swift.org/latest/documentation/the-swift-programming-language/",
+          "elapsedMs": 1809,
+          "outcome": "unreadable"
+        },
+        {
+          "site": "pixijs",
+          "mode": "native",
+          "format": "native",
+          "url": "https://pixijs.com/8.x/guides/getting-started/intro",
+          "checks": {
+            "reading": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "Introduction",
+                "contentMs": 901
+              },
+              "elapsedMs": 229
+            },
+            "styling": {
+              "outcome": "passed",
+              "detail": {
+                "sheets": 1,
+                "font": "Roboto, \"Roboto Fallback\", system-ui, sans-serif",
+                "links": [
+                  {
+                    "loaded": true,
+                    "href": "https://pixijs.com/assets/css/styles.1a1cd864.css"
+                  }
+                ]
+              },
+              "elapsedMs": 53
+            },
+            "retainedContent": {
+              "outcome": "passed",
+              "detail": {
+                "textCharacters": 3208
+              },
+              "elapsedMs": 13
+            },
+            "selection": {
+              "outcome": "passed",
+              "detail": {
+                "selectedCharacters": 20
+              },
+              "elapsedMs": 481
+            },
+            "navigation": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "Quick Start"
+              },
+              "elapsedMs": 490
+            },
+            "back": {
+              "outcome": "passed",
+              "detail": "Original article restored",
+              "elapsedMs": 66
+            },
+            "search": {
+              "outcome": "passed",
+              "detail": {
+                "results": 1,
+                "query": "sprite"
+              },
+              "elapsedMs": 524
+            }
+          },
+          "browserErrors": [],
+          "consoleErrors": [],
+          "directClientRequests": [],
+          "clientRequestFailures": [],
+          "nativeHttpErrors": [],
+          "socketStates": [],
+          "encryptedDownBytes": 0,
+          "encryptedUpBytes": 0,
+          "initial": {
+            "title": "Introduction | PixiJS",
+            "textCharacters": 3208,
+            "headings": [
+              "Introduction",
+              "Features ⚡️​",
+              "What Is PixiJS?​",
+              "What Makes PixiJS Special​",
+              "Why Choose PixiJS?​",
+              "Who Is PixiJS For?​",
+              "Get Started​"
+            ],
+            "styleSheets": 1,
+            "bodyFont": "Roboto, \"Roboto Fallback\", system-ui, sans-serif",
+            "images": {
+              "total": 9,
+              "loaded": 9
+            },
+            "nestedFrames": 0
+          },
+          "styleDiagnostics": {
+            "sheets": 1,
+            "font": "Roboto, \"Roboto Fallback\", system-ui, sans-serif",
+            "links": [
+              {
+                "loaded": true,
+                "href": "https://pixijs.com/assets/css/styles.1a1cd864.css"
+              }
+            ]
+          },
+          "settled": {
+            "title": "Introduction | PixiJS",
+            "textCharacters": 3208,
+            "headings": [
+              "Introduction",
+              "Features ⚡️​",
+              "What Is PixiJS?​",
+              "What Makes PixiJS Special​",
+              "Why Choose PixiJS?​",
+              "Who Is PixiJS For?​",
+              "Get Started​"
+            ],
+            "styleSheets": 1,
+            "bodyFont": "Roboto, \"Roboto Fallback\", system-ui, sans-serif"
+          },
+          "selectionGeometry": {
+            "box": {
+              "x": 344,
+              "y": 104,
+              "width": 281.640625,
+              "height": 16.796875
+            },
+            "point": {
+              "x": 16,
+              "y": 0,
+              "width": 265.640625,
+              "height": 16
+            },
+            "prose": "2D · GUIDES · GETTING STARTED"
+          },
+          "finalAddress": "https://pixijs.com/8.x/guides/getting-started/intro",
+          "elapsedMs": 5857,
+          "outcome": "usable"
+        },
+        {
+          "site": "pixijs",
+          "mode": "proxy",
+          "format": "html",
+          "url": "https://pixijs.com/8.x/guides/getting-started/intro",
+          "checks": {
+            "reading": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "Introduction",
+                "contentMs": 1391
+              },
+              "elapsedMs": 348
+            },
+            "styling": {
+              "outcome": "failed",
+              "error": "Expected native body font Roboto, \"Roboto Fallback\", system-ui, sans-serif, observed \"Times New Roman\"",
+              "elapsedMs": 10015
+            },
+            "retainedContent": {
+              "outcome": "passed",
+              "detail": {
+                "textCharacters": 3228
+              },
+              "elapsedMs": 9
+            },
+            "selection": {
+              "outcome": "passed",
+              "detail": {
+                "selectedCharacters": 25
+              },
+              "elapsedMs": 378
+            },
+            "navigation": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "Quick Start"
+              },
+              "elapsedMs": 767
+            },
+            "back": {
+              "outcome": "passed",
+              "detail": "Original article restored",
+              "elapsedMs": 361
+            },
+            "search": {
+              "outcome": "failed",
+              "error": "locator.fill: Timeout 10000ms exceeded.",
+              "elapsedMs": 10608
+            }
+          },
+          "browserErrors": [
+            "Loading chunk 5062 failed.",
+            "Loading chunk 5062 failed."
+          ],
+          "consoleErrors": [
+            "Loading the image 'https://www.googletagmanager.com/td?id=G-YXHQVRJ694&v=3&t=t&pid=1860124609&gtm=45je6bd1v9219823212za204zd9219823212xf3&seq=1&exp=115938466~115938468~118897920~118897930~120213116~120385422~120412528~120420416~120469145~120469153~121246026~121246034&dl=%2Fsrcdoc&tdp=G-YXHQVRJ694;219823212;0;0;0&frm=1&bt=0&ct=3&jsp=1~3~4&z=0' violates the following Content Security Policy directive: \"img-src blob: data:[omitted] The action has been blocked.",
+            "Loading the script 'https://pixijs.com/assets/js/5062.dadee2b0.js' violates the following Content Security Policy directive: \"script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:[omitted] Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+            "Loading the script 'https://pixijs.com/assets/js/5062.dadee2b0.js' violates the following Content Security Policy directive: \"script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:[omitted] Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked."
+          ],
+          "directClientRequests": [],
+          "clientRequestFailures": [
+            {
+              "url": "https://www.googletagmanager.com/td",
+              "error": "csp"
+            },
+            {
+              "url": "https://pixijs.com/assets/js/5062.dadee2b0.js",
+              "error": "csp"
+            },
+            {
+              "url": "https://pixijs.com/assets/js/5062.dadee2b0.js",
+              "error": "csp"
+            }
+          ],
+          "nativeHttpErrors": [],
+          "socketStates": [],
+          "encryptedDownBytes": 5406156,
+          "encryptedUpBytes": 56650,
+          "initial": {
+            "title": "Introduction | PixiJS",
+            "textCharacters": 3228,
+            "headings": [
+              "Introduction",
+              "Features ⚡️​",
+              "What Is PixiJS?​",
+              "What Makes PixiJS Special​",
+              "Why Choose PixiJS?​",
+              "Who Is PixiJS For?​",
+              "Get Started​"
+            ],
+            "styleSheets": 0,
+            "bodyFont": "\"Times New Roman\"",
+            "images": {
+              "total": 9,
+              "loaded": 9
+            },
+            "nestedFrames": 0
+          },
+          "styleDiagnostics": {
+            "sheets": 1,
+            "font": "\"Times New Roman\"",
+            "links": [
+              {
+                "loaded": true,
+                "href": "data:"
+              }
+            ]
+          },
+          "settled": {
+            "title": "Introduction | PixiJS",
+            "textCharacters": 3228,
+            "headings": [
+              "Introduction",
+              "Features ⚡️​",
+              "What Is PixiJS?​",
+              "What Makes PixiJS Special​",
+              "Why Choose PixiJS?​",
+              "Who Is PixiJS For?​",
+              "Get Started​"
+            ],
+            "styleSheets": 1,
+            "bodyFont": "\"Times New Roman\""
+          },
+          "selectionGeometry": {
+            "box": {
+              "x": 14,
+              "y": 529,
+              "width": 1412,
+              "height": 22
+            },
+            "point": {
+              "x": 0,
+              "y": 0,
+              "width": 213,
+              "height": 22
+            },
+            "prose": "2D · guides · Getting Started"
+          },
+          "searchDiagnostics": {
+            "inputs": [
+              {
+                "type": "text",
+                "placeholder": "Search",
+                "label": "Search",
+                "readonly": true
+              }
+            ],
+            "dialogs": [
+              {
+                "open": false,
+                "text": ""
+              },
+              {
+                "open": false,
+                "text": ""
+              },
+              {
+                "open": false,
+                "text": "escSearching PixiJSGetting startedExamplesTutorialsPlayground↑↓ navigate↵ openesc close"
+              }
+            ]
+          },
+          "sandbox": "allow-scripts",
+          "panelStatus": "https://pixijs.com/8.x/guides/getting-started/intro\nConnected",
+          "runtimeConsole": "Console is clear.",
+          "network": "GET 200 https://pixijs.com/8.x/guides/getting-started/intro 171 ms\nGET 200 https://pixijs.com/images/favicon.png 38 ms\nGET 200 https://pixijs.com/fonts/outfit-latin-wght.woff2 105 ms\nGET 200 https://pixijs.com/fonts/roboto-latin-wght.woff2 168 ms\nGET 200 https://www.googletagmanager.com/gtag/js?id=G-YXHQVRJ694 779 ms\nCACHE (panel) GET 200 https://pixijs.com/fonts/outfit-latin-wght.woff2\nCACHE (panel) GET 200 https://pixijs.com/fonts/roboto-latin-wght.woff2\nGET 200 https://pixijs.com/assets/js/runtime~main.f7297763.js 990 ms\nGET 200 https://pixijs.com/fonts/roboto-latin-ext-wght.woff2 109 ms\nGET 200 https://pixijs.com/fonts/roboto-mono-latin-ext-wght.woff2 159 ms\nGET 200 https://pixijs.com/fonts/roboto-mono-latin-wght.woff2 209 ms\nGET 200 https://pixijs.com/images/logo.svg 1625 ms\nGET 200 https://pixijs.com/assets/js/main.187a2fda.js 1633 ms\nGET 200 https://pixijs.com/images/logo-p.svg 1871 ms\nGET 200 https://files.pixijs.download/branding/pixijs-logo-transparent-dark.svg?v=1 1960 ms\nGET 200 https://img.shields.io/npm/v/pixi.js.svg 2067 ms\nGET 200 https://github.com/pixijs/pixijs/actions/workflows/release.yml/badge.svg 2320 ms\nGET 200 https://opencollective.com/pixijs/tiers/badge.svg 2462 ms\nGET 200 https://img.shields.io/badge/chat-discord-blue?style=flat&logo=discord 2547 ms\nCACHE GET 200 https://pixijs.com/images/logo.svg 2575 ms\nCACHE (shared) GET 200 https://pixijs.com/images/logo.svg\nCACHE (shared) GET 200 https://pixijs.com/images/logo.svg\nCACHE GET 200 https://pixijs.com/images/logo-p.svg 2601 ms\nGET 200 https://files.pixijs.download/branding/pixijs-logo-transparent-dark.svg?v=1 2643 ms\nCACHE GET 200 https://img.shields.io/npm/v/pixi.js.svg 2661 ms\nGET 200 https://github.com/pixijs/pixijs/actions/workflows/release.yml/badge.svg 2698 ms\nCACHE GET 200 https://opencollective.com/pixijs/tiers/badge.svg 2718 ms\nCACHE GET 200 https://img.shields.io/badge/chat-discord-blue?style=flat&logo=discord 2736 ms\nGET 404 https://pixijs.com/assets/css/%22data:image/svg+xml;utf8,%3Csvg%20xmlns=/%22http://www.w3.org/2000/svg/%22%20x=/%220px/%22%20y=/%220px/%22%20viewBox=/%220%200%20256%20256/%22%3E%3Cg%3E%3Cg%3E%3Cpolygon%20points=/%2279.093,0%2048.907,30.187%20146.72,128%2048.907,225.813%2079.093,256%20207.093,128/%22/%3E%3C/g%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3C/svg%3E%22 1820 ms\nGET 404 https://pixijs.com/assets/css/%22data:image/svg+xml;utf8,%3Csvg%20xmlns=/%22http://www.w3.org/2000/svg/%22%20width=/%2216px/%22%20height=/%2216px/%22%20viewBox=/%220%200%2024%2024/%22%3E%3Cpath%20fill=/%22rgba(0,0,0,0.5 1853 ms\nGET 404 https://pixijs.com/assets/css/%22data:image/svg+xml;utf8,%3Csvg%20fill=/%22currentColor/%22%20xmlns=/%22http://www.w3.org/2000/svg/%22%20viewBox=/%220%200%2016%2016/%22%20height=/%2216px/%22%20width=/%2216px/%22%3E%3Cpath%20d=/%22M6.02945,10.20327a4.17382,4.17382,0,1,1,4.17382-4.17382A4.15609,4.15609,0,0,1,6.02945,10.20327Zm9.69195,4.2199L10.8989,9.59979A5.88021,5.88021,0,0,0,12.058,6.02856,6.00467,6.00467,0,1,0,9.59979,10.8989l4.82338,4.82338a.89729.89729,0,0,0,1.29912,0,.89749.89749,0,0,0-.00087-1.29909Z/%22%20/%3E%3C/svg%3E%22 1879 ms\nGET 404 https://pixijs.com/assets/css/%22data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23000'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='m6%209%206%206%206-6'/%3E%3C/svg%3E%22 1908 ms\nGET 200 https://pixijs.com/images/clay/light/clay/capsule-rose.webp 1946 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/capsule-rose.webp 1984 ms\nGET 200 https://pixijs.com/images/clay/light/clay/cube-pink.webp 2021 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/cube-pink.webp 2056 ms\nGET 200 https://pixijs.com/images/clay/light/clay/cube-violet.webp 2121 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/cube-violet.webp 2164 ms\nGET 200 https://pixijs.com/images/clay/light/clay/cylinder-cyan.webp 2218 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/cylinder-cyan.webp 2271 ms\nGET 200 https://pixijs.com/images/clay/light/clay/octahedron-violet.webp 2307 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/octahedron-violet.webp 2348 ms\nGET 200 https://pixijs.com/images/clay/light/clay/pyramid-cyan.webp 2388 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/pyramid-cyan.webp 2436 ms\nGET 200 https://pixijs.com/images/clay/light/clay/pyramid-pink.webp 2499 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/pyramid-pink.webp 2542 ms\nGET 200 https://pixijs.com/images/clay/light/clay/sphere-cyan.webp 2583 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/sphere-cyan.webp 2624 ms\nGET 200 https://pixijs.com/images/clay/light/clay/sphere-pink.webp 2666 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/sphere-pink.webp 2710 ms\nGET 200 https://pixijs.com/images/clay/light/clay/sphere-violet.webp 2772 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/sphere-violet.webp 2805 ms\nGET 200 https://pixijs.com/images/clay/light/clay/torus-cyan.webp 2840 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/torus-cyan.webp 2872 ms\nGET 200 https://pixijs.com/images/clay/light/clay/torus-pink.webp 2911 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/torus-pink.webp 2946 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-blue-fill.png 2991 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-blue-stroke.png 3028 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-green-fill.png 3066 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-green-stroke.png 3107 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-orange-fill.png 3152 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-orange-stroke.png 3202 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-pink-fill.png 3250 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-pink-stroke.png 3290 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-purple-fill.png 3331 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-purple-stroke.png 3374 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-blue-fill.png 3417 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-blue-stroke.png 3472 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-green-fill.png 3513 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-green-stroke.png 3551 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-orange-fill.png 3603 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-orange-stroke.png 3657 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-pink-fill.png 3709 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-pink-stroke.png 3755 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-purple-fill.png 3810 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-purple-stroke.png 3857 ms\nGET 200 https://pixijs.com/assets/standard/square/square-blue-fill.png 3898 ms\nGET 200 https://pixijs.com/assets/standard/square/square-blue-stroke.png 3937 ms\nGET 200 https://pixijs.com/assets/standard/square/square-green-fill.png 3994 ms\nGET 200 https://pixijs.com/assets/standard/square/square-green-stroke.png 4036 ms\nGET 200 https://pixijs.com/assets/standard/square/square-orange-fill.png 4090 ms\nGET 200 https://pixijs.com/assets/standard/square/square-orange-stroke.png 4130 ms\nGET 200 https://pixijs.com/assets/standard/square/square-pink-fill.png 4168 ms\nGET 200 https://pixijs.com/assets/standard/square/square-pink-stroke.png 4206 ms\nGET 200 https://pixijs.com/assets/standard/square/square-purple-fill.png 4267 ms\nGET 200 https://pixijs.com/assets/standard/square/square-purple-stroke.png 4313 ms\nGET 200 https://pixijs.com/assets/standard/star/star-blue-fill.png 4361 ms\nGET 200 https://pixijs.com/assets/standard/star/star-blue-stroke.png 4402 ms\nGET 200 https://pixijs.com/assets/standard/star/star-green-fill.png 4443 ms\nGET 200 https://pixijs.com/assets/standard/star/star-green-stroke.png 4498 ms\nGET 200 https://pixijs.com/assets/standard/star/star-orange-fill.png 4546 ms\nGET 200 https://pixijs.com/assets/standard/star/star-orange-stroke.png 4596 ms\nGET 200 https://pixijs.com/assets/standard/star/star-pink-fill.png 4647 ms\nGET 200 https://pixijs.com/assets/standard/star/star-pink-stroke.png 4694 ms\nGET 200 https://pixijs.com/assets/standard/star/star-purple-fill.png 4744 ms\nGET 200 https://pixijs.com/assets/standard/star/star-purple-stroke.png 4792 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-blue-fill.png 4841 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-blue-stroke.png 4879 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-green-fill.png 4923 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-green-stroke.png 4960 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-orange-fill.png 4998 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-orange-stroke.png 5058 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-pink-fill.png 5113 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-pink-stroke.png 5158 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-purple-fill.png 5210 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-purple-stroke.png 5257 ms\nGET 200 https://pixijs.com/assets/css/styles.1a1cd864.css 6377 ms\nGET 200 https://pixijs.com/8.x/guides/getting-started/quick-start 77 ms\nCACHE GET 200 https://pixijs.com/images/favicon.png 13 ms\nCACHE GET 200 https://pixijs.com/fonts/outfit-latin-wght.woff2 33 ms\nCACHE GET 200 https://pixijs.com/fonts/roboto-latin-wght.woff2 59 ms\nGET 200 https://pixijs.com/8.x/guides/getting-started/intro 64 ms\nCACHE GET 200 https://pixijs.com/images/favicon.png 19 ms\nCACHE GET 200 https://pixijs.com/fonts/outfit-latin-wght.woff2 85 ms\nCACHE GET 200 https://pixijs.com/fonts/roboto-latin-wght.woff2 156 ms\nCACHE (panel) GET 200 https://pixijs.com/fonts/outfit-latin-wght.woff2\nCACHE (panel) GET 200 https://pixijs.com/fonts/roboto-latin-wght.woff2\nCACHE GET 200 https://pixijs.com/assets/js/runtime~main.f7297763.js 348 ms\nGET 200 https://www.googletagmanager.com/gtag/js?id=G-YXHQVRJ694 811 ms\nCACHE GET 200 https://pixijs.com/fonts/roboto-latin-ext-wght.woff2 593 ms\nCACHE GET 200 https://pixijs.com/fonts/roboto-mono-latin-ext-wght.woff2 634 ms\nCACHE GET 200 https://pixijs.com/fonts/roboto-mono-latin-wght.woff2 665 ms\nCACHE GET 200 https://pixijs.com/images/logo.svg 973 ms\nCACHE GET 200 https://pixijs.com/images/logo-p.svg 1003 ms\nGET 200 https://files.pixijs.download/branding/pixijs-logo-transparent-dark.svg?v=1 1069 ms\nCACHE GET 200 https://img.shields.io/npm/v/pixi.js.svg 1448 ms\nCACHE GET 200 https://pixijs.com/assets/js/main.187a2fda.js 1453 ms\nGET 200 https://github.com/pixijs/pixijs/actions/workflows/release.yml/badge.svg 1608 ms\nCACHE GET 200 https://opencollective.com/pixijs/tiers/badge.svg 1618 ms\nCACHE GET 200 https://img.shields.io/badge/chat-discord-blue?style=flat&logo=discord 1631 ms\nCACHE GET 200 https://pixijs.com/images/logo.svg 1646 ms\nCACHE (shared) GET 200 https://pixijs.com/images/logo.svg\nCACHE (shared) GET 200 https://pixijs.com/images/logo.svg\nCACHE GET 200 https://pixijs.com/images/logo-p.svg 1663 ms\nGET 200 https://files.pixijs.download/branding/pixijs-logo-transparent-dark.svg?v=1 1712 ms\nCACHE GET 200 https://img.shields.io/npm/v/pixi.js.svg 1732 ms\nGET 200 https://github.com/pixijs/pixijs/actions/workflows/release.yml/badge.svg 1767 ms\nCACHE GET 200 https://opencollective.com/pixijs/tiers/badge.svg 1779 ms\nCACHE GET 200 https://img.shields.io/badge/chat-discord-blue?style=flat&logo=discord 1796 ms\nGET 404 https://pixijs.com/assets/css/%22data:image/svg+xml;utf8,%3Csvg%20xmlns=/%22http://www.w3.org/2000/svg/%22%20x=/%220px/%22%20y=/%220px/%22%20viewBox=/%220%200%20256%20256/%22%3E%3Cg%3E%3Cg%3E%3Cpolygon%20points=/%2279.093,0%2048.907,30.187%20146.72,128%2048.907,225.813%2079.093,256%20207.093,128/%22/%3E%3C/g%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3C/svg%3E%22 1551 ms\nGET 404 https://pixijs.com/assets/css/%22data:image/svg+xml;utf8,%3Csvg%20xmlns=/%22http://www.w3.org/2000/svg/%22%20width=/%2216px/%22%20height=/%2216px/%22%20viewBox=/%220%200%2024%2024/%22%3E%3Cpath%20fill=/%22rgba(0,0,0,0.5 1608 ms\nGET 404 https://pixijs.com/assets/css/%22data:image/svg+xml;utf8,%3Csvg%20fill=/%22currentColor/%22%20xmlns=/%22http://www.w3.org/2000/svg/%22%20viewBox=/%220%200%2016%2016/%22%20height=/%2216px/%22%20width=/%2216px/%22%3E%3Cpath%20d=/%22M6.02945,10.20327a4.17382,4.17382,0,1,1,4.17382-4.17382A4.15609,4.15609,0,0,1,6.02945,10.20327Zm9.69195,4.2199L10.8989,9.59979A5.88021,5.88021,0,0,0,12.058,6.02856,6.00467,6.00467,0,1,0,9.59979,10.8989l4.82338,4.82338a.89729.89729,0,0,0,1.29912,0,.89749.89749,0,0,0-.00087-1.29909Z/%22%20/%3E%3C/svg%3E%22 1662 ms\nGET 404 https://pixijs.com/assets/css/%22data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23000'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='m6%209%206%206%206-6'/%3E%3C/svg%3E%22 1691 ms\nCACHE GET 200 https://pixijs.com/images/clay/light/clay/capsule-rose.webp 1705 ms\nCACHE GET 200 https://pixijs.com/images/clay/dark/clay/capsule-rose.webp 1720 ms\nCACHE GET 200 https://pixijs.com/images/clay/light/clay/cube-pink.webp 1736 ms\nCACHE GET 200 https://pixijs.com/images/clay/dark/clay/cube-pink.webp 1746 ms\nCACHE GET 200 https://pixijs.com/images/clay/light/clay/cube-violet.webp 1763 ms\nCACHE GET 200 https://pixijs.com/images/clay/dark/clay/cube-violet.webp 1774 ms\nCACHE GET 200 https://pixijs.com/images/clay/light/clay/cylinder-cyan.webp 1789 ms\nCACHE GET 200 https://pixijs.com/images/clay/dark/clay/cylinder-cyan.webp 1808 ms\nCACHE GET 200 https://pixijs.com/images/clay/light/clay/octahedron-violet.webp 1823 ms\nCACHE GET 200 https://pixijs.com/images/clay/dark/clay/octahedron-violet.webp 1839 ms\nCACHE GET 200 https://pixijs.com/images/clay/light/clay/pyramid-cyan.webp 1856 ms\nCACHE GET 200 https://pixijs.com/images/clay/dark/clay/pyramid-cyan.webp 1876 ms\nCACHE GET 200 https://pixijs.com/images/clay/light/clay/pyramid-pink.webp 1893 ms\nCACHE GET 200 https://pixijs.com/images/clay/dark/clay/pyramid-pink.webp 1910 ms\nCACHE GET 200 https://pixijs.com/images/clay/light/clay/sphere-cyan.webp 1921 ms\nCACHE GET 200 https://pixijs.com/images/clay/dark/clay/sphere-cyan.webp 1931 ms\nCACHE GET 200 https://pixijs.com/images/clay/light/clay/sphere-pink.webp 1943 ms\nCACHE GET 200 https://pixijs.com/images/clay/dark/clay/sphere-pink.webp 1953 ms\nCACHE GET 200 https://pixijs.com/images/clay/light/clay/sphere-violet.webp 1966 ms\nCACHE GET 200 https://pixijs.com/images/clay/dark/clay/sphere-violet.webp 1982 ms\nCACHE GET 200 https://pixijs.com/images/clay/light/clay/torus-cyan.webp 2001 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/torus-cyan.webp 2045 ms\nCACHE GET 200 https://pixijs.com/images/clay/light/clay/torus-pink.webp 2061 ms\nCACHE GET 200 https://pixijs.com/images/clay/dark/clay/torus-pink.webp 2079 ms\nCACHE GET 200 https://pixijs.com/assets/standard/circle/circle-blue-fill.png 2102 ms\nCACHE GET 200 https://pixijs.com/assets/standard/circle/circle-blue-stroke.png 2115 ms\nCACHE GET 200 https://pixijs.com/assets/standard/circle/circle-green-fill.png 2127 ms\nCACHE GET 200 https://pixijs.com/assets/standard/circle/circle-green-stroke.png 2141 ms\nCACHE GET 200 https://pixijs.com/assets/standard/circle/circle-orange-fill.png 2162 ms\nCACHE GET 200 https://pixijs.com/assets/standard/circle/circle-orange-stroke.png 2185 ms\nCACHE GET 200 https://pixijs.com/assets/standard/circle/circle-pink-fill.png 2210 ms\nCACHE GET 200 https://pixijs.com/assets/standard/circle/circle-pink-stroke.png 2228 ms\nCACHE GET 200 https://pixijs.com/assets/standard/circle/circle-purple-fill.png 2251 ms\nCACHE GET 200 https://pixijs.com/assets/standard/circle/circle-purple-stroke.png 2262 ms\nCACHE GET 200 https://pixijs.com/assets/standard/pentagon/pentagon-blue-fill.png 2276 ms\nCACHE GET 200 https://pixijs.com/assets/standard/pentagon/pentagon-blue-stroke.png 2287 ms\nCACHE GET 200 https://pixijs.com/assets/standard/pentagon/pentagon-green-fill.png 2302 ms\nCACHE GET 200 https://pixijs.com/assets/standard/pentagon/pentagon-green-stroke.png 2315 ms\nCACHE GET 200 https://pixijs.com/assets/standard/pentagon/pentagon-orange-fill.png 2329 ms\nCACHE GET 200 https://pixijs.com/assets/standard/pentagon/pentagon-orange-stroke.png 2345 ms\nCACHE GET 200 https://pixijs.com/assets/standard/pentagon/pentagon-pink-fill.png 2360 ms\nCACHE GET 200 https://pixijs.com/assets/standard/pentagon/pentagon-pink-stroke.png 2379 ms\nCACHE GET 200 https://pixijs.com/assets/standard/pentagon/pentagon-purple-fill.png 2403 ms\nCACHE GET 200 https://pixijs.com/assets/standard/pentagon/pentagon-purple-stroke.png 2415 ms\nCACHE GET 200 https://pixijs.com/assets/standard/square/square-blue-fill.png 2431 ms\nCACHE GET 200 https://pixijs.com/assets/standard/square/square-blue-stroke.png 2444 ms\nCACHE GET 200 https://pixijs.com/assets/standard/square/square-green-fill.png 2461 ms\nCACHE GET 200 https://pixijs.com/assets/standard/square/square-green-stroke.png 2474 ms\nCACHE GET 200 https://pixijs.com/assets/standard/square/square-orange-fill.png 2500 ms\nCACHE GET 200 https://pixijs.com/assets/standard/square/square-orange-stroke.png 2515 ms\nCACHE GET 200 https://pixijs.com/assets/standard/square/square-pink-fill.png 2538 ms\nCACHE GET 200 https://pixijs.com/assets/standard/square/square-pink-stroke.png 2561 ms\nCACHE GET 200 https://pixijs.com/assets/standard/square/square-purple-fill.png 2586 ms\nCACHE GET 200 https://pixijs.com/assets/standard/square/square-purple-stroke.png 2607 ms\nCACHE GET 200 https://pixijs.com/assets/standard/star/star-blue-fill.png 2631 ms\nCACHE GET 200 https://pixijs.com/assets/standard/star/star-blue-stroke.png 2653 ms\nCACHE GET 200 https://pixijs.com/assets/standard/star/star-green-fill.png 2673 ms\nCACHE GET 200 https://pixijs.com/assets/standard/star/star-green-stroke.png 2697 ms\nCACHE GET 200 https://pixijs.com/assets/standard/star/star-orange-fill.png 2719 ms\nCACHE GET 200 https://pixijs.com/assets/standard/star/star-orange-stroke.png 2741 ms\nCACHE GET 200 https://pixijs.com/assets/standard/star/star-pink-fill.png 2764 ms\nCACHE GET 200 https://pixijs.com/assets/standard/star/star-pink-stroke.png 2782 ms\nCACHE GET 200 https://pixijs.com/assets/standard/star/star-purple-fill.png 2806 ms\nCACHE GET 200 https://pixijs.com/assets/standard/star/star-purple-stroke.png 2829 ms\nCACHE GET 200 https://pixijs.com/assets/standard/triangle/triangle-blue-fill.png 2854 ms\nCACHE GET 200 https://pixijs.com/assets/standard/triangle/triangle-blue-stroke.png 2870 ms\nCACHE GET 200 https://pixijs.com/assets/standard/triangle/triangle-green-fill.png 2891 ms\nCACHE GET 200 https://pixijs.com/assets/standard/triangle/triangle-green-stroke.png 2913 ms\nCACHE GET 200 https://pixijs.com/assets/standard/triangle/triangle-orange-fill.png 2936 ms\nCACHE GET 200 https://pixijs.com/assets/standard/triangle/triangle-orange-stroke.png 2956 ms\nCACHE GET 200 https://pixijs.com/assets/standard/triangle/triangle-pink-fill.png 2971 ms\nCACHE GET 200 https://pixijs.com/assets/standard/triangle/triangle-pink-stroke.png 2986 ms\nCACHE GET 200 https://pixijs.com/assets/standard/triangle/triangle-purple-fill.png 3002 ms\nCACHE GET 200 https://pixijs.com/assets/standard/triangle/triangle-purple-stroke.png 3016 ms\nCACHE GET 200 https://pixijs.com/assets/css/styles.1a1cd864.css 3433 ms",
+          "finalAddress": "https://pixijs.com/8.x/guides/getting-started/intro",
+          "elapsedMs": 27227,
+          "outcome": "partial"
+        },
+        {
+          "site": "rust",
+          "mode": "native",
+          "format": "native",
+          "url": "https://doc.rust-lang.org/book/",
+          "checks": {
+            "reading": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "The Rust Programming Language",
+                "contentMs": 515
+              },
+              "elapsedMs": 66
+            },
+            "styling": {
+              "outcome": "passed",
+              "detail": {
+                "sheets": 10,
+                "font": "\"Open Sans\", sans-serif",
+                "links": [
+                  {
+                    "loaded": true,
+                    "href": "https://doc.rust-lang.org/book/css/variables-8adf115d.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://doc.rust-lang.org/book/css/general-e96d0476.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://doc.rust-lang.org/book/css/chrome-d279d366.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://doc.rust-lang.org/book/css/print-9e4910d8.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://doc.rust-lang.org/book/fonts/fonts-9644e21d.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://doc.rust-lang.org/book/highlight-493f70e1.css"
+                  },
+                  {
+                    "loaded": false,
+                    "href": "https://doc.rust-lang.org/book/tomorrow-night-4c0ae647.css"
+                  },
+                  {
+                    "loaded": false,
+                    "href": "https://doc.rust-lang.org/book/ayu-highlight-3fdfc3ac.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://doc.rust-lang.org/book/ferris-d33b75bf.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://doc.rust-lang.org/book/theme/2018-edition-4e126c62.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://doc.rust-lang.org/book/theme/semantic-notes-9b5766c0.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://doc.rust-lang.org/book/theme/listing-cab26221.css"
+                  }
+                ]
+              },
+              "elapsedMs": 55
+            },
+            "retainedContent": {
+              "outcome": "passed",
+              "detail": {
+                "textCharacters": 4908
+              },
+              "elapsedMs": 13
+            },
+            "selection": {
+              "outcome": "passed",
+              "detail": {
+                "selectedCharacters": 27
+              },
+              "elapsedMs": 436
+            },
+            "navigation": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "Installation"
+              },
+              "elapsedMs": 371
+            },
+            "back": {
+              "outcome": "passed",
+              "detail": "Original article restored",
+              "elapsedMs": 134
+            },
+            "search": {
+              "outcome": "passed",
+              "detail": {
+                "results": 30,
+                "query": "ownership"
+              },
+              "elapsedMs": 294
+            }
+          },
+          "browserErrors": [],
+          "consoleErrors": [],
+          "directClientRequests": [],
+          "clientRequestFailures": [],
+          "nativeHttpErrors": [],
+          "socketStates": [],
+          "encryptedDownBytes": 0,
+          "encryptedUpBytes": 0,
+          "initial": {
+            "title": "The Rust Programming Language - The Rust Programming Language",
+            "textCharacters": 4908,
+            "headings": [
+              "Keyboard shortcuts",
+              "The Rust Programming Language",
+              "The Rust Programming Language"
+            ],
+            "styleSheets": 10,
+            "bodyFont": "\"Open Sans\", sans-serif",
+            "images": {
+              "total": 0,
+              "loaded": 0
+            },
+            "nestedFrames": 0
+          },
+          "styleDiagnostics": {
+            "sheets": 10,
+            "font": "\"Open Sans\", sans-serif",
+            "links": [
+              {
+                "loaded": true,
+                "href": "https://doc.rust-lang.org/book/css/variables-8adf115d.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://doc.rust-lang.org/book/css/general-e96d0476.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://doc.rust-lang.org/book/css/chrome-d279d366.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://doc.rust-lang.org/book/css/print-9e4910d8.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://doc.rust-lang.org/book/fonts/fonts-9644e21d.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://doc.rust-lang.org/book/highlight-493f70e1.css"
+              },
+              {
+                "loaded": false,
+                "href": "https://doc.rust-lang.org/book/tomorrow-night-4c0ae647.css"
+              },
+              {
+                "loaded": false,
+                "href": "https://doc.rust-lang.org/book/ayu-highlight-3fdfc3ac.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://doc.rust-lang.org/book/ferris-d33b75bf.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://doc.rust-lang.org/book/theme/2018-edition-4e126c62.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://doc.rust-lang.org/book/theme/semantic-notes-9b5766c0.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://doc.rust-lang.org/book/theme/listing-cab26221.css"
+              }
+            ]
+          },
+          "settled": {
+            "title": "The Rust Programming Language - The Rust Programming Language",
+            "textCharacters": 4908,
+            "headings": [
+              "Keyboard shortcuts",
+              "The Rust Programming Language",
+              "The Rust Programming Language"
+            ],
+            "styleSheets": 10,
+            "bodyFont": "\"Open Sans\", sans-serif"
+          },
+          "selectionGeometry": {
+            "box": {
+              "x": 499,
+              "y": 136.875,
+              "width": 750,
+              "height": 23.203125
+            },
+            "point": {
+              "x": 0,
+              "y": 0,
+              "width": 652,
+              "height": 22
+            },
+            "prose": "by Steve Klabnik, Carol Nichols, and Chris Krycho, with contributions from the Rust Community"
+          },
+          "finalAddress": "https://doc.rust-lang.org/book/",
+          "elapsedMs": 5124,
+          "outcome": "usable"
+        },
+        {
+          "site": "rust",
+          "mode": "proxy",
+          "format": "html",
+          "url": "https://doc.rust-lang.org/book/",
+          "checks": {
+            "reading": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "The Rust Programming Language",
+                "contentMs": 1391
+              },
+              "elapsedMs": 398
+            },
+            "styling": {
+              "outcome": "passed",
+              "detail": {
+                "sheets": 12,
+                "font": "\"Open Sans\", sans-serif",
+                "links": [
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  }
+                ]
+              },
+              "elapsedMs": 40
+            },
+            "retainedContent": {
+              "outcome": "passed",
+              "detail": {
+                "textCharacters": 4908
+              },
+              "elapsedMs": 19
+            },
+            "selection": {
+              "outcome": "passed",
+              "detail": {
+                "selectedCharacters": 27
+              },
+              "elapsedMs": 487
+            },
+            "navigation": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "Installation"
+              },
+              "elapsedMs": 480
+            },
+            "back": {
+              "outcome": "passed",
+              "detail": "Original article restored",
+              "elapsedMs": 331
+            },
+            "search": {
+              "outcome": "failed",
+              "error": "locator.waitFor: Timeout 10000ms exceeded.",
+              "elapsedMs": 10315
+            }
+          },
+          "browserErrors": [
+            "hljs is not defined",
+            "hljs is not defined"
+          ],
+          "consoleErrors": [
+            "Loading the script 'https://doc.rust-lang.org/book/searchindex-52b0e2b4.js' violates the following Content Security Policy directive: \"script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:[omitted] Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+            "Failed to load `searchindex-52b0e2b4.js`: [object Event]"
+          ],
+          "directClientRequests": [],
+          "clientRequestFailures": [
+            {
+              "url": "https://doc.rust-lang.org/book/searchindex-52b0e2b4.js",
+              "error": "csp"
+            }
+          ],
+          "nativeHttpErrors": [],
+          "socketStates": [],
+          "encryptedDownBytes": 1803839,
+          "encryptedUpBytes": 21833,
+          "initial": {
+            "title": "The Rust Programming Language - The Rust Programming Language",
+            "textCharacters": 4908,
+            "headings": [
+              "Keyboard shortcuts",
+              "The Rust Programming Language",
+              "The Rust Programming Language"
+            ],
+            "styleSheets": 12,
+            "bodyFont": "\"Open Sans\", sans-serif",
+            "images": {
+              "total": 0,
+              "loaded": 0
+            },
+            "nestedFrames": 0
+          },
+          "styleDiagnostics": {
+            "sheets": 12,
+            "font": "\"Open Sans\", sans-serif",
+            "links": [
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              }
+            ]
+          },
+          "settled": {
+            "title": "The Rust Programming Language - The Rust Programming Language",
+            "textCharacters": 4908,
+            "headings": [
+              "Keyboard shortcuts",
+              "The Rust Programming Language",
+              "The Rust Programming Language"
+            ],
+            "styleSheets": 12,
+            "bodyFont": "\"Open Sans\", sans-serif"
+          },
+          "selectionGeometry": {
+            "box": {
+              "x": 499,
+              "y": 323.875,
+              "width": 750,
+              "height": 23.203125
+            },
+            "point": {
+              "x": 0,
+              "y": 0,
+              "width": 652,
+              "height": 22
+            },
+            "prose": "by Steve Klabnik, Carol Nichols, and Chris Krycho, with contributions from the Rust Community"
+          },
+          "searchDiagnostics": {
+            "inputs": [
+              {
+                "type": "checkbox",
+                "placeholder": "",
+                "label": null,
+                "readonly": false
+              },
+              {
+                "type": "search",
+                "placeholder": "Search this book ...",
+                "label": null,
+                "readonly": false
+              }
+            ],
+            "dialogs": []
+          },
+          "sandbox": "allow-scripts",
+          "panelStatus": "https://doc.rust-lang.org/book/\nConnected",
+          "runtimeConsole": "8:35:16 AM Failed to load `searchindex-52b0e2b4.js`: [object Event]",
+          "network": "GET 200 https://doc.rust-lang.org/book/ 118 ms\nGET 200 https://doc.rust-lang.org/book/favicon-de23e50b.svg 37 ms\nGET 200 https://doc.rust-lang.org/book/css/variables-8adf115d.css 41 ms\nGET 200 https://doc.rust-lang.org/book/css/general-e96d0476.css 78 ms\nGET 200 https://doc.rust-lang.org/book/css/print-9e4910d8.css 198 ms\nGET 200 https://doc.rust-lang.org/book/highlight-493f70e1.css 236 ms\nGET 200 https://doc.rust-lang.org/book/tomorrow-night-4c0ae647.css 245 ms\nGET 200 https://doc.rust-lang.org/book/ayu-highlight-3fdfc3ac.css 269 ms\nGET 200 https://doc.rust-lang.org/book/ferris-d33b75bf.css 282 ms\nGET 200 https://doc.rust-lang.org/book/theme/2018-edition-4e126c62.css 302 ms\nGET 200 https://doc.rust-lang.org/book/theme/semantic-notes-9b5766c0.css 308 ms\nGET 200 https://doc.rust-lang.org/book/theme/listing-cab26221.css 339 ms\nGET 200 https://doc.rust-lang.org/book/toc-0e4ce700.js 460 ms\nGET 200 https://doc.rust-lang.org/book/elasticlunr-ef4e11c1.min.js 494 ms\nGET 200 https://doc.rust-lang.org/book/mark-09e88c2c.min.js 544 ms\nGET 200 https://doc.rust-lang.org/book/searcher-09f2665d.js 572 ms\nGET 200 https://doc.rust-lang.org/book/clipboard-1626706a.min.js 588 ms\nGET 200 https://doc.rust-lang.org/book/book-609e4cb8.js 759 ms\nGET 200 https://doc.rust-lang.org/book/highlight-abc7f01d.js 773 ms\nGET 200 https://doc.rust-lang.org/book/ferris-2317480c.js 802 ms\nGET 200 https://doc.rust-lang.org/book/fonts/open-sans-v17-all-charsets-300-7736aa35.woff2 644 ms\nGET 200 https://doc.rust-lang.org/book/fonts/open-sans-v17-all-charsets-300italic-2c7b95c0.woff2 703 ms\nGET 200 https://doc.rust-lang.org/book/fonts/open-sans-v17-all-charsets-regular-2e3b1d34.woff2 723 ms\nGET 200 https://doc.rust-lang.org/book/fonts/open-sans-v17-all-charsets-italic-6c9463f7.woff2 801 ms\nGET 200 https://doc.rust-lang.org/book/fonts/open-sans-v17-all-charsets-600-486c6759.woff2 805 ms\nGET 200 https://doc.rust-lang.org/book/fonts/open-sans-v17-all-charsets-600italic-1a3e8659.woff2 879 ms\nGET 200 https://doc.rust-lang.org/book/fonts/open-sans-v17-all-charsets-700-c22fe8c7.woff2 882 ms\nGET 200 https://doc.rust-lang.org/book/fonts/open-sans-v17-all-charsets-700italic-238ae959.woff2 942 ms\nGET 200 https://doc.rust-lang.org/book/fonts/open-sans-v17-all-charsets-800-3d2c812a.woff2 971 ms\nGET 200 https://doc.rust-lang.org/book/fonts/open-sans-v17-all-charsets-800italic-ba1521ec.woff2 1024 ms\nGET 200 https://doc.rust-lang.org/book/fonts/source-code-pro-v11-all-charsets-500-2bdd9410.woff2 1061 ms\nGET 200 https://doc.rust-lang.org/book/fonts/fonts-9644e21d.css 1291 ms\nGET 200 https://doc.rust-lang.org/book/favicon-8114d1fc.png 1295 ms\nGET 404 https://doc.rust-lang.org/book/css/'data:image/svg+xml,%3Csvg%20width=%2221%22%20height=%2220%22%20viewBox=%220%200%2024%2025%22%20/xmlns=%22http://www.w3.org/2000/svg%22%20aria-label=%22Copy%20to%20clipboard%22%3E/%3Cpath%20d=%22M18%2020h2v3c0%201-1%202-2%202H2c-.998%200-2-1-2-2V5c0-.911.755-1.667%201.667-1.667h5A3.323%203.323%200%20/0110%200a3.323%203.323%200%20013.333%203.333h5C19.245%203.333%2020%204.09%2020%205v8.333h-2V9H2v14h16v-3zM3%20/7h14c0-.911-.793-1.667-1.75-1.667H13.5c-.957%200-1.75-.755-1.75-1.666C11.75%202.755%2010.957%202%2010%20/2s-1.75.755-1.75%201.667c0%20.911-.793%201.666-1.75%201.666H4.75C3.793%205.333%203%206.09%203%207z%22/%3E/%3Cpath%20d=%22M4%2019h6v2H4zM12%2011H4v2h8zM4%2017h4v-2H4zM15%2015v-3l-4.5%204.5L15%2021v-3l8.027-.032L23%2015z%22/%3E/%3C/svg%3E' 1363 ms\nGET 200 https://doc.rust-lang.org/book/css/chrome-d279d366.css 1446 ms\nGET 200 https://doc.rust-lang.org/book/ch01-01-installation.html 86 ms\nGET 200 https://doc.rust-lang.org/book/css/variables-8adf115d.css 38 ms\nGET 200 https://doc.rust-lang.org/book/favicon-de23e50b.svg 42 ms\nGET 200 https://doc.rust-lang.org/book/css/general-e96d0476.css 87 ms\nGET 200 https://doc.rust-lang.org/book/css/print-9e4910d8.css 137 ms\nGET 200 https://doc.rust-lang.org/book/ 39 ms\nGET 200 https://doc.rust-lang.org/book/favicon-de23e50b.svg 36 ms\nGET 200 https://doc.rust-lang.org/book/css/variables-8adf115d.css 42 ms\nGET 200 https://doc.rust-lang.org/book/css/general-e96d0476.css 67 ms\nGET 200 https://doc.rust-lang.org/book/css/print-9e4910d8.css 92 ms\nGET 200 https://doc.rust-lang.org/book/highlight-493f70e1.css 124 ms\nGET 200 https://doc.rust-lang.org/book/tomorrow-night-4c0ae647.css 132 ms\nGET 200 https://doc.rust-lang.org/book/ayu-highlight-3fdfc3ac.css 158 ms\nGET 200 https://doc.rust-lang.org/book/ferris-d33b75bf.css 164 ms\nGET 200 https://doc.rust-lang.org/book/theme/2018-edition-4e126c62.css 190 ms\nGET 200 https://doc.rust-lang.org/book/theme/semantic-notes-9b5766c0.css 207 ms\nGET 200 https://doc.rust-lang.org/book/theme/listing-cab26221.css 256 ms\nGET 200 https://doc.rust-lang.org/book/toc-0e4ce700.js 285 ms\nGET 200 https://doc.rust-lang.org/book/elasticlunr-ef4e11c1.min.js 311 ms\nGET 200 https://doc.rust-lang.org/book/mark-09e88c2c.min.js 353 ms\nGET 200 https://doc.rust-lang.org/book/searcher-09f2665d.js 385 ms\nGET 200 https://doc.rust-lang.org/book/clipboard-1626706a.min.js 406 ms\nGET 200 https://doc.rust-lang.org/book/book-609e4cb8.js 502 ms\nGET 200 https://doc.rust-lang.org/book/highlight-abc7f01d.js 515 ms\nCACHE GET 200 https://doc.rust-lang.org/book/fonts/open-sans-v17-all-charsets-300-7736aa35.woff2 444 ms\nGET 200 https://doc.rust-lang.org/book/ferris-2317480c.js 550 ms\nCACHE GET 200 https://doc.rust-lang.org/book/fonts/open-sans-v17-all-charsets-300italic-2c7b95c0.woff2 486 ms\nCACHE GET 200 https://doc.rust-lang.org/book/fonts/open-sans-v17-all-charsets-regular-2e3b1d34.woff2 499 ms\nCACHE GET 200 https://doc.rust-lang.org/book/fonts/open-sans-v17-all-charsets-italic-6c9463f7.woff2 516 ms\nCACHE GET 200 https://doc.rust-lang.org/book/fonts/open-sans-v17-all-charsets-600-486c6759.woff2 536 ms\nCACHE GET 200 https://doc.rust-lang.org/book/fonts/open-sans-v17-all-charsets-600italic-1a3e8659.woff2 553 ms\nCACHE GET 200 https://doc.rust-lang.org/book/fonts/open-sans-v17-all-charsets-700-c22fe8c7.woff2 594 ms\nCACHE GET 200 https://doc.rust-lang.org/book/fonts/open-sans-v17-all-charsets-700italic-238ae959.woff2 633 ms\nCACHE GET 200 https://doc.rust-lang.org/book/fonts/open-sans-v17-all-charsets-800-3d2c812a.woff2 653 ms\nCACHE GET 200 https://doc.rust-lang.org/book/fonts/open-sans-v17-all-charsets-800italic-ba1521ec.woff2 671 ms\nCACHE GET 200 https://doc.rust-lang.org/book/fonts/source-code-pro-v11-all-charsets-500-2bdd9410.woff2 699 ms\nGET 200 https://doc.rust-lang.org/book/favicon-8114d1fc.png 820 ms\nGET 200 https://doc.rust-lang.org/book/fonts/fonts-9644e21d.css 822 ms\nGET 404 https://doc.rust-lang.org/book/css/'data:image/svg+xml,%3Csvg%20width=%2221%22%20height=%2220%22%20viewBox=%220%200%2024%2025%22%20/xmlns=%22http://www.w3.org/2000/svg%22%20aria-label=%22Copy%20to%20clipboard%22%3E/%3Cpath%20d=%22M18%2020h2v3c0%201-1%202-2%202H2c-.998%200-2-1-2-2V5c0-.911.755-1.667%201.667-1.667h5A3.323%203.323%200%20/0110%200a3.323%203.323%200%20013.333%203.333h5C19.245%203.333%2020%204.09%2020%205v8.333h-2V9H2v14h16v-3zM3%20/7h14c0-.911-.793-1.667-1.75-1.667H13.5c-.957%200-1.75-.755-1.75-1.666C11.75%202.755%2010.957%202%2010%20/2s-1.75.755-1.75%201.667c0%20.911-.793%201.666-1.75%201.666H4.75C3.793%205.333%203%206.09%203%207z%22/%3E/%3Cpath%20d=%22M4%2019h6v2H4zM12%2011H4v2h8zM4%2017h4v-2H4zM15%2015v-3l-4.5%204.5L15%2021v-3l8.027-.032L23%2015z%22/%3E/%3C/svg%3E' 844 ms\nGET 200 https://doc.rust-lang.org/book/css/chrome-d279d366.css 959 ms",
+          "finalAddress": "https://doc.rust-lang.org/book/",
+          "elapsedMs": 16746,
+          "outcome": "partial"
+        },
+        {
+          "site": "python",
+          "mode": "native",
+          "format": "native",
+          "url": "https://docs.python.org/3/tutorial/",
+          "checks": {
+            "reading": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "The Python Tutorial",
+                "contentMs": 448
+              },
+              "elapsedMs": 70
+            },
+            "styling": {
+              "outcome": "passed",
+              "detail": {
+                "sheets": 6,
+                "font": "-apple-system, BlinkMacSystemFont, \"avenir next\", avenir, \"segoe ui\", \"helvetica neue\", helvetica, Cantarell, Ubuntu, roboto, noto, arial, sans-serif",
+                "links": [
+                  {
+                    "loaded": true,
+                    "href": "https://docs.python.org/3/_static/pygments.css?v=b86133f3"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://docs.python.org/3/_static/pygments_dark.css?v=0fc419ee"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://docs.python.org/3/_static/classic.css?v=234b1a7c"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://docs.python.org/3/_static/pydoctheme.css?v=48df1187"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://docs.python.org/3/_static/pydoctheme_dark.css"
+                  }
+                ]
+              },
+              "elapsedMs": 57
+            },
+            "retainedContent": {
+              "outcome": "passed",
+              "detail": {
+                "textCharacters": 7817
+              },
+              "elapsedMs": 10
+            },
+            "selection": {
+              "outcome": "passed",
+              "detail": {
+                "selectedCharacters": 25
+              },
+              "elapsedMs": 500
+            },
+            "navigation": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "2. Using the Python Interpreter"
+              },
+              "elapsedMs": 762
+            },
+            "back": {
+              "outcome": "passed",
+              "detail": "Original article restored",
+              "elapsedMs": 114
+            },
+            "search": {
+              "outcome": "passed",
+              "detail": {
+                "results": 4,
+                "query": "functions"
+              },
+              "elapsedMs": 522
+            }
+          },
+          "browserErrors": [],
+          "consoleErrors": [],
+          "directClientRequests": [],
+          "clientRequestFailures": [],
+          "nativeHttpErrors": [],
+          "socketStates": [],
+          "encryptedDownBytes": 0,
+          "encryptedUpBytes": 0,
+          "initial": {
+            "title": "The Python Tutorial — Python 3.15.2 documentation",
+            "textCharacters": 7817,
+            "headings": [
+              "The Python Tutorial¶"
+            ],
+            "styleSheets": 6,
+            "bodyFont": "-apple-system, BlinkMacSystemFont, \"avenir next\", avenir, \"segoe ui\", \"helvetica neue\", helvetica, Cantarell, Ubuntu, roboto, noto, arial, sans-serif",
+            "images": {
+              "total": 3,
+              "loaded": 3
+            },
+            "nestedFrames": 0
+          },
+          "styleDiagnostics": {
+            "sheets": 6,
+            "font": "-apple-system, BlinkMacSystemFont, \"avenir next\", avenir, \"segoe ui\", \"helvetica neue\", helvetica, Cantarell, Ubuntu, roboto, noto, arial, sans-serif",
+            "links": [
+              {
+                "loaded": true,
+                "href": "https://docs.python.org/3/_static/pygments.css?v=b86133f3"
+              },
+              {
+                "loaded": true,
+                "href": "https://docs.python.org/3/_static/pygments_dark.css?v=0fc419ee"
+              },
+              {
+                "loaded": true,
+                "href": "https://docs.python.org/3/_static/classic.css?v=234b1a7c"
+              },
+              {
+                "loaded": true,
+                "href": "https://docs.python.org/3/_static/pydoctheme.css?v=48df1187"
+              },
+              {
+                "loaded": true,
+                "href": "https://docs.python.org/3/_static/pydoctheme_dark.css"
+              }
+            ]
+          },
+          "settled": {
+            "title": "The Python Tutorial — Python 3.15.2 documentation",
+            "textCharacters": 7817,
+            "headings": [
+              "The Python Tutorial¶"
+            ],
+            "styleSheets": 6,
+            "bodyFont": "-apple-system, BlinkMacSystemFont, \"avenir next\", avenir, \"segoe ui\", \"helvetica neue\", helvetica, Cantarell, Ubuntu, roboto, noto, arial, sans-serif"
+          },
+          "selectionGeometry": {
+            "box": {
+              "x": 393.1875,
+              "y": 151.015625,
+              "width": 775.6875,
+              "height": 47.59375
+            },
+            "point": {
+              "x": 43.015625,
+              "y": 0,
+              "width": 209.171875,
+              "height": 22
+            },
+            "prose": "This tutorial is designed for programmers that are new to the Python language, not beginners who are new to programming."
+          },
+          "finalAddress": "https://docs.python.org/3/search.html",
+          "elapsedMs": 5761,
+          "outcome": "usable"
+        },
+        {
+          "site": "python",
+          "mode": "proxy",
+          "format": "html",
+          "url": "https://docs.python.org/3/tutorial/",
+          "checks": {
+            "reading": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "The Python Tutorial¶",
+                "contentMs": 1378
+              },
+              "elapsedMs": 330
+            },
+            "styling": {
+              "outcome": "passed",
+              "detail": {
+                "sheets": 6,
+                "font": "-apple-system, BlinkMacSystemFont, \"avenir next\", avenir, \"segoe ui\", \"helvetica neue\", helvetica, Cantarell, Ubuntu, roboto, noto, arial, sans-serif",
+                "links": [
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  }
+                ]
+              },
+              "elapsedMs": 50
+            },
+            "retainedContent": {
+              "outcome": "passed",
+              "detail": {
+                "textCharacters": 6981
+              },
+              "elapsedMs": 8
+            },
+            "selection": {
+              "outcome": "passed",
+              "detail": {
+                "selectedCharacters": 25
+              },
+              "elapsedMs": 556
+            },
+            "navigation": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "2. Using the Python Interpreter¶"
+              },
+              "elapsedMs": 836
+            },
+            "back": {
+              "outcome": "passed",
+              "detail": "Original article restored",
+              "elapsedMs": 375
+            },
+            "search": {
+              "outcome": "failed",
+              "error": "locator.waitFor: Timeout 10000ms exceeded.",
+              "elapsedMs": 10339
+            }
+          },
+          "browserErrors": [
+            "Failed to construct 'URL': Invalid URL",
+            "Failed to construct 'URL': Invalid URL"
+          ],
+          "consoleErrors": [],
+          "directClientRequests": [],
+          "clientRequestFailures": [],
+          "nativeHttpErrors": [],
+          "socketStates": [],
+          "encryptedDownBytes": 4558989,
+          "encryptedUpBytes": 19177,
+          "initial": {
+            "title": "The Python Tutorial — Python 3.15.2 documentation",
+            "textCharacters": 6981,
+            "headings": [
+              "The Python Tutorial¶"
+            ],
+            "styleSheets": 6,
+            "bodyFont": "-apple-system, BlinkMacSystemFont, \"avenir next\", avenir, \"segoe ui\", \"helvetica neue\", helvetica, Cantarell, Ubuntu, roboto, noto, arial, sans-serif",
+            "images": {
+              "total": 3,
+              "loaded": 3
+            },
+            "nestedFrames": 0
+          },
+          "styleDiagnostics": {
+            "sheets": 6,
+            "font": "-apple-system, BlinkMacSystemFont, \"avenir next\", avenir, \"segoe ui\", \"helvetica neue\", helvetica, Cantarell, Ubuntu, roboto, noto, arial, sans-serif",
+            "links": [
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              }
+            ]
+          },
+          "settled": {
+            "title": "The Python Tutorial — Python 3.15.2 documentation",
+            "textCharacters": 6981,
+            "headings": [
+              "The Python Tutorial¶"
+            ],
+            "styleSheets": 6,
+            "bodyFont": "-apple-system, BlinkMacSystemFont, \"avenir next\", avenir, \"segoe ui\", \"helvetica neue\", helvetica, Cantarell, Ubuntu, roboto, noto, arial, sans-serif"
+          },
+          "selectionGeometry": {
+            "box": {
+              "x": 399.1875,
+              "y": 338.015625,
+              "width": 775.6875,
+              "height": 47.59375
+            },
+            "point": {
+              "x": 43.015625,
+              "y": 0,
+              "width": 209.171875,
+              "height": 22
+            },
+            "prose": "This tutorial is designed for programmers that are new to the Python language, not beginners who are new to programming."
+          },
+          "searchDiagnostics": {
+            "inputs": [
+              {
+                "type": "checkbox",
+                "placeholder": "",
+                "label": "Menu",
+                "readonly": false
+              },
+              {
+                "type": "text",
+                "placeholder": "",
+                "label": null,
+                "readonly": false
+              },
+              {
+                "type": "submit",
+                "placeholder": "",
+                "label": null,
+                "readonly": false
+              }
+            ],
+            "dialogs": []
+          },
+          "sandbox": "allow-scripts",
+          "panelStatus": "https://docs.python.org/3/search.html?q=functions\nConnected",
+          "runtimeConsole": "8:35:34 AM Uncaught TypeError: Failed to construct 'URL': Invalid URL data:[omitted]\n8:35:40 AM Uncaught TypeError: Failed to construct 'URL': Invalid URL data:[omitted]",
+          "network": "GET 200 https://docs.python.org/3/tutorial/ 149 ms\nGET 200 https://docs.python.org/3/_static/pygments_dark.css?v=0fc419ee 64 ms\nGET 200 https://docs.python.org/3/_static/pygments.css?v=b86133f3 66 ms\nGET 200 https://docs.python.org/3/_static/documentation_options.js?v=c6788839 119 ms\nGET 200 https://docs.python.org/3/_static/doctools.js?v=fd6eb6e6 156 ms\nGET 200 https://docs.python.org/3/_static/sphinx_highlight.js?v=6ffebe34 163 ms\nGET 200 https://docs.python.org/3/_static/sidebar.js 196 ms\nGET 200 https://docs.python.org/3/_static/pydoctheme_dark.css 232 ms\nGET 200 https://analytics.python.org/js/script.file-downloads.outbound-links.js 273 ms\nGET 200 https://docs.python.org/3/_static/copybutton.js 280 ms\nGET 200 https://docs.python.org/3/_static/menu.js 310 ms\nGET 200 https://docs.python.org/3/_static/search-focus.js 320 ms\nGET 200 https://docs.python.org/3/_static/themetoggle.js 345 ms\nGET 200 https://docs.python.org/3/_static/rtd_switcher.js 375 ms\nGET 200 https://docs.python.org/3/_static/switchers.js 398 ms\nGET 200 https://docs.python.org/3/_static/basic.css 349 ms\nGET 200 https://docs.python.org/3/_static/classic.css?v=234b1a7c 440 ms\nGET 200 https://docs.python.org/3/_static/fonts/Vazirmatn-NL-VF.woff2 467 ms\nGET 200 https://docs.python.org/3/_static/pydoctheme.css?v=48df1187 578 ms\nGET 200 https://docs.python.org/3/_static/py.svg 580 ms\nCACHE (shared) GET 200 https://docs.python.org/3/_static/py.svg\nCACHE (shared) GET 200 https://docs.python.org/3/_static/py.svg\nCACHE (shared) GET 200 https://docs.python.org/3/_static/py.svg\nGET 200 https://docs.python.org/3/tutorial/interpreter.html 48 ms\nGET 200 https://docs.python.org/3/_static/pygments_dark.css?v=0fc419ee 46 ms\nGET 200 https://docs.python.org/3/_static/pygments.css?v=b86133f3 49 ms\nGET 200 https://docs.python.org/3/_static/documentation_options.js?v=c6788839 151 ms\nGET 200 https://docs.python.org/3/_static/doctools.js?v=fd6eb6e6 153 ms\nGET 200 https://docs.python.org/3/tutorial/ 55 ms\nGET 200 https://docs.python.org/3/_static/pygments_dark.css?v=0fc419ee 44 ms\nGET 200 https://docs.python.org/3/_static/pygments.css?v=b86133f3 49 ms\nGET 200 https://docs.python.org/3/_static/documentation_options.js?v=c6788839 119 ms\nGET 200 https://docs.python.org/3/_static/doctools.js?v=fd6eb6e6 137 ms\nGET 200 https://docs.python.org/3/_static/sphinx_highlight.js?v=6ffebe34 172 ms\nGET 200 https://docs.python.org/3/_static/sidebar.js 174 ms\nCACHE GET 200 https://analytics.python.org/js/script.file-downloads.outbound-links.js 191 ms\nGET 200 https://docs.python.org/3/_static/pydoctheme_dark.css 212 ms\nGET 200 https://docs.python.org/3/_static/copybutton.js 232 ms\nGET 200 https://docs.python.org/3/_static/menu.js 250 ms\nGET 200 https://docs.python.org/3/_static/search-focus.js 268 ms\nGET 200 https://docs.python.org/3/search.html?q=functions 32 ms\nGET 200 https://docs.python.org/3/_static/pygments.css?v=b86133f3 46 ms\nGET 200 https://docs.python.org/3/_static/pygments_dark.css?v=0fc419ee 48 ms\nGET 200 https://docs.python.org/3/_static/documentation_options.js?v=c6788839 106 ms\nGET 200 https://docs.python.org/3/_static/doctools.js?v=fd6eb6e6 121 ms\nGET 200 https://docs.python.org/3/_static/sphinx_highlight.js?v=6ffebe34 147 ms\nGET 200 https://docs.python.org/3/_static/sidebar.js 159 ms\nGET 200 https://docs.python.org/3/_static/searchtools.js 216 ms\nGET 200 https://docs.python.org/3/_static/language_data.js 224 ms\nCACHE GET 200 https://analytics.python.org/js/script.file-downloads.outbound-links.js 243 ms\nGET 200 https://docs.python.org/3/_static/pydoctheme_dark.css 349 ms\nGET 200 https://docs.python.org/3/_static/copybutton.js 413 ms\nGET 200 https://docs.python.org/3/_static/menu.js 469 ms\nGET 200 https://docs.python.org/3/_static/search-focus.js 517 ms\nGET 200 https://docs.python.org/3/_static/themetoggle.js 567 ms\nGET 200 https://docs.python.org/3/_static/rtd_switcher.js 620 ms\nGET 200 https://docs.python.org/3/_static/glossary_search.js 704 ms\nGET 200 https://docs.python.org/3/_static/glossary.json 182 ms\nGET 200 https://docs.python.org/3/_static/switchers.js 815 ms\nGET 200 https://docs.python.org/3/_static/basic.css 826 ms\nGET 200 https://docs.python.org/3/_static/classic.css?v=234b1a7c 906 ms\nGET 200 https://docs.python.org/3/_static/fonts/Vazirmatn-NL-VF.woff2 895 ms\nGET 200 https://docs.python.org/3/_static/pydoctheme.css?v=48df1187 983 ms\nGET 200 https://docs.python.org/3/_static/py.svg 1021 ms\nCACHE (shared) GET 200 https://docs.python.org/3/_static/py.svg\nCACHE (shared) GET 200 https://docs.python.org/3/_static/py.svg\nCACHE (shared) GET 200 https://docs.python.org/3/_static/py.svg\nGET 200 https://docs.python.org/3/searchindex.js 2020 ms",
+          "finalAddress": "https://docs.python.org/3/search.html?q=functions",
+          "elapsedMs": 17232,
+          "outcome": "partial"
+        },
+        {
+          "site": "mdn",
+          "mode": "native",
+          "format": "native",
+          "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide",
+          "checks": {
+            "reading": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "JavaScript Guide",
+                "contentMs": 671
+              },
+              "elapsedMs": 119
+            },
+            "styling": {
+              "outcome": "passed",
+              "detail": {
+                "sheets": 17,
+                "font": "Inter, sans-serif",
+                "links": [
+                  {
+                    "loaded": true,
+                    "href": "https://developer.mozilla.org/static/client/styles-global.19cc0c980e463125.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://developer.mozilla.org/static/client/270.c4deb27edf934078.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://developer.mozilla.org/static/client/styles-reference-layout.632d2f3884f10ca3.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://developer.mozilla.org/static/client/9228.c46ef79d5582674d.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://developer.mozilla.org/static/client/styles-content-section.ee79aa021892f35a.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://developer.mozilla.org/static/client/styles-heading-anchor.0eec5185ab9425b7.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://developer.mozilla.org/static/client/styles-reference-toc.9b9bd019efd16b86.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://developer.mozilla.org/static/client/styles-article-footer.81ae18c89fc527dc.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://developer.mozilla.org/static/client/styles-left-sidebar.46e37af4d0b5c883.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://developer.mozilla.org/static/client/styles-page-layout.5a4354f33e894319.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://developer.mozilla.org/static/client/styles-a11y-menu.5796ee87cb69f93f.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://developer.mozilla.org/static/client/styles-navigation.c3ebf384e65df345.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://developer.mozilla.org/static/client/styles-logo.aea5ff6edf1b9cfb.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://developer.mozilla.org/static/client/styles-menu.e2c5c8a53a8854c2.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://developer.mozilla.org/static/client/styles-breadcrumbs-bar.2d1bed1ab424b6b3.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://developer.mozilla.org/static/client/styles-breadcrumbs.87eb742f4e711dc3.css"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "https://developer.mozilla.org/static/client/styles-footer.66072dd619a4ef50.css"
+                  }
+                ]
+              },
+              "elapsedMs": 56
+            },
+            "retainedContent": {
+              "outcome": "passed",
+              "detail": {
+                "textCharacters": 4981
+              },
+              "elapsedMs": 14
+            },
+            "selection": {
+              "outcome": "passed",
+              "detail": {
+                "selectedCharacters": 23
+              },
+              "elapsedMs": 709
+            },
+            "navigation": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "Introduction"
+              },
+              "elapsedMs": 2697
+            },
+            "back": {
+              "outcome": "passed",
+              "detail": "Original article restored",
+              "elapsedMs": 224
+            },
+            "search": {
+              "outcome": "passed",
+              "detail": {
+                "query": "closures",
+                "kind": "Search suggestion followed with Enter",
+                "heading": "Closures"
+              },
+              "elapsedMs": 601
+            }
+          },
+          "browserErrors": [],
+          "consoleErrors": [
+            "Error while parsing the 'sandbox' attribute: 'allow-fullscreen' is an invalid sandbox flag.",
+            "Error while parsing the 'sandbox' attribute: 'allow-fullscreen' is an invalid sandbox flag.",
+            "Error while parsing the 'sandbox' attribute: 'allow-fullscreen' is an invalid sandbox flag.",
+            "Error while parsing the 'sandbox' attribute: 'allow-fullscreen' is an invalid sandbox flag.",
+            "Error while parsing the 'sandbox' attribute: 'allow-fullscreen' is an invalid sandbox flag.",
+            "Error while parsing the 'sandbox' attribute: 'allow-fullscreen' is an invalid sandbox flag."
+          ],
+          "directClientRequests": [],
+          "clientRequestFailures": [],
+          "nativeHttpErrors": [],
+          "socketStates": [],
+          "encryptedDownBytes": 0,
+          "encryptedUpBytes": 0,
+          "initial": {
+            "title": "JavaScript Guide - JavaScript | MDN",
+            "textCharacters": 4981,
+            "headings": [
+              "JavaScript Guide",
+              "In this article",
+              "Introduction",
+              "Grammar and types",
+              "Control flow and error handling",
+              "Loops and iteration",
+              "Functions",
+              "Expressions and operators",
+              "Numbers and strings",
+              "Representing dates & times",
+              "Regular expressions",
+              "Indexed collections",
+              "Keyed collections",
+              "Working with objects"
+            ],
+            "styleSheets": 17,
+            "bodyFont": "Inter, sans-serif",
+            "images": {
+              "total": 0,
+              "loaded": 0
+            },
+            "nestedFrames": 0
+          },
+          "styleDiagnostics": {
+            "sheets": 17,
+            "font": "Inter, sans-serif",
+            "links": [
+              {
+                "loaded": true,
+                "href": "https://developer.mozilla.org/static/client/styles-global.19cc0c980e463125.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://developer.mozilla.org/static/client/270.c4deb27edf934078.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://developer.mozilla.org/static/client/styles-reference-layout.632d2f3884f10ca3.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://developer.mozilla.org/static/client/9228.c46ef79d5582674d.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://developer.mozilla.org/static/client/styles-content-section.ee79aa021892f35a.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://developer.mozilla.org/static/client/styles-heading-anchor.0eec5185ab9425b7.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://developer.mozilla.org/static/client/styles-reference-toc.9b9bd019efd16b86.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://developer.mozilla.org/static/client/styles-article-footer.81ae18c89fc527dc.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://developer.mozilla.org/static/client/styles-left-sidebar.46e37af4d0b5c883.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://developer.mozilla.org/static/client/styles-page-layout.5a4354f33e894319.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://developer.mozilla.org/static/client/styles-a11y-menu.5796ee87cb69f93f.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://developer.mozilla.org/static/client/styles-navigation.c3ebf384e65df345.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://developer.mozilla.org/static/client/styles-logo.aea5ff6edf1b9cfb.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://developer.mozilla.org/static/client/styles-menu.e2c5c8a53a8854c2.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://developer.mozilla.org/static/client/styles-breadcrumbs-bar.2d1bed1ab424b6b3.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://developer.mozilla.org/static/client/styles-breadcrumbs.87eb742f4e711dc3.css"
+              },
+              {
+                "loaded": true,
+                "href": "https://developer.mozilla.org/static/client/styles-footer.66072dd619a4ef50.css"
+              }
+            ]
+          },
+          "settled": {
+            "title": "JavaScript Guide - JavaScript | MDN",
+            "textCharacters": 4981,
+            "headings": [
+              "JavaScript Guide",
+              "In this article",
+              "Introduction",
+              "Grammar and types",
+              "Control flow and error handling",
+              "Loops and iteration",
+              "Functions",
+              "Expressions and operators",
+              "Numbers and strings",
+              "Representing dates & times",
+              "Regular expressions",
+              "Indexed collections",
+              "Keyed collections",
+              "Working with objects"
+            ],
+            "styleSheets": 17,
+            "bodyFont": "Inter, sans-serif"
+          },
+          "selectionGeometry": {
+            "box": {
+              "x": 328.5,
+              "y": 271,
+              "width": 768,
+              "height": 56
+            },
+            "point": {
+              "x": 0,
+              "y": 4,
+              "width": 329,
+              "height": 20
+            },
+            "prose": "The JavaScript Guide shows you how to use JavaScript and gives an overview of the language. If you need exhaustive information about a language feature, have a look at the JavaScript reference."
+          },
+          "finalAddress": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Closures",
+          "elapsedMs": 8377,
+          "outcome": "usable"
+        },
+        {
+          "site": "mdn",
+          "mode": "proxy",
+          "format": "html",
+          "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide",
+          "checks": {
+            "reading": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "JavaScript Guide",
+                "contentMs": 1642
+              },
+              "elapsedMs": 607
+            },
+            "styling": {
+              "outcome": "passed",
+              "detail": {
+                "sheets": 17,
+                "font": "Inter, sans-serif",
+                "links": [
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  },
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  }
+                ]
+              },
+              "elapsedMs": 43
+            },
+            "retainedContent": {
+              "outcome": "passed",
+              "detail": {
+                "textCharacters": 4981
+              },
+              "elapsedMs": 16
+            },
+            "selection": {
+              "outcome": "passed",
+              "detail": {
+                "selectedCharacters": 23
+              },
+              "elapsedMs": 671
+            },
+            "navigation": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "Introduction"
+              },
+              "elapsedMs": 2662
+            },
+            "back": {
+              "outcome": "passed",
+              "detail": "Original article restored",
+              "elapsedMs": 23
+            },
+            "search": {
+              "outcome": "failed",
+              "error": "locator.fill: Timeout 10000ms exceeded.",
+              "elapsedMs": 10699
+            }
+          },
+          "browserErrors": [],
+          "consoleErrors": [
+            "Loading the image 'https://developer.mozilla.org/static/ssr/contrast.d86e85c43de8dee8.svg' violates the following Content Security Policy directive: \"img-src blob: data:[omitted] The action has been blocked.",
+            "Loading the image 'https://developer.mozilla.org/static/ssr/languages.dcba936080e5be86.svg' violates the following Content Security Policy directive: \"img-src blob: data:[omitted] The action has been blocked.",
+            "Loading the image 'https://developer.mozilla.org/static/ssr/filter.b77a4ccbfb57e2ef.svg' violates the following Content Security Policy directive: \"img-src blob: data:[omitted] The action has been blocked.",
+            "Loading the image 'https://developer.mozilla.org/static/ssr/contrast.d86e85c43de8dee8.svg' violates the following Content Security Policy directive: \"img-src blob: data:[omitted] The action has been blocked.",
+            "Loading the image 'https://developer.mozilla.org/static/ssr/contrast.d86e85c43de8dee8.svg' violates the following Content Security Policy directive: \"img-src blob: data:[omitted] The action has been blocked.",
+            "Loading the image 'https://developer.mozilla.org/static/ssr/contrast.d86e85c43de8dee8.svg' violates the following Content Security Policy directive: \"img-src blob: data:[omitted] The action has been blocked.",
+            "Loading the image 'https://developer.mozilla.org/static/ssr/contrast.d86e85c43de8dee8.svg' violates the following Content Security Policy directive: \"img-src blob: data:[omitted] The action has been blocked.",
+            "Loading the image 'https://developer.mozilla.org/static/ssr/contrast.d86e85c43de8dee8.svg' violates the following Content Security Policy directive: \"img-src blob: data:[omitted] The action has been blocked.",
+            "Loading the image 'https://developer.mozilla.org/static/ssr/languages.dcba936080e5be86.svg' violates the following Content Security Policy directive: \"img-src blob: data:[omitted] The action has been blocked.",
+            "Loading the image 'https://developer.mozilla.org/static/ssr/filter.b77a4ccbfb57e2ef.svg' violates the following Content Security Policy directive: \"img-src blob: data:[omitted] The action has been blocked.",
+            "Loading the image 'https://developer.mozilla.org/static/ssr/contrast.d86e85c43de8dee8.svg' violates the following Content Security Policy directive: \"img-src blob: data:[omitted] The action has been blocked.",
+            "Loading the image 'https://developer.mozilla.org/static/ssr/contrast.d86e85c43de8dee8.svg' violates the following Content Security Policy directive: \"img-src blob: data:[omitted] The action has been blocked.",
+            "Loading the image 'https://developer.mozilla.org/static/ssr/contrast.d86e85c43de8dee8.svg' violates the following Content Security Policy directive: \"img-src blob: data:[omitted] The action has been blocked.",
+            "Loading the image 'https://developer.mozilla.org/static/ssr/contrast.d86e85c43de8dee8.svg' violates the following Content Security Policy directive: \"img-src blob: data:[omitted] The action has been blocked."
+          ],
+          "directClientRequests": [],
+          "clientRequestFailures": [
+            {
+              "url": "https://developer.mozilla.org/static/ssr/contrast.d86e85c43de8dee8.svg",
+              "error": "csp"
+            },
+            {
+              "url": "https://developer.mozilla.org/static/ssr/languages.dcba936080e5be86.svg",
+              "error": "csp"
+            },
+            {
+              "url": "https://developer.mozilla.org/static/ssr/filter.b77a4ccbfb57e2ef.svg",
+              "error": "csp"
+            },
+            {
+              "url": "https://developer.mozilla.org/static/ssr/contrast.d86e85c43de8dee8.svg",
+              "error": "csp"
+            },
+            {
+              "url": "https://developer.mozilla.org/static/ssr/contrast.d86e85c43de8dee8.svg",
+              "error": "csp"
+            },
+            {
+              "url": "https://developer.mozilla.org/static/ssr/contrast.d86e85c43de8dee8.svg",
+              "error": "csp"
+            },
+            {
+              "url": "https://developer.mozilla.org/static/ssr/contrast.d86e85c43de8dee8.svg",
+              "error": "csp"
+            },
+            {
+              "url": "https://developer.mozilla.org/static/ssr/contrast.d86e85c43de8dee8.svg",
+              "error": "csp"
+            },
+            {
+              "url": "https://developer.mozilla.org/static/ssr/languages.dcba936080e5be86.svg",
+              "error": "csp"
+            },
+            {
+              "url": "https://developer.mozilla.org/static/ssr/filter.b77a4ccbfb57e2ef.svg",
+              "error": "csp"
+            },
+            {
+              "url": "https://developer.mozilla.org/static/ssr/contrast.d86e85c43de8dee8.svg",
+              "error": "csp"
+            },
+            {
+              "url": "https://developer.mozilla.org/static/ssr/contrast.d86e85c43de8dee8.svg",
+              "error": "csp"
+            },
+            {
+              "url": "https://developer.mozilla.org/static/ssr/contrast.d86e85c43de8dee8.svg",
+              "error": "csp"
+            },
+            {
+              "url": "https://developer.mozilla.org/static/ssr/contrast.d86e85c43de8dee8.svg",
+              "error": "csp"
+            }
+          ],
+          "nativeHttpErrors": [],
+          "socketStates": [],
+          "encryptedDownBytes": 3177581,
+          "encryptedUpBytes": 42117,
+          "initial": {
+            "title": "JavaScript Guide - JavaScript | MDN",
+            "textCharacters": 4981,
+            "headings": [
+              "JavaScript Guide",
+              "In this article",
+              "Introduction",
+              "Grammar and types",
+              "Control flow and error handling",
+              "Loops and iteration",
+              "Functions",
+              "Expressions and operators",
+              "Numbers and strings",
+              "Representing dates & times",
+              "Regular expressions",
+              "Indexed collections",
+              "Keyed collections",
+              "Working with objects"
+            ],
+            "styleSheets": 17,
+            "bodyFont": "Inter, sans-serif",
+            "images": {
+              "total": 0,
+              "loaded": 0
+            },
+            "nestedFrames": 0
+          },
+          "styleDiagnostics": {
+            "sheets": 17,
+            "font": "Inter, sans-serif",
+            "links": [
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              },
+              {
+                "loaded": true,
+                "href": "data:"
+              }
+            ]
+          },
+          "settled": {
+            "title": "JavaScript Guide - JavaScript | MDN",
+            "textCharacters": 4981,
+            "headings": [
+              "JavaScript Guide",
+              "In this article",
+              "Introduction",
+              "Grammar and types",
+              "Control flow and error handling",
+              "Loops and iteration",
+              "Functions",
+              "Expressions and operators",
+              "Numbers and strings",
+              "Representing dates & times",
+              "Regular expressions",
+              "Indexed collections",
+              "Keyed collections",
+              "Working with objects"
+            ],
+            "styleSheets": 17,
+            "bodyFont": "Inter, sans-serif"
+          },
+          "selectionGeometry": {
+            "box": {
+              "x": 328.5,
+              "y": 458,
+              "width": 768,
+              "height": 56
+            },
+            "point": {
+              "x": 0,
+              "y": 4,
+              "width": 329,
+              "height": 20
+            },
+            "prose": "The JavaScript Guide shows you how to use JavaScript and gives an overview of the language. If you need exhaustive information about a language feature, have a look at the JavaScript reference."
+          },
+          "searchDiagnostics": {
+            "inputs": [],
+            "dialogs": []
+          },
+          "sandbox": "allow-scripts",
+          "panelStatus": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Introduction\nConnected",
+          "runtimeConsole": "8:36:00 AM TypeError: Dynamic import() is not supported in proxied worker modules.\n8:36:01 AM TypeError: Dynamic import() is not supported in proxied worker modules.\n8:36:07 AM TypeError: Dynamic import() is not supported in proxied worker modules.\n8:36:08 AM TypeError: Dynamic import() is not supported in proxied worker modules.",
+          "network": "GET 200 https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide 308 ms\nGET 200 https://developer.mozilla.org/static/client/270.c4deb27edf934078.css 73 ms\nGET 200 https://developer.mozilla.org/static/client/styles-reference-layout.632d2f3884f10ca3.css 153 ms\nGET 200 https://developer.mozilla.org/static/client/styles-heading-anchor.0eec5185ab9425b7.css 179 ms\nGET 200 https://developer.mozilla.org/static/client/styles-article-footer.81ae18c89fc527dc.css 199 ms\nGET 200 https://developer.mozilla.org/static/client/styles-reference-toc.9b9bd019efd16b86.css 200 ms\nGET 200 https://developer.mozilla.org/static/client/styles-page-layout.5a4354f33e894319.css 236 ms\nGET 200 https://developer.mozilla.org/static/client/styles-a11y-menu.5796ee87cb69f93f.css 285 ms\nGET 200 https://developer.mozilla.org/static/client/styles-logo.aea5ff6edf1b9cfb.css 317 ms\nGET 200 https://developer.mozilla.org/static/client/styles-breadcrumbs-bar.2d1bed1ab424b6b3.css 361 ms\nGET 200 https://developer.mozilla.org/static/client/jetbrains-mono-latin.119994ed445212c7.woff2 410 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/jetbrains-mono-latin.119994ed445212c7.woff2\nGET 200 https://developer.mozilla.org/static/client/inter-latin.9a3b1bc220d426ef.woff2 509 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/inter-latin.9a3b1bc220d426ef.woff2\nGET 200 https://developer.mozilla.org/static/client/inter-italic-latin.fd2627ec16333c05.woff2 731 ms\nGET 200 https://developer.mozilla.org/static/client/inter-latin-extended.02dc98170ff37b88.woff2 814 ms\nGET 200 https://developer.mozilla.org/static/client/inter-italic-latin-extended.0a7409875db33654.woff2 856 ms\nGET 200 https://developer.mozilla.org/static/client/inter-cyrillic.eecfbd79d522303a.woff2 858 ms\nGET 200 https://developer.mozilla.org/static/client/inter-italic-cyrillic.d153dcd2916c4842.woff2 901 ms\nGET 200 https://developer.mozilla.org/static/client/jetbrains-mono-italic-latin.55b330522e5e3ed9.woff2 921 ms\nGET 200 https://developer.mozilla.org/static/client/jetbrains-mono-latin-extended.01c891f9c832ce28.woff2 960 ms\nGET 200 https://developer.mozilla.org/static/client/jetbrains-mono-italic-latin-extended.c25d5e1f309ed948.woff2 984 ms\nGET 200 https://developer.mozilla.org/static/client/jetbrains-mono-cyrillic.577e793cdf179ae1.woff2 1021 ms\nGET 200 https://developer.mozilla.org/static/client/jetbrains-mono-italic-cyrillic.8d00711fdb1702e0.woff2 1031 ms\nGET 200 https://developer.mozilla.org/static/client/BarlowCondensed-SemiBold.199288b668a15dc1.woff2 1104 ms\nGET 200 https://developer.mozilla.org/favicon.ico 1290 ms\nGET 200 https://developer.mozilla.org/favicon.svg 1460 ms\nGET 200 https://developer.mozilla.org/apple-touch-icon.png 1488 ms\nGET 200 https://developer.mozilla.org/manifest.json 1524 ms\nGET 200 https://developer.mozilla.org/static/client/external-link.4f3a2dc8e402cae5.svg 1502 ms\nGET 200 https://developer.mozilla.org/static/client/trash-2.73b28bc66fb8543c.svg 1535 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/trash-2.73b28bc66fb8543c.svg\nGET 200 https://developer.mozilla.org/static/client/flask-conical.c16b3d71f14f31d1.svg 1569 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/flask-conical.c16b3d71f14f31d1.svg\nGET 200 https://developer.mozilla.org/static/client/triangle-alert.cff4c57ccef57da3.svg 1603 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/triangle-alert.cff4c57ccef57da3.svg\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/triangle-alert.cff4c57ccef57da3.svg\nGET 200 https://developer.mozilla.org/static/client/styles-global.19cc0c980e463125.css 1708 ms\nGET 200 https://developer.mozilla.org/static/client/obsolete.103e80a32b90e7f1.svg 1832 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/obsolete.103e80a32b90e7f1.svg\nGET 200 https://developer.mozilla.org/static/client/obsolete-dark.97bd602b44120cb3.svg 1873 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/obsolete-dark.97bd602b44120cb3.svg\nGET 200 https://developer.mozilla.org/static/client/pending-removal.7300f68a9465c1b9.svg 1909 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/pending-removal.7300f68a9465c1b9.svg\nGET 200 https://developer.mozilla.org/static/client/pending-removal-dark.7a08806b42144903.svg 1945 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/pending-removal-dark.7a08806b42144903.svg\nGET 200 https://developer.mozilla.org/static/client/9228.c46ef79d5582674d.css 2069 ms\nGET 200 https://developer.mozilla.org/static/client/circle-check.205f48f66c3c9d17.svg 1930 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/circle-check.205f48f66c3c9d17.svg\nGET 200 https://developer.mozilla.org/static/client/circle-x.4b1c3fa0511867e7.svg 1967 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/circle-x.4b1c3fa0511867e7.svg\nGET 200 https://developer.mozilla.org/static/client/arrow-left.29a44bc5a550fe38.svg 2001 ms\nGET 200 https://developer.mozilla.org/static/client/arrow-right.648145f00e77b7f0.svg 2036 ms\nGET 200 https://developer.mozilla.org/static/client/info.d40b80f84482feba.svg 2073 ms\nGET 200 https://developer.mozilla.org/static/client/lock.4befe79c52ccec2a.svg 2109 ms\nGET 200 https://developer.mozilla.org/static/client/lightbulb.f54f9e803373ffd2.svg 2149 ms\nGET 200 https://developer.mozilla.org/static/client/cog.f23af856fab34421.svg 2189 ms\nGET 200 https://developer.mozilla.org/static/client/chevron-right.a81fc439dd5e4839.svg 2225 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/chevron-right.a81fc439dd5e4839.svg\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/chevron-right.a81fc439dd5e4839.svg\nGET 200 https://developer.mozilla.org/static/client/styles-content-section.ee79aa021892f35a.css 2407 ms\nGET 200 https://developer.mozilla.org/static/client/styles-left-sidebar.46e37af4d0b5c883.css 2407 ms\nGET 200 https://developer.mozilla.org/static/client/styles-breadcrumbs.87eb742f4e711dc3.css 2408 ms\nGET 200 https://developer.mozilla.org/static/client/cancel.7362f2cdf3515e0d.svg 2174 ms\nGET 200 https://developer.mozilla.org/static/client/menu.74ccd9bb64dbf543.svg 2202 ms\nGET 200 https://developer.mozilla.org/static/client/styles-navigation.c3ebf384e65df345.css 2492 ms\nGET 200 https://developer.mozilla.org/static/client/graduation-cap.c7aa0f3430c53718.svg 2219 ms\nGET 200 https://developer.mozilla.org/static/client/wrench.a3caa7312a364b47.svg 2248 ms\nGET 200 https://developer.mozilla.org/static/client/chevron-down.7c923b7054da305b.svg 2278 ms\nGET 200 https://developer.mozilla.org/static/client/circle-play.6ed4ac1fb3c93a04.svg 2307 ms\nGET 200 https://developer.mozilla.org/static/client/shield-check.07bdc37f20ac5cc6.svg 2338 ms\nGET 200 https://developer.mozilla.org/static/client/mdn-m.70aac857e4a908d0.svg 2367 ms\nGET 200 https://developer.mozilla.org/static/client/chart-no-axes-combined.aee09a7064cb8b35.svg 2398 ms\nGET 200 https://developer.mozilla.org/static/client/users.f7e6f1f213744762.svg 2430 ms\nGET 200 https://developer.mozilla.org/static/client/github.4d94e1bf436aa7ed.svg 2465 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/github.4d94e1bf436aa7ed.svg\nGET 200 https://developer.mozilla.org/static/client/styles-menu.e2c5c8a53a8854c2.css 2789 ms\nGET 200 https://developer.mozilla.org/static/client/bluesky.a9421882d093c829.svg 2422 ms\nGET 200 https://developer.mozilla.org/static/client/x.4c7e68bf52af030a.svg 2459 ms\nGET 200 https://developer.mozilla.org/static/client/mastodon.1a5c0fde8353f680.svg 2486 ms\nGET 200 https://developer.mozilla.org/static/client/rss.37214526d7308d0c.svg 2521 ms\nGET 200 https://developer.mozilla.org/static/client/styles-footer.66072dd619a4ef50.css 2922 ms\nGET 200 https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Introduction 149 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/270.c4deb27edf934078.css 21 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/styles-reference-layout.632d2f3884f10ca3.css 71 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/styles-heading-anchor.0eec5185ab9425b7.css 106 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/styles-reference-toc.9b9bd019efd16b86.css 116 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/styles-article-footer.81ae18c89fc527dc.css 120 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/styles-page-layout.5a4354f33e894319.css 147 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/styles-a11y-menu.5796ee87cb69f93f.css 186 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/styles-logo.aea5ff6edf1b9cfb.css 206 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/styles-breadcrumbs-bar.2d1bed1ab424b6b3.css 232 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/jetbrains-mono-latin.119994ed445212c7.woff2 267 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/jetbrains-mono-latin.119994ed445212c7.woff2\nCACHE GET 200 https://developer.mozilla.org/static/client/inter-latin.9a3b1bc220d426ef.woff2 329 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/inter-latin.9a3b1bc220d426ef.woff2\nCACHE GET 200 https://developer.mozilla.org/static/client/inter-italic-latin.fd2627ec16333c05.woff2 467 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/inter-latin-extended.02dc98170ff37b88.woff2 495 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/inter-cyrillic.eecfbd79d522303a.woff2 525 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/inter-italic-latin-extended.0a7409875db33654.woff2 541 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/inter-italic-cyrillic.d153dcd2916c4842.woff2 550 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/jetbrains-mono-italic-latin.55b330522e5e3ed9.woff2 563 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/jetbrains-mono-latin-extended.01c891f9c832ce28.woff2 576 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/jetbrains-mono-italic-latin-extended.c25d5e1f309ed948.woff2 587 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/jetbrains-mono-cyrillic.577e793cdf179ae1.woff2 596 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/jetbrains-mono-italic-cyrillic.8d00711fdb1702e0.woff2 606 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/BarlowCondensed-SemiBold.199288b668a15dc1.woff2 629 ms\nCACHE GET 200 https://developer.mozilla.org/favicon.ico 763 ms\nCACHE GET 200 https://developer.mozilla.org/favicon.svg 776 ms\nCACHE GET 200 https://developer.mozilla.org/apple-touch-icon.png 793 ms\nCACHE GET 200 https://developer.mozilla.org/manifest.json 804 ms\nGET 200 https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Introduction/2019-04-04_00-15-29.png 1022 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/external-link.4f3a2dc8e402cae5.svg 989 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/trash-2.73b28bc66fb8543c.svg 1000 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/trash-2.73b28bc66fb8543c.svg\nCACHE GET 200 https://developer.mozilla.org/static/client/flask-conical.c16b3d71f14f31d1.svg 1015 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/flask-conical.c16b3d71f14f31d1.svg\nCACHE GET 200 https://developer.mozilla.org/static/client/triangle-alert.cff4c57ccef57da3.svg 1030 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/triangle-alert.cff4c57ccef57da3.svg\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/triangle-alert.cff4c57ccef57da3.svg\nCACHE GET 200 https://developer.mozilla.org/static/client/obsolete.103e80a32b90e7f1.svg 1045 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/obsolete.103e80a32b90e7f1.svg\nCACHE GET 200 https://developer.mozilla.org/static/client/styles-global.19cc0c980e463125.css 1124 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/obsolete-dark.97bd602b44120cb3.svg 1290 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/obsolete-dark.97bd602b44120cb3.svg\nCACHE GET 200 https://developer.mozilla.org/static/client/pending-removal.7300f68a9465c1b9.svg 1304 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/pending-removal.7300f68a9465c1b9.svg\nCACHE GET 200 https://developer.mozilla.org/static/client/pending-removal-dark.7a08806b42144903.svg 1334 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/pending-removal-dark.7a08806b42144903.svg\nCACHE GET 200 https://developer.mozilla.org/static/client/9228.c46ef79d5582674d.css 1416 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/circle-check.205f48f66c3c9d17.svg 1324 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/circle-check.205f48f66c3c9d17.svg\nCACHE GET 200 https://developer.mozilla.org/static/client/circle-x.4b1c3fa0511867e7.svg 1333 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/circle-x.4b1c3fa0511867e7.svg\nCACHE GET 200 https://developer.mozilla.org/static/client/arrow-left.29a44bc5a550fe38.svg 1342 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/arrow-right.648145f00e77b7f0.svg 1355 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/info.d40b80f84482feba.svg 1367 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/lock.4befe79c52ccec2a.svg 1376 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/lightbulb.f54f9e803373ffd2.svg 1386 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/cog.f23af856fab34421.svg 1396 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/chevron-right.a81fc439dd5e4839.svg 1405 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/chevron-right.a81fc439dd5e4839.svg\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/chevron-right.a81fc439dd5e4839.svg\nCACHE GET 200 https://developer.mozilla.org/static/client/styles-content-section.ee79aa021892f35a.css 1516 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/styles-left-sidebar.46e37af4d0b5c883.css 1516 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/styles-breadcrumbs.87eb742f4e711dc3.css 1515 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/cancel.7362f2cdf3515e0d.svg 1378 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/menu.74ccd9bb64dbf543.svg 1386 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/styles-navigation.c3ebf384e65df345.css 1571 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/graduation-cap.c7aa0f3430c53718.svg 1400 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/wrench.a3caa7312a364b47.svg 1408 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/chevron-down.7c923b7054da305b.svg 1418 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/circle-play.6ed4ac1fb3c93a04.svg 1427 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/shield-check.07bdc37f20ac5cc6.svg 1436 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/mdn-m.70aac857e4a908d0.svg 1444 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/chart-no-axes-combined.aee09a7064cb8b35.svg 1452 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/users.f7e6f1f213744762.svg 1460 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/github.4d94e1bf436aa7ed.svg 1469 ms\nCACHE (shared) GET 200 https://developer.mozilla.org/static/client/github.4d94e1bf436aa7ed.svg\nCACHE GET 200 https://developer.mozilla.org/static/client/styles-menu.e2c5c8a53a8854c2.css 1674 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/bluesky.a9421882d093c829.svg 1452 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/x.4c7e68bf52af030a.svg 1459 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/mastodon.1a5c0fde8353f680.svg 1469 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/rss.37214526d7308d0c.svg 1480 ms\nCACHE GET 200 https://developer.mozilla.org/static/client/styles-footer.66072dd619a4ef50.css 1720 ms",
+          "finalAddress": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Introduction",
+          "elapsedMs": 19453,
+          "outcome": "partial"
+        }
+      ],
+      "serverBinarySha256": "cea1386432acd6aecf841a8988e5518e5c1dcbbe9dca051273be9bd8b770319e",
+      "chromium": "156.0.8078.4",
+      "summary": {
+        "rows": 12,
+        "usable": 6,
+        "partial": 4,
+        "unreadable": 2,
+        "proxyDirectRequestRows": 0
+      },
+      "harnessRevisionNote": "Measured before the final-address diagnostic changed from Playwright inputValue() to DOM input.value for XHTML inputs in SVG clients. All website interactions and assertions are identical; the recorded source hash corresponds to that exact one-line earlier revision."
+    },
+    {
+      "schema": 1,
+      "generatedAt": "2026-11-17T13:37:51.641Z",
+      "version": "2.5.1",
+      "node": "v22.23.2",
+      "methodology": "Built standalone client, actual authenticated Noise transport and Rust public egress; fresh native Chromium controls. Read/navigation/search/selection checks, no accounts, credentials, purchases or application forms. Proxy direct HTTP attempts blocked and counted, never used as fallback. Search and ordinary page scripts may send site telemetry. One sequential sample; timings include host load and test waits, not performance benchmarks.",
+      "configuration": {
+        "format": "svg",
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "contentDeadlineMs": 40000,
+        "interactionDeadlineMs": 10000,
+        "styling": "Loaded sheets plus computed body font matches the native control (known family fallback for proxy-only runs); screenshots supplement, not pixel equivalence",
+        "captures": "/tmp/eya-proxy-public-verified-svg-captures"
+      },
+      "sourceSha256": {
+        "client.html": "e75639370b332ca5afb1d6ccc8ad2191cdff0ea3a3991d565412cc352ff996b8",
+        "client/browser-panel.js": "9b86809ce21c311088abbc287fb7a368ac6e03be51db2cf38c817931f224708f",
+        "client/browser-transport.js": "bd207e0ef71a2f1b848104a4a94eb221b1a007c5d194ac68fc32122a556f1b34",
+        "eya-server/src/browser.rs": "eb254fefa91ea86d3f1dbbd85b3eaa7681705a73980c97502d57498df304585b",
+        "tests/browser-proxy-public.cjs": "ecd03d97f75c22d47d33e8f1b14fb71b46e8c98b383b1539ae66cf937d8ee46b"
+      },
+      "rows": [
+        {
+          "site": "react",
+          "mode": "proxy",
+          "format": "svg",
+          "url": "https://react.dev/learn",
+          "checks": {
+            "reading": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "Quick Start",
+                "contentMs": 4662
+              },
+              "elapsedMs": 1090
+            },
+            "styling": {
+              "outcome": "passed",
+              "detail": {
+                "sheets": 1,
+                "font": "\"Optimistic Text\", -apple-system, ui-sans-serif, system-ui, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+                "links": [
+                  {
+                    "loaded": true,
+                    "href": "data:"
+                  }
+                ]
+              },
+              "elapsedMs": 4702
+            },
+            "retainedContent": {
+              "outcome": "failed",
+              "error": "Article remains visible after scripts and styles load",
+              "elapsedMs": 13
+            }
+          },
+          "browserErrors": [
+            "Loading chunk 809 failed.",
+            "Minified React error #418; visit https://react.dev/errors/418?args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings.",
+            "Loading chunk 809 failed."
+          ],
+          "consoleErrors": [
+            "Loading the script 'https://react.dev/_next/static/chunks/4ad82c5e.aa059996e264f809.js' violates the following Content Security Policy directive: \"script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:[omitted] Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+            "Loading the script 'https://react.dev/_next/static/chunks/811.b2e5ca620a3f883e.js' violates the following Content Security Policy directive: \"script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:[omitted] Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+            "Loading the script 'https://react.dev/_next/static/chunks/972.d10c430071e5a41c.js' violates the following Content Security Policy directive: \"script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:[omitted] Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+            "Loading the font 'https://react.dev/fonts/Source-Code-Pro-Regular.woff2' violates the following Content Security Policy directive: \"font-src blob: data:[omitted] The action has been blocked.",
+            "Loading the font 'https://react.dev/fonts/Source-Code-Pro-Bold.woff2' violates the following Content Security Policy directive: \"font-src blob: data:[omitted] The action has been blocked.",
+            "Loading the font 'https://react.dev/fonts/Optimistic_Display_W_Md.woff2' violates the following Content Security Policy directive: \"font-src blob: data:[omitted] The action has been blocked.",
+            "Loading the font 'https://react.dev/fonts/Optimistic_Display_W_SBd.woff2' violates the following Content Security Policy directive: \"font-src blob: data:[omitted] The action has been blocked.",
+            "Loading the font 'https://react.dev/fonts/Optimistic_Display_W_Bd.woff2' violates the following Content Security Policy directive: \"font-src blob: data:[omitted] The action has been blocked.",
+            "Loading the font 'https://react.dev/fonts/Optimistic_Text_W_Md.woff2' violates the following Content Security Policy directive: \"font-src blob: data:[omitted] The action has been blocked.",
+            "Loading the font 'https://react.dev/fonts/Optimistic_Text_W_Bd.woff2' violates the following Content Security Policy directive: \"font-src blob: data:[omitted] The action has been blocked.",
+            "Loading the font 'https://react.dev/fonts/Optimistic_Text_W_Rg.woff2' violates the following Content Security Policy directive: \"font-src blob: data:[omitted] The action has been blocked.",
+            "Loading the font 'https://react.dev/fonts/Optimistic_Text_W_It.woff2' violates the following Content Security Policy directive: \"font-src blob: data:[omitted] The action has been blocked.",
+            "Loading the image 'https://react.dev/_next/image?url=%2Fimages%2Fuwu.png&w=64&q=75' violates the following Content Security Policy directive: \"img-src blob: data:[omitted] The action has been blocked.",
+            "Fetching content from 'https://react.dev/_next/static/chunks/668-9be9de6fa7660277.js' violates the following Content Security Policy directive: \"default-src 'none'\". The action has been blocked.",
+            "Fetching content from 'https://react.dev/_next/static/chunks/928-22de2b840e40e9ed.js' violates the following Content Security Policy directive: \"default-src 'none'\". The action has been blocked.",
+            "Fetching content from 'https://react.dev/_next/static/chunks/pages/%5B%5B...markdownPath%5D%5D-3f4d3fa908e59b5a.js' violates the following Content Security Policy directive: \"default-src 'none'\". The action has been blocked.",
+            "Loading the script 'https://react.dev/_next/static/chunks/4ad82c5e.aa059996e264f809.js' violates the following Content Security Policy directive: \"script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:[omitted] Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+            "Loading the script 'https://react.dev/_next/static/chunks/811.b2e5ca620a3f883e.js' violates the following Content Security Policy directive: \"script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:[omitted] Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+            "Loading the script 'https://react.dev/_next/static/chunks/972.d10c430071e5a41c.js' violates the following Content Security Policy directive: \"script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:[omitted] Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+            "ChunkLoadError: Loading chunk 809 failed.\n(error: https://react.dev/_next/static/chunks/4ad82c5e.aa059996e264f809.js)\n    at r.f.j (data:[omitted] charset=utf-8;base64,KCgpPT57InVzZSBzdHJpY3QiO3ZhciBlPXt9LHQ9e307ZnVuY3Rpb24gcihhKXt2YXIgbz10W2FdO2lmKHZvaWQgMCE9PW8pcmV0dXJuIG8uZXhwb3J0czt2YXIgbj10W2FdPXtpZDphLGxvYWRlZDohMSxleHBvcnRzOnt9fSxjPSEwO3RyeXtlW2FdLmNhbGwobi5leHBvcnRzLG4sbi5leHBvcnRzLHIpLGM9ITF9ZmluYWxseXtjJiZkZWxldGUgdFthXX1yZXR1cm4gbi5sb2FkZWQ9ITAsbi5leHBvcnRzfXIubT1lLCgoKT0+e3ZhciBlPVtdO3IuTz0odCxhLG8sbik9PntpZihhKXtuPW58fDA7Zm9yKHZhciBjPWUubGVuZ3RoO2M+MCYmZVtjLTFdWzJdPm47Yy0tKWVbY109ZVtjLTFdO2VbY109W2EsbyxuXTtyZXR1cm59Zm9yKHZhciBkPTEvMCxjPTA7YzxlLmxlbmd0aDtjKyspe2Zvcih2YXJbYSxvLG5d",
+            "ChunkLoadError: Loading chunk 809 failed.\n(error: https://react.dev/_next/static/chunks/4ad82c5e.aa059996e264f809.js)\n    at r.f.j (data:[omitted] charset=utf-8;base64,KCgpPT57InVzZSBzdHJpY3QiO3ZhciBlPXt9LHQ9e307ZnVuY3Rpb24gcihhKXt2YXIgbz10W2FdO2lmKHZvaWQgMCE9PW8pcmV0dXJuIG8uZXhwb3J0czt2YXIgbj10W2FdPXtpZDphLGxvYWRlZDohMSxleHBvcnRzOnt9fSxjPSEwO3RyeXtlW2FdLmNhbGwobi5leHBvcnRzLG4sbi5leHBvcnRzLHIpLGM9ITF9ZmluYWxseXtjJiZkZWxldGUgdFthXX1yZXR1cm4gbi5sb2FkZWQ9ITAsbi5leHBvcnRzfXIubT1lLCgoKT0+e3ZhciBlPVtdO3IuTz0odCxhLG8sbik9PntpZihhKXtuPW58fDA7Zm9yKHZhciBjPWUubGVuZ3RoO2M+MCYmZVtjLTFdWzJdPm47Yy0tKWVbY109ZVtjLTFdO2VbY109W2EsbyxuXTtyZXR1cm59Zm9yKHZhciBkPTEvMCxjPTA7YzxlLmxlbmd0aDtjKyspe2Zvcih2YXJbYSxvLG5d",
+            "A client-side exception has occurred, see here for more info: https://nextjs.org/docs/messages/client-side-exception-occurred",
+            "Loading the script 'https://react.dev/_next/static/chunks/pages/_error-add665a7ef077506.js' violates the following Content Security Policy directive: \"script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:[omitted] Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+            "Error rendering page:  Error: Failed to load script: /_next/static/chunks/pages/_error-add665a7ef077506.js\n    at t.onerror (data:[omitted] charset=utf-8;base64,KHNlbGYud2VicGFja0NodW5rX05fRT1zZWxmLndlYnBhY2tDaHVua19OX0V8fFtdKS5wdXNoKFtbNzkyXSx7ODkyNTooZSx0KT0+eyJ1c2Ugc3RyaWN0IjtmdW5jdGlvbiByKCl7cmV0dXJuIiJ9T2JqZWN0LmRlZmluZVByb3BlcnR5KHQsIl9fZXNNb2R1bGUiLHt2YWx1ZTohMH0pLE9iamVjdC5kZWZpbmVQcm9wZXJ0eSh0LCJnZXREZXBsb3ltZW50SWRRdWVyeU9yRW1wdHlTdHJpbmciLHtlbnVtZXJhYmxlOiEwLGdldDpmdW5jdGlvbigpe3JldHVybiByfX0pfSw0NTk5OigpPT57InRyaW1TdGFydCJpbiBTdHJpbmcucHJvdG90eXBlfHwoU3RyaW5nLnByb3RvdHlwZS50cmltU3RhcnQ9U3RyaW5nLnByb3RvdHlwZS50cmltTGVmdCksInRyaW1FbmQiaW4gU3RyaW5nLnByb3RvdHlwZXx8KFN0cmluZy5wcm90b3R"
+          ],
+          "directClientRequests": [],
+          "clientRequestFailures": [
+            {
+              "url": "https://react.dev/_next/static/chunks/4ad82c5e.aa059996e264f809.js",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/_next/static/chunks/811.b2e5ca620a3f883e.js",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/_next/static/chunks/972.d10c430071e5a41c.js",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/fonts/Source-Code-Pro-Regular.woff2",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/fonts/Source-Code-Pro-Bold.woff2",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/fonts/Optimistic_Display_W_Md.woff2",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/fonts/Optimistic_Display_W_SBd.woff2",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/fonts/Optimistic_Display_W_Bd.woff2",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/fonts/Optimistic_Text_W_Md.woff2",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/fonts/Optimistic_Text_W_Bd.woff2",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/fonts/Optimistic_Text_W_Rg.woff2",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/fonts/Optimistic_Text_W_It.woff2",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/_next/image",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/_next/static/chunks/668-9be9de6fa7660277.js",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/_next/static/chunks/928-22de2b840e40e9ed.js",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/_next/static/chunks/pages/%5B%5B...markdownPath%5D%5D-3f4d3fa908e59b5a.js",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/_next/static/chunks/4ad82c5e.aa059996e264f809.js",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/_next/static/chunks/811.b2e5ca620a3f883e.js",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/_next/static/chunks/972.d10c430071e5a41c.js",
+              "error": "csp"
+            },
+            {
+              "url": "https://react.dev/_next/static/chunks/pages/_error-add665a7ef077506.js",
+              "error": "csp"
+            }
+          ],
+          "nativeHttpErrors": [],
+          "socketStates": [],
+          "encryptedDownBytes": 3534659,
+          "encryptedUpBytes": 20845,
+          "initial": {
+            "title": "Quick Start – React",
+            "textCharacters": 13542,
+            "headings": [
+              "Quick Start",
+              "Creating and nesting components",
+              "Writing markup with JSX",
+              "Adding styles",
+              "Displaying data",
+              "Conditional rendering",
+              "Rendering lists",
+              "Responding to events",
+              "Updating the screen",
+              "Using Hooks",
+              "Sharing data between components",
+              "Next Steps",
+              "On this page"
+            ],
+            "styleSheets": 0,
+            "bodyFont": "\"Times New Roman\"",
+            "images": {
+              "total": 9,
+              "loaded": 0
+            },
+            "nestedFrames": 0
+          },
+          "styleDiagnostics": {
+            "sheets": 1,
+            "font": "\"Optimistic Text\", -apple-system, ui-sans-serif, system-ui, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+            "links": [
+              {
+                "loaded": true,
+                "href": "data:"
+              }
+            ]
+          },
+          "settled": {
+            "title": "",
+            "textCharacters": 0,
+            "headings": [],
+            "styleSheets": 1,
+            "bodyFont": "\"Optimistic Text\", -apple-system, ui-sans-serif, system-ui, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\""
+          },
+          "sandbox": "allow-scripts",
+          "panelStatus": "https://react.dev/cdoc\nConnected",
+          "runtimeConsole": "8:38:00 AM {\"message\":\"Loading chunk 809 failed.\\n(error: https://react.dev/_next/static/chunks/4ad82c5e.aa059996e264f809.js)\",\"name\":\"ChunkLoadError\",\"type\":\"error\",\"request\":\"https://react.dev/_next/static/chunks/4ad82c5e.aa059996e264f809.js\"}\n8:38:00 AM {\"message\":\"Loading chunk 809 failed.\\n(error: https://react.dev/_next/static/chunks/4ad82c5e.aa059996e264f809.js)\",\"name\":\"ChunkLoadError\",\"type\":\"error\",\"request\":\"https://react.dev/_next/static/chunks/4ad82c5e.aa059996e264f809.js\"}\n8:38:00 AM A client-side exception has occurred, see here for more info: https://nextjs.org/docs/messages/client-side-exception-occurred\n8:38:00 AM Error rendering page:  {}",
+          "network": "GET 200 https://react.dev/learn 589 ms\nGET 200 https://react.dev/fonts/Source-Code-Pro-Regular.woff2 233 ms\nGET 200 https://react.dev/fonts/Source-Code-Pro-Bold.woff2 390 ms\nGET 200 https://www.googletagmanager.com/gtag/js?id=G-B1E83PJ3RT 1046 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_W_Md.woff2 1256 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_W_SBd.woff2 1285 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_W_Bd.woff2 1362 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_W_Md.woff2 1401 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_W_Bd.woff2 1455 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_W_Rg.woff2 1487 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_W_It.woff2 1528 ms\nCACHE (panel) GET 200 https://react.dev/fonts/Source-Code-Pro-Regular.woff2\nCACHE (panel) GET 200 https://react.dev/fonts/Source-Code-Pro-Bold.woff2\nCACHE (panel) GET 200 https://react.dev/fonts/Optimistic_Display_W_Md.woff2\nCACHE (panel) GET 200 https://react.dev/fonts/Optimistic_Display_W_SBd.woff2\nCACHE (panel) GET 200 https://react.dev/fonts/Optimistic_Display_W_Bd.woff2\nCACHE (panel) GET 200 https://react.dev/fonts/Optimistic_Text_W_Rg.woff2\nCACHE (panel) GET 200 https://react.dev/fonts/Optimistic_Text_W_It.woff2\nCACHE (panel) GET 200 https://react.dev/fonts/Optimistic_Text_W_Md.woff2\nCACHE (panel) GET 200 https://react.dev/fonts/Optimistic_Text_W_Bd.woff2\nGET 200 https://react.dev/_next/static/chunks/webpack-95fc1f1713249e81.js 1682 ms\nGET 200 https://react.dev/_next/static/chunks/polyfills-42372ed130431b0a.js 1813 ms\nGET 200 https://react.dev/_next/static/chunks/framework-76ad44d61c11f057.js 2043 ms\nGET 200 https://react.dev/_next/static/chunks/main-8bc660a98b463b2d.js 2277 ms\nGET 200 https://react.dev/_next/static/chunks/pages/_app-6d7b64b3b21a9551.js 2342 ms\nGET 200 https://react.dev/_next/static/chunks/668-9be9de6fa7660277.js 2446 ms\nGET 200 https://react.dev/_next/static/chunks/pages/%5B%5B...markdownPath%5D%5D-3f4d3fa908e59b5a.js 2540 ms\nGET 200 https://react.dev/_next/static/chunks/928-22de2b840e40e9ed.js 2882 ms\nGET 200 https://react.dev/_next/static/FktEpVg7A3SOjIyUKbFBz/_buildManifest.js 2880 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_W_MdIt.woff2 1734 ms\nGET 200 https://react.dev/_next/static/FktEpVg7A3SOjIyUKbFBz/_ssgManifest.js 3370 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_W_SBdIt.woff2 2251 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_W_BdIt.woff2 2256 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_W_MdIt.woff2 2364 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_W_BdIt.woff2 2391 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Arbc_W_Md.woff2 2435 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Arbc_W_Bd.woff2 2522 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Arbc_W_SBd.woff2 2566 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Arbc_W_Rg.woff2 2608 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Arbc_W_Md.woff2 2674 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Arbc_W_Bd.woff2 2716 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Cyrl_W_SBd.woff2 2818 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Cyrl_W_Md.woff2 2822 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Cyrl_W_Rg.woff2 2922 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Cyrl_W_Bd.woff2 2926 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Cyrl_W_Md.woff2 2987 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Cyrl_W_Bd.woff2 3019 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Deva_W_Md.woff2 3088 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Deva_W_SBd.woff2 3170 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Deva_W_Bd.woff2 3250 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Deva_W_Rg.woff2 3342 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Deva_W_Md.woff2 3409 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Deva_W_Bd.woff2 3489 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Viet_W_Md.woff2 3536 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Viet_W_SBd.woff2 3577 ms\nGET 200 https://react.dev/fonts/Optimistic_Display_Viet_W_Bd.woff2 3629 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Viet_W_Rg.woff2 3667 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Viet_W_Md.woff2 3723 ms\nGET 200 https://react.dev/fonts/Optimistic_Text_Viet_W_Bd.woff2 3766 ms\nCACHE GET 200 https://react.dev/_next/static/css/f647474d5749a6d8.css 5539 ms\nGET 200 https://react.dev/apple-touch-icon.png 5628 ms\nGET 200 https://react.dev/favicon-32x32.png 5680 ms\nGET 200 https://react.dev/favicon-16x16.png 5736 ms\nGET 200 https://react.dev/site.webmanifest 5867 ms\nGET 200 https://react.dev/safari-pinned-tab.svg 5932 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fuwu.png&w=64&q=75 5999 ms\nCACHE (shared) GET 200 https://react.dev/_next/image?url=%2Fimages%2Fuwu.png&w=64&q=75\nCACHE (shared) GET 200 https://react.dev/_next/image?url=%2Fimages%2Fuwu.png&w=64&q=75\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fuwu.png&w=128&q=75 6080 ms\nCACHE (shared) GET 200 https://react.dev/_next/image?url=%2Fimages%2Fuwu.png&w=128&q=75\nCACHE (shared) GET 200 https://react.dev/_next/image?url=%2Fimages%2Fuwu.png&w=128&q=75\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_child.dark.png&w=640&q=75 6119 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_child.dark.png&w=828&q=75 6186 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_child.png&w=640&q=75 6255 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_child.png&w=828&q=75 6324 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_child_clicked.dark.png&w=640&q=75 6395 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_child_clicked.dark.png&w=828&q=75 6471 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_child_clicked.png&w=640&q=75 6552 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_child_clicked.png&w=828&q=75 6640 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_parent.dark.png&w=640&q=75 6710 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_parent.dark.png&w=828&q=75 6777 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_parent.png&w=640&q=75 6841 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_parent.png&w=828&q=75 6915 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_parent_clicked.dark.png&w=640&q=75 6988 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_parent_clicked.dark.png&w=828&q=75 7052 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_parent_clicked.png&w=640&q=75 7120 ms\nGET 200 https://react.dev/_next/image?url=%2Fimages%2Fdocs%2Fdiagrams%2Fsharing_data_parent_clicked.png&w=828&q=75 7188 ms\nGET 200 https://react.dev/images/meta-gradient.png 5677 ms\nGET 200 https://react.dev/images/g_arrow.png 5741 ms\nGET 200 https://react.dev/images/meta-gradient-dark.png 5803 ms\nGET 200 https://react.dev/_next/static/css/f647474d5749a6d8.css 7501 ms",
+          "finalAddress": "https://react.dev/cdoc",
+          "elapsedMs": 13502,
+          "outcome": "unreadable"
+        },
+        {
+          "site": "swift",
+          "mode": "proxy",
+          "format": "svg",
+          "url": "https://docs.swift.org/latest/documentation/the-swift-programming-language/",
+          "checks": {
+            "reading": {
+              "outcome": "failed",
+              "error": "Page unavailable",
+              "elapsedMs": 296
+            }
+          },
+          "browserErrors": [],
+          "consoleErrors": [],
+          "directClientRequests": [],
+          "clientRequestFailures": [],
+          "nativeHttpErrors": [],
+          "socketStates": [],
+          "encryptedDownBytes": 232,
+          "encryptedUpBytes": 328,
+          "sandbox": "allow-scripts",
+          "panelStatus": "The upstream returned an unsupported content encoding\nConnected",
+          "runtimeConsole": "8:38:08 AM The upstream returned an unsupported content encoding",
+          "network": "No requests yet.",
+          "finalAddress": "https://docs.swift.org/latest/documentation/the-swift-programming-language/",
+          "elapsedMs": 3434,
+          "outcome": "unreadable"
+        },
+        {
+          "site": "pixijs",
+          "mode": "proxy",
+          "format": "svg",
+          "url": "https://pixijs.com/8.x/guides/getting-started/intro",
+          "checks": {
+            "reading": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "Introduction",
+                "contentMs": 2491
+              },
+              "elapsedMs": 612
+            },
+            "styling": {
+              "outcome": "failed",
+              "error": "Expected native body font Roboto, observed \"Times New Roman\"",
+              "elapsedMs": 10018
+            },
+            "retainedContent": {
+              "outcome": "passed",
+              "detail": {
+                "textCharacters": 3228
+              },
+              "elapsedMs": 12
+            },
+            "selection": {
+              "outcome": "passed",
+              "detail": {
+                "selectedCharacters": 25
+              },
+              "elapsedMs": 570
+            },
+            "navigation": {
+              "outcome": "passed",
+              "detail": {
+                "heading": "Quick Start"
+              },
+              "elapsedMs": 882
+            },
+            "back": {
+              "outcome": "passed",
+              "detail": "Original article restored",
+              "elapsedMs": 589
+            },
+            "search": {
+              "outcome": "failed",
+              "error": "locator.fill: Timeout 10000ms exceeded.",
+              "elapsedMs": 10837
+            }
+          },
+          "browserErrors": [
+            "Loading chunk 5062 failed.",
+            "Loading chunk 5062 failed."
+          ],
+          "consoleErrors": [
+            "Loading the script 'https://pixijs.com/assets/js/5062.dadee2b0.js' violates the following Content Security Policy directive: \"script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:[omitted] Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+            "Loading the script 'https://pixijs.com/assets/js/5062.dadee2b0.js' violates the following Content Security Policy directive: \"script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:[omitted] Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked."
+          ],
+          "directClientRequests": [],
+          "clientRequestFailures": [
+            {
+              "url": "https://pixijs.com/assets/js/5062.dadee2b0.js",
+              "error": "csp"
+            },
+            {
+              "url": "https://pixijs.com/assets/js/5062.dadee2b0.js",
+              "error": "csp"
+            }
+          ],
+          "nativeHttpErrors": [],
+          "socketStates": [],
+          "encryptedDownBytes": 5033969,
+          "encryptedUpBytes": 55798,
+          "initial": {
+            "title": "Introduction | PixiJS",
+            "textCharacters": 3228,
+            "headings": [
+              "Introduction",
+              "Features ⚡️​",
+              "What Is PixiJS?​",
+              "What Makes PixiJS Special​",
+              "Why Choose PixiJS?​",
+              "Who Is PixiJS For?​",
+              "Get Started​"
+            ],
+            "styleSheets": 0,
+            "bodyFont": "\"Times New Roman\"",
+            "images": {
+              "total": 9,
+              "loaded": 5
+            },
+            "nestedFrames": 0
+          },
+          "styleDiagnostics": {
+            "sheets": 1,
+            "font": "\"Times New Roman\"",
+            "links": [
+              {
+                "loaded": true,
+                "href": "data:"
+              }
+            ]
+          },
+          "settled": {
+            "title": "Introduction | PixiJS",
+            "textCharacters": 3228,
+            "headings": [
+              "Introduction",
+              "Features ⚡️​",
+              "What Is PixiJS?​",
+              "What Makes PixiJS Special​",
+              "Why Choose PixiJS?​",
+              "Who Is PixiJS For?​",
+              "Get Started​"
+            ],
+            "styleSheets": 1,
+            "bodyFont": "\"Times New Roman\""
+          },
+          "selectionGeometry": {
+            "box": {
+              "x": 14,
+              "y": 529,
+              "width": 1412,
+              "height": 22
+            },
+            "point": {
+              "x": 0,
+              "y": 0,
+              "width": 213,
+              "height": 22
+            },
+            "prose": "2D · guides · Getting Started"
+          },
+          "searchDiagnostics": {
+            "inputs": [
+              {
+                "type": "text",
+                "placeholder": "Search",
+                "label": "Search",
+                "readonly": true
+              }
+            ],
+            "dialogs": [
+              {
+                "open": false,
+                "text": ""
+              },
+              {
+                "open": false,
+                "text": ""
+              },
+              {
+                "open": false,
+                "text": "escSearching PixiJSGetting startedExamplesTutorialsPlayground↑↓ navigate↵ openesc close"
+              }
+            ]
+          },
+          "sandbox": "allow-scripts",
+          "panelStatus": "https://pixijs.com/8.x/guides/getting-started/intro\nConnected",
+          "runtimeConsole": "Console is clear.",
+          "network": "GET 200 https://pixijs.com/8.x/guides/getting-started/intro 262 ms\nGET 200 https://pixijs.com/images/favicon.png 60 ms\nGET 200 https://pixijs.com/fonts/outfit-latin-wght.woff2 159 ms\nGET 200 https://pixijs.com/fonts/roboto-latin-wght.woff2 254 ms\nGET 200 https://www.googletagmanager.com/gtag/js?id=G-YXHQVRJ694 850 ms\nGET 200 https://pixijs.com/assets/js/runtime~main.f7297763.js 1069 ms\nCACHE (panel) GET 200 https://pixijs.com/fonts/outfit-latin-wght.woff2\nCACHE (panel) GET 200 https://pixijs.com/fonts/roboto-latin-wght.woff2\nGET 200 https://pixijs.com/images/logo.svg 1207 ms\nGET 200 https://pixijs.com/fonts/roboto-latin-ext-wght.woff2 201 ms\nGET 200 https://pixijs.com/fonts/roboto-mono-latin-ext-wght.woff2 280 ms\nGET 200 https://pixijs.com/fonts/roboto-mono-latin-wght.woff2 755 ms\nGET 200 https://pixijs.com/assets/js/main.187a2fda.js 1871 ms\nGET 200 https://pixijs.com/images/logo-p.svg 2120 ms\nGET 200 https://files.pixijs.download/branding/pixijs-logo-transparent-dark.svg?v=1 2304 ms\nGET 200 https://img.shields.io/npm/v/pixi.js.svg 2450 ms\nGET 200 https://github.com/pixijs/pixijs/actions/workflows/release.yml/badge.svg 2713 ms\nGET 200 https://opencollective.com/pixijs/tiers/badge.svg 2948 ms\nGET 200 https://img.shields.io/badge/chat-discord-blue?style=flat&logo=discord 3011 ms\nCACHE GET 200 https://pixijs.com/images/logo.svg 3039 ms\nCACHE (shared) GET 200 https://pixijs.com/images/logo.svg\nCACHE (shared) GET 200 https://pixijs.com/images/logo.svg\nCACHE GET 200 https://pixijs.com/images/logo-p.svg 3058 ms\nGET 200 https://files.pixijs.download/branding/pixijs-logo-transparent-dark.svg?v=1 3096 ms\nCACHE GET 200 https://img.shields.io/npm/v/pixi.js.svg 3116 ms\nGET 200 https://github.com/pixijs/pixijs/actions/workflows/release.yml/badge.svg 3157 ms\nCACHE GET 200 https://opencollective.com/pixijs/tiers/badge.svg 3179 ms\nCACHE GET 200 https://img.shields.io/badge/chat-discord-blue?style=flat&logo=discord 3199 ms\nGET 404 https://pixijs.com/assets/css/%22data:image/svg+xml;utf8,%3Csvg%20xmlns=/%22http://www.w3.org/2000/svg/%22%20x=/%220px/%22%20y=/%220px/%22%20viewBox=/%220%200%20256%20256/%22%3E%3Cg%3E%3Cg%3E%3Cpolygon%20points=/%2279.093,0%2048.907,30.187%20146.72,128%2048.907,225.813%2079.093,256%20207.093,128/%22/%3E%3C/g%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3C/svg%3E%22 2144 ms\nGET 404 https://pixijs.com/assets/css/%22data:image/svg+xml;utf8,%3Csvg%20xmlns=/%22http://www.w3.org/2000/svg/%22%20width=/%2216px/%22%20height=/%2216px/%22%20viewBox=/%220%200%2024%2024/%22%3E%3Cpath%20fill=/%22rgba(0,0,0,0.5 2179 ms\nGET 404 https://pixijs.com/assets/css/%22data:image/svg+xml;utf8,%3Csvg%20fill=/%22currentColor/%22%20xmlns=/%22http://www.w3.org/2000/svg/%22%20viewBox=/%220%200%2016%2016/%22%20height=/%2216px/%22%20width=/%2216px/%22%3E%3Cpath%20d=/%22M6.02945,10.20327a4.17382,4.17382,0,1,1,4.17382-4.17382A4.15609,4.15609,0,0,1,6.02945,10.20327Zm9.69195,4.2199L10.8989,9.59979A5.88021,5.88021,0,0,0,12.058,6.02856,6.00467,6.00467,0,1,0,9.59979,10.8989l4.82338,4.82338a.89729.89729,0,0,0,1.29912,0,.89749.89749,0,0,0-.00087-1.29909Z/%22%20/%3E%3C/svg%3E%22 2214 ms\nGET 404 https://pixijs.com/assets/css/%22data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23000'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='m6%209%206%206%206-6'/%3E%3C/svg%3E%22 2245 ms\nGET 200 https://pixijs.com/images/clay/light/clay/capsule-rose.webp 2288 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/capsule-rose.webp 2341 ms\nGET 200 https://pixijs.com/images/clay/light/clay/cube-pink.webp 2393 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/cube-pink.webp 2444 ms\nGET 200 https://pixijs.com/images/clay/light/clay/cube-violet.webp 2487 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/cube-violet.webp 2557 ms\nGET 200 https://pixijs.com/images/clay/light/clay/cylinder-cyan.webp 2610 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/cylinder-cyan.webp 2661 ms\nGET 200 https://pixijs.com/images/clay/light/clay/octahedron-violet.webp 2709 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/octahedron-violet.webp 2757 ms\nGET 200 https://pixijs.com/images/clay/light/clay/pyramid-cyan.webp 2801 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/pyramid-cyan.webp 2848 ms\nGET 200 https://pixijs.com/images/clay/light/clay/pyramid-pink.webp 2889 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/pyramid-pink.webp 2931 ms\nGET 200 https://pixijs.com/images/clay/light/clay/sphere-cyan.webp 2974 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/sphere-cyan.webp 3014 ms\nGET 200 https://pixijs.com/images/clay/light/clay/sphere-pink.webp 3065 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/sphere-pink.webp 3107 ms\nGET 200 https://pixijs.com/images/clay/light/clay/sphere-violet.webp 3171 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/sphere-violet.webp 3213 ms\nGET 200 https://pixijs.com/images/clay/light/clay/torus-cyan.webp 3288 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/torus-cyan.webp 3339 ms\nGET 200 https://pixijs.com/images/clay/light/clay/torus-pink.webp 3383 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/torus-pink.webp 3466 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-blue-fill.png 3528 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-blue-stroke.png 3568 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-green-fill.png 3617 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-green-stroke.png 3678 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-orange-fill.png 3743 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-orange-stroke.png 3798 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-pink-fill.png 3851 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-pink-stroke.png 3909 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-purple-fill.png 3980 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-purple-stroke.png 4017 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-blue-fill.png 4063 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-blue-stroke.png 4111 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-green-fill.png 4168 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-green-stroke.png 4220 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-orange-fill.png 4309 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-orange-stroke.png 4355 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-pink-fill.png 4429 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-pink-stroke.png 4472 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-purple-fill.png 4524 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-purple-stroke.png 4583 ms\nGET 200 https://pixijs.com/assets/standard/square/square-blue-fill.png 4632 ms\nGET 200 https://pixijs.com/assets/standard/square/square-blue-stroke.png 4679 ms\nGET 200 https://pixijs.com/assets/standard/square/square-green-fill.png 4743 ms\nGET 200 https://pixijs.com/assets/standard/square/square-green-stroke.png 4789 ms\nGET 200 https://pixijs.com/assets/standard/square/square-orange-fill.png 4857 ms\nGET 200 https://pixijs.com/assets/standard/square/square-orange-stroke.png 4900 ms\nGET 200 https://pixijs.com/assets/standard/square/square-pink-fill.png 4951 ms\nGET 200 https://pixijs.com/assets/standard/square/square-pink-stroke.png 4995 ms\nGET 200 https://pixijs.com/assets/standard/square/square-purple-fill.png 5046 ms\nGET 200 https://pixijs.com/assets/standard/square/square-purple-stroke.png 5090 ms\nGET 200 https://pixijs.com/assets/standard/star/star-blue-fill.png 5135 ms\nGET 200 https://pixijs.com/assets/standard/star/star-blue-stroke.png 5181 ms\nGET 200 https://pixijs.com/assets/standard/star/star-green-fill.png 5233 ms\nGET 200 https://pixijs.com/assets/standard/star/star-green-stroke.png 5289 ms\nGET 200 https://pixijs.com/assets/standard/star/star-orange-fill.png 5336 ms\nGET 200 https://pixijs.com/assets/standard/star/star-orange-stroke.png 5382 ms\nGET 200 https://pixijs.com/assets/standard/star/star-pink-fill.png 5433 ms\nGET 200 https://pixijs.com/assets/standard/star/star-pink-stroke.png 5480 ms\nGET 200 https://pixijs.com/assets/standard/star/star-purple-fill.png 5537 ms\nGET 200 https://pixijs.com/assets/standard/star/star-purple-stroke.png 5588 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-blue-fill.png 5634 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-blue-stroke.png 5702 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-green-fill.png 5747 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-green-stroke.png 5794 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-orange-fill.png 5841 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-orange-stroke.png 5885 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-pink-fill.png 5930 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-pink-stroke.png 5992 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-purple-fill.png 6052 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-purple-stroke.png 6099 ms\nGET 200 https://pixijs.com/assets/css/styles.1a1cd864.css 7347 ms\nGET 200 https://pixijs.com/8.x/guides/getting-started/quick-start 126 ms\nGET 200 https://pixijs.com/8.x/guides/getting-started/intro 125 ms\nCACHE GET 200 https://pixijs.com/images/favicon.png 51 ms\nCACHE GET 200 https://pixijs.com/fonts/outfit-latin-wght.woff2 145 ms\nGET 200 https://pixijs.com/fonts/roboto-latin-wght.woff2 239 ms\nGET 200 https://www.googletagmanager.com/gtag/js?id=G-YXHQVRJ694 805 ms\nCACHE (panel) GET 200 https://pixijs.com/fonts/outfit-latin-wght.woff2\nCACHE (panel) GET 200 https://pixijs.com/fonts/roboto-latin-wght.woff2\nGET 200 https://pixijs.com/assets/js/runtime~main.f7297763.js 1052 ms\nCACHE GET 200 https://pixijs.com/fonts/roboto-latin-ext-wght.woff2 227 ms\nCACHE GET 200 https://pixijs.com/assets/js/main.187a2fda.js 1646 ms\nCACHE GET 200 https://pixijs.com/fonts/roboto-mono-latin-ext-wght.woff2 694 ms\nCACHE GET 200 https://pixijs.com/images/logo.svg 1852 ms\nCACHE GET 200 https://pixijs.com/fonts/roboto-mono-latin-wght.woff2 887 ms\nGET 200 https://pixijs.com/images/logo-p.svg 1925 ms\nGET 200 https://files.pixijs.download/branding/pixijs-logo-transparent-dark.svg?v=1 1977 ms\nCACHE GET 200 https://img.shields.io/npm/v/pixi.js.svg 2003 ms\nGET 200 https://github.com/pixijs/pixijs/actions/workflows/release.yml/badge.svg 2046 ms\nCACHE GET 200 https://opencollective.com/pixijs/tiers/badge.svg 2072 ms\nCACHE GET 200 https://img.shields.io/badge/chat-discord-blue?style=flat&logo=discord 2103 ms\nCACHE GET 200 https://pixijs.com/images/logo.svg 2139 ms\nCACHE (shared) GET 200 https://pixijs.com/images/logo.svg\nCACHE (shared) GET 200 https://pixijs.com/images/logo.svg\nCACHE GET 200 https://pixijs.com/images/logo-p.svg 2167 ms\nGET 200 https://files.pixijs.download/branding/pixijs-logo-transparent-dark.svg?v=1 2215 ms\nCACHE GET 200 https://img.shields.io/npm/v/pixi.js.svg 2244 ms\nGET 200 https://github.com/pixijs/pixijs/actions/workflows/release.yml/badge.svg 2286 ms\nCACHE GET 200 https://opencollective.com/pixijs/tiers/badge.svg 2315 ms\nCACHE GET 200 https://img.shields.io/badge/chat-discord-blue?style=flat&logo=discord 2347 ms\nGET 404 https://pixijs.com/assets/css/%22data:image/svg+xml;utf8,%3Csvg%20xmlns=/%22http://www.w3.org/2000/svg/%22%20x=/%220px/%22%20y=/%220px/%22%20viewBox=/%220%200%20256%20256/%22%3E%3Cg%3E%3Cg%3E%3Cpolygon%20points=/%2279.093,0%2048.907,30.187%20146.72,128%2048.907,225.813%2079.093,256%20207.093,128/%22/%3E%3C/g%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3Cg%3E%3C/g%3E%3C/svg%3E%22 1437 ms\nGET 404 https://pixijs.com/assets/css/%22data:image/svg+xml;utf8,%3Csvg%20xmlns=/%22http://www.w3.org/2000/svg/%22%20width=/%2216px/%22%20height=/%2216px/%22%20viewBox=/%220%200%2024%2024/%22%3E%3Cpath%20fill=/%22rgba(0,0,0,0.5 1482 ms\nGET 404 https://pixijs.com/assets/css/%22data:image/svg+xml;utf8,%3Csvg%20fill=/%22currentColor/%22%20xmlns=/%22http://www.w3.org/2000/svg/%22%20viewBox=/%220%200%2016%2016/%22%20height=/%2216px/%22%20width=/%2216px/%22%3E%3Cpath%20d=/%22M6.02945,10.20327a4.17382,4.17382,0,1,1,4.17382-4.17382A4.15609,4.15609,0,0,1,6.02945,10.20327Zm9.69195,4.2199L10.8989,9.59979A5.88021,5.88021,0,0,0,12.058,6.02856,6.00467,6.00467,0,1,0,9.59979,10.8989l4.82338,4.82338a.89729.89729,0,0,0,1.29912,0,.89749.89749,0,0,0-.00087-1.29909Z/%22%20/%3E%3C/svg%3E%22 1521 ms\nGET 404 https://pixijs.com/assets/css/%22data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23000'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='m6%209%206%206%206-6'/%3E%3C/svg%3E%22 1562 ms\nGET 200 https://pixijs.com/images/clay/light/clay/capsule-rose.webp 1635 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/capsule-rose.webp 1723 ms\nCACHE GET 200 https://pixijs.com/images/clay/light/clay/cube-pink.webp 1968 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/cube-pink.webp 2052 ms\nGET 200 https://pixijs.com/images/clay/light/clay/cube-violet.webp 2132 ms\nCACHE GET 200 https://pixijs.com/images/clay/dark/clay/cube-violet.webp 2196 ms\nGET 200 https://pixijs.com/images/clay/light/clay/cylinder-cyan.webp 2262 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/cylinder-cyan.webp 2336 ms\nGET 200 https://pixijs.com/images/clay/light/clay/octahedron-violet.webp 2406 ms\nCACHE GET 200 https://pixijs.com/images/clay/dark/clay/octahedron-violet.webp 2479 ms\nCACHE GET 200 https://pixijs.com/images/clay/light/clay/pyramid-cyan.webp 2551 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/pyramid-cyan.webp 2636 ms\nGET 200 https://pixijs.com/images/clay/light/clay/pyramid-pink.webp 2742 ms\nCACHE GET 200 https://pixijs.com/images/clay/dark/clay/pyramid-pink.webp 2805 ms\nCACHE GET 200 https://pixijs.com/images/clay/light/clay/sphere-cyan.webp 2888 ms\nCACHE GET 200 https://pixijs.com/images/clay/dark/clay/sphere-cyan.webp 2949 ms\nGET 200 https://pixijs.com/images/clay/light/clay/sphere-pink.webp 3005 ms\nCACHE GET 200 https://pixijs.com/images/clay/dark/clay/sphere-pink.webp 3064 ms\nCACHE GET 200 https://pixijs.com/images/clay/light/clay/sphere-violet.webp 3130 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/sphere-violet.webp 3188 ms\nCACHE GET 200 https://pixijs.com/images/clay/light/clay/torus-cyan.webp 3273 ms\nCACHE GET 200 https://pixijs.com/images/clay/dark/clay/torus-cyan.webp 3303 ms\nCACHE GET 200 https://pixijs.com/images/clay/light/clay/torus-pink.webp 3366 ms\nGET 200 https://pixijs.com/images/clay/dark/clay/torus-pink.webp 3438 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-blue-fill.png 3518 ms\nCACHE GET 200 https://pixijs.com/assets/standard/circle/circle-blue-stroke.png 3588 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-green-fill.png 3664 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-green-stroke.png 3739 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-orange-fill.png 3805 ms\nCACHE GET 200 https://pixijs.com/assets/standard/circle/circle-orange-stroke.png 3869 ms\nCACHE GET 200 https://pixijs.com/assets/standard/circle/circle-pink-fill.png 3935 ms\nCACHE GET 200 https://pixijs.com/assets/standard/circle/circle-pink-stroke.png 4004 ms\nCACHE GET 200 https://pixijs.com/assets/standard/circle/circle-purple-fill.png 4072 ms\nGET 200 https://pixijs.com/assets/standard/circle/circle-purple-stroke.png 4137 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-blue-fill.png 4208 ms\nCACHE GET 200 https://pixijs.com/assets/standard/pentagon/pentagon-blue-stroke.png 4268 ms\nCACHE GET 200 https://pixijs.com/assets/standard/pentagon/pentagon-green-fill.png 4335 ms\nCACHE GET 200 https://pixijs.com/assets/standard/pentagon/pentagon-green-stroke.png 4400 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-orange-fill.png 4472 ms\nCACHE GET 200 https://pixijs.com/assets/standard/pentagon/pentagon-orange-stroke.png 4544 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-pink-fill.png 4616 ms\nCACHE GET 200 https://pixijs.com/assets/standard/pentagon/pentagon-pink-stroke.png 4698 ms\nGET 200 https://pixijs.com/assets/standard/pentagon/pentagon-purple-fill.png 4862 ms\nCACHE GET 200 https://pixijs.com/assets/standard/pentagon/pentagon-purple-stroke.png 4934 ms\nCACHE GET 200 https://pixijs.com/assets/standard/square/square-blue-fill.png 5016 ms\nCACHE GET 200 https://pixijs.com/assets/standard/square/square-blue-stroke.png 5076 ms\nCACHE GET 200 https://pixijs.com/assets/standard/square/square-green-fill.png 5199 ms\nCACHE GET 200 https://pixijs.com/assets/standard/square/square-green-stroke.png 5277 ms\nCACHE GET 200 https://pixijs.com/assets/standard/square/square-orange-fill.png 5364 ms\nCACHE GET 200 https://pixijs.com/assets/standard/square/square-orange-stroke.png 5442 ms\nCACHE GET 200 https://pixijs.com/assets/standard/square/square-pink-fill.png 5526 ms\nCACHE GET 200 https://pixijs.com/assets/standard/square/square-pink-stroke.png 5584 ms\nCACHE GET 200 https://pixijs.com/assets/standard/square/square-purple-fill.png 5659 ms\nGET 200 https://pixijs.com/assets/standard/square/square-purple-stroke.png 5782 ms\nGET 200 https://pixijs.com/assets/standard/star/star-blue-fill.png 5874 ms\nCACHE GET 200 https://pixijs.com/assets/standard/star/star-blue-stroke.png 5951 ms\nGET 200 https://pixijs.com/assets/standard/star/star-green-fill.png 6038 ms\nGET 200 https://pixijs.com/assets/standard/star/star-green-stroke.png 6114 ms\nGET 200 https://pixijs.com/assets/standard/star/star-orange-fill.png 6216 ms\nGET 200 https://pixijs.com/assets/standard/star/star-orange-stroke.png 6287 ms\nCACHE GET 200 https://pixijs.com/assets/standard/star/star-pink-fill.png 6366 ms\nGET 200 https://pixijs.com/assets/standard/star/star-pink-stroke.png 6464 ms\nGET 200 https://pixijs.com/assets/standard/star/star-purple-fill.png 6538 ms\nGET 200 https://pixijs.com/assets/standard/star/star-purple-stroke.png 6631 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-blue-fill.png 6741 ms\nCACHE GET 200 https://pixijs.com/assets/standard/triangle/triangle-blue-stroke.png 6850 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-green-fill.png 6939 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-green-stroke.png 7006 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-orange-fill.png 7085 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-orange-stroke.png 7155 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-pink-fill.png 7229 ms\nGET 200 https://pixijs.com/assets/standard/triangle/triangle-pink-stroke.png 7306 ms\nCACHE GET 200 https://pixijs.com/assets/standard/triangle/triangle-purple-fill.png 7403 ms\nCACHE GET 200 https://pixijs.com/assets/standard/triangle/triangle-purple-stroke.png 7478 ms\nCACHE GET 200 https://pixijs.com/assets/css/styles.1a1cd864.css 8584 ms",
+          "finalAddress": "https://pixijs.com/8.x/guides/getting-started/intro",
+          "elapsedMs": 29406,
+          "outcome": "partial"
+        }
+      ],
+      "serverBinarySha256": "cea1386432acd6aecf841a8988e5518e5c1dcbbe9dca051273be9bd8b770319e",
+      "chromium": "156.0.8078.4",
+      "summary": {
+        "rows": 3,
+        "usable": 0,
+        "partial": 1,
+        "unreadable": 2,
+        "proxyDirectRequestRows": 0
+      }
+    }
+  ]
+}

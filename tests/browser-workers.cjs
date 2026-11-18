@@ -40,6 +40,19 @@ async function main() {
   ]);
   assert.match(loaded.exports.parseClassicWorkerImports('importScripts(name)', 'https://docs.example/w.js').error, /static string/);
   assert.match(loaded.exports.parseClassicWorkerImports('importScripts("https://outside.example/x.js")', 'https://docs.example/w.js').error, /worker origin/);
+  const bundleWorker = `(()=>{const r={f:{}};const loaded={};
+    r.p="/";r.u=id=>"chunks/"+id+".hash.js";
+    r.f.i=(id,promises)=>{loaded[id]||importScripts(r.p+r.u(id))};
+    r.e("607");r.e(241);
+  })();`;
+  const workerBase = 'https://docs.example/assets/w.js';
+  const parsedBundle = loaded.exports.parseClassicWorkerImports(bundleWorker, workerBase);
+  assert.equal(parsedBundle.error, '');
+  assert.deepEqual(parsedBundle.calls.map(({ urls, computed }) => ({ urls, computed })), [{
+    computed: true, urls: ['https://docs.example/chunks/607.hash.js', 'https://docs.example/chunks/241.hash.js'],
+  }]);
+  assert.match(loaded.exports.parseClassicWorkerImports(bundleWorker.replace('r.p="/"','r.p="https://outside.example/"'), workerBase).error, /worker origin/);
+  assert.match(loaded.exports.parseClassicWorkerImports(bundleWorker.replace('r.e("607");r.e(241)', 'r.e(runtimeId)'), workerBase).error, /static string/);
   const moduleImports = loaded.exports.parseModuleWorkerImports(
     'import { value } from "./dep.js"; export { value as named } from \'./re-export.js\'; import \'./side-effect.js\';',
     'https://docs.example/modules/main.js',
@@ -50,8 +63,14 @@ async function main() {
     'https://docs.example/modules/re-export.js',
     'https://docs.example/modules/side-effect.js',
   ]);
-  assert.match(loaded.exports.parseModuleWorkerImports('await import("./lazy.js")', 'https://docs.example/main.js').error, /Dynamic import/);
-  assert.match(loaded.exports.parseModuleWorkerImports('console.log(import.meta.url)', 'https://docs.example/main.js').error, /import.meta/);
+  const lazy = loaded.exports.parseModuleWorkerImports('await import("./lazy.js")', 'https://docs.example/main.js');
+  assert.equal(lazy.error, '');
+  assert.equal(lazy.imports[0].dynamic, true);
+  assert.equal(lazy.imports[0].url, 'https://docs.example/lazy.js');
+  assert.match(loaded.exports.parseModuleWorkerImports('import(computed)', 'https://docs.example/main.js').error, /literal/);
+  const meta = loaded.exports.parseModuleWorkerImports('console.log(import.meta.url)', 'https://docs.example/main.js');
+  assert.equal(meta.error, '');
+  assert.match(meta.source, /https:\/\/docs.example\/main.js/);
   assert.match(loaded.exports.parseModuleWorkerImports('import value from "bare-package"', 'https://docs.example/main.js').error, /Bare/);
   assert.match(loaded.exports.parseModuleWorkerImports('import value from "./data.json" with {type:"json"}', 'https://docs.example/main.js').error, /import attributes/);
   const moduleGraph = {
@@ -69,11 +88,26 @@ async function main() {
   const listeners = [];
   const workerMessages = [];
   const imports = [];
+  const bootTimers = [];
+  const receivedEarly = [];
+  let bootHandlersInstalled = false;
   const self = {
     addEventListener(type, callback) { if (type === 'message') listeners.push(callback); },
     postMessage(message) { workerMessages.push(message); },
-    importScripts(url) { imports.push(url); },
-    dispatchEvent(event) { for (const callback of listeners) callback(event); return true; },
+    importScripts(url) {
+      imports.push(url);
+      if (imports.length === 1) queueMicrotask(() => {
+        bootHandlersInstalled = true;
+        listeners.push(event => receivedEarly.push(event));
+      });
+    },
+    dispatchEvent(event) {
+      for (const callback of listeners) {
+        callback(event);
+        if (event.stopped) break;
+      }
+      return true;
+    },
   };
   const context = {
     self,
@@ -84,7 +118,7 @@ async function main() {
     Headers,
     AbortController,
     DOMException,
-    Event: class TestEvent extends Event { stopImmediatePropagation() {} },
+    Event: class TestEvent extends Event { stopImmediatePropagation() { this.stopped = true; } },
     EventTarget,
     MessageEvent: class MessageEvent { constructor(type, init = {}) { this.type = type; Object.assign(this, init); } },
     importScripts: url => imports.push(url),
@@ -97,17 +131,32 @@ async function main() {
     Number,
     TypeError,
     Error,
+    setTimeout: callback => bootTimers.push(callback),
   };
   vm.runInNewContext(workerRuntime, context);
 
   const sent = [];
   const bridge = { postMessage(message) { sent.push(message); }, start() {} };
   self.dispatchEvent({ type: 'message', data: { type: 'eya-init', base: 'https://docs.example/worker.js' }, ports: [bridge], stopImmediatePropagation() {} });
-  self.dispatchEvent({ type: 'message', data: { type: 'eya-source', source: '/* worker source */', base: 'https://docs.example/worker.js', sources: { 'https://docs.example/dependency.js': '/* dependency */' } }, ports: [], stopImmediatePropagation() {} });
+  self.dispatchEvent({ type: 'message', data: 'first' });
+  self.dispatchEvent({ type: 'message', data: { type: 'eya-source', source: '/* worker source */', base: 'https://docs.example/worker.js', sources: { 'https://docs.example/dependency.js': '/* dependency */' }, aliases: { 'https://docs.example/original.js': 'https://docs.example/dependency.js' } }, ports: [], stopImmediatePropagation() {} });
+  const earlyPort = { postMessage() {} };
+  self.dispatchEvent({ type: 'message', data: 'early', ports: [earlyPort], origin: 'null' });
   assert.equal(imports.length, 1, 'proxied classic worker source was not imported');
+  assert.equal(workerMessages.length, 0, 'worker replay ran before startup microtasks');
+  await Promise.resolve();
+  assert.equal(bootHandlersInstalled, true);
+  assert.equal(bootTimers.length, 1);
+  self.dispatchEvent({ type: 'message', data: 'last queued' });
+  assert.deepEqual(receivedEarly, []);
+  bootTimers.shift()();
+  assert.deepEqual(receivedEarly.map(event => event.data), ['first', 'early', 'last queued']);
+  assert.equal(receivedEarly[1]?.ports[0], earlyPort);
+
   assert.equal(workerMessages.at(-1).type, 'eya-worker-ready');
-  self.importScripts('https://docs.example/dependency.js');
-  assert.equal(imports.length, 2, 'preloaded importScripts dependency was not loaded synchronously');
+  self.importScripts('https://docs.example/original.js');
+  assert.equal(imports.length, 2, 'preloaded importScripts dependency was not loaded synchronously through its original URL');
+  assert.equal(context.__eyaLocation().origin, 'https://docs.example');
   assert.throws(() => self.importScripts('https://outside.example/blocked.js'), /not preloaded/);
 
   const responsePromise = self.fetch('/api/data');
@@ -178,6 +227,7 @@ async function main() {
   assert.equal(xhrAbortRequest.url, 'https://docs.example/slow-xhr');
 
   assert.throws(() => { const xhr = new self.XMLHttpRequest(); xhr.open('GET', '/sync', false); }, /Synchronous XHR/);
+  assert.throws(() => { const xhr = new self.XMLHttpRequest(); xhr.open('GET', '/mime'); xhr.overrideMimeType('text/plain'); }, { name: 'NotSupportedError' });
   console.log('Classic worker bootstrap, proxied fetch and XHR, response events, and cancellation checks passed.');
 }
 

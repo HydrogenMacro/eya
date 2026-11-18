@@ -1,0 +1,55 @@
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const { fixture, KEY } = require('./continuity-fixture.cjs');
+const { Peer } = require('./workspace-protocol.cjs');
+
+(async () => {
+  const f = await fixture(); let other, control;
+  try {
+    const page = await f.client({ type: 'svg' }), answers = [];
+    page.__dialogHandler = dialog => dialog.type() === 'prompt' ? dialog.accept(answers.shift() || '') : dialog.accept();
+    const manager = page.locator('#workspaces-dialog');
+    const entry = id => manager.locator(`[data-workspace-id="${id}"]`);
+    const open = async () => { if (!await manager.isVisible()) await f.manage(page); await manager.locator('[data-workspace-id]').first().waitFor(); };
+    await open(); answers.push('Project'); await manager.getByRole('button', { name: 'New workspace', exact: true }).click();
+    await page.waitForFunction(() => EyaWorkspaces.getState().workspace.name === 'Project'); await manager.waitFor({ state: 'hidden' });
+    const project = await page.evaluate(() => EyaWorkspaces.getState().workspace.id);
+    await open(); answers.push('Project renamed'); await entry(project).getByRole('button', { name: 'Rename', exact: true }).click();
+    await page.waitForFunction(() => EyaWorkspaces.getState().workspace.name === 'Project renamed');
+    answers.push('Copy'); await entry(project).getByRole('button', { name: 'Save as', exact: true }).click();
+    const copy = await manager.locator('[data-workspace-id]').filter({ has: page.locator(':scope > span').filter({ hasText: /^Copy ·/ }) }).getAttribute('data-workspace-id');
+    assert.equal(await page.evaluate(() => EyaWorkspaces.getState().workspace.name), 'Project renamed', 'Save as does not implicitly select the copy');
+    await manager.getByRole('button', { name: 'Close workspaces', exact: true }).click();
+    const files = await page.evaluate(() => EyaPanels.create('files'));
+    await page.evaluate(({ files, cwd }) => EyaPanels.call(files, 'navigate', cwd), { files, cwd: path.join(f.files, 'folder') }); await f.saved(page);
+    await open();
+    assert.equal(await manager.getByRole('combobox').count(), 0, 'Moves no longer use a destination dropdown');
+    assert.equal(await manager.getByText('Active sessions · all workspaces', { exact: true }).count(), 0);
+    await manager.locator(`[data-tab-id="${files}"]`).dragTo(entry(copy));
+    await page.waitForFunction(id => !EyaPanels.layout().some(group => group.panels.includes(id)), files);
+    const moved = await f.snapshot();
+    assert.equal(moved.workspaces.find(workspace => workspace.id === copy).tabs[0].config.cwd, path.join(f.files, 'folder'));
+    assert.equal(moved.workspaces.find(workspace => workspace.id === project).tabs.length, 0);
+    await entry(copy).getByRole('button', { name: 'Open', exact: true }).click();
+    await manager.waitFor({ state: 'hidden' });
+    assert.equal(await page.evaluate(id => EyaPanels.call(id, 'getPath'), files), path.join(f.files, 'folder'));
+    const terminal = await page.evaluate(() => EyaPanels.create('terminal'));
+    await page.waitForFunction(id => EyaPanels.call(id, 'getState').connected, terminal); await f.saved(page);
+    control = new Peer(f.url, 'eya-terminal-v1', 'eya-workspace-v1:{}'); await control.state();
+    assert.equal((await control.request('session.list')).sessions.length, 1);
+    await open(); await entry(copy).getByRole('button', { name: 'Delete', exact: true }).click();
+    await page.waitForFunction(id => EyaWorkspaces.getState().workspace && EyaWorkspaces.getState().workspace.id !== id, copy); await manager.waitFor({ state: 'hidden' });
+    for (let attempt = 0; attempt < 100 && (await control.request('session.list')).sessions.length; attempt++) await page.waitForTimeout(30);
+    assert.deepEqual((await control.request('session.list')).sessions, [], 'Confirmed workspace deletion ends its assigned sessions');
+    const anonymous = await page.evaluate(() => EyaWorkspaces.getState().workspace.id);
+    await page.evaluate(() => { window.__closedWorkspaceSocket = window.__sockets.find(socket => socket.url.endsWith('/ws') && socket.readyState === WebSocket.OPEN); window.__closedWorkspaceSocket.close(); });
+    await page.waitForFunction(() => window.__sockets.some(socket => socket !== window.__closedWorkspaceSocket && socket.url.endsWith('/ws') && socket.readyState === WebSocket.OPEN) && document.querySelector('#status').dataset.connected === 'true' && EyaWorkspaces.getState().workspace);
+    assert.equal(await page.evaluate(() => EyaWorkspaces.getState().workspace.id), anonymous, 'Anonymous replacement survives same-page reconnect');
+    other = await fixture(); await page.evaluate(() => { window.__switchMarker = 'survived'; });
+    await page.locator('#connect').click(); await page.locator('#url').fill(other.url); await page.locator('#key').fill(KEY); await page.locator('#start-connection').click();
+    await page.waitForFunction(id => EyaWorkspaces.getState().workspace?.id !== id && document.querySelector('#status').dataset.connected === 'true', anonymous);
+    assert.equal(await page.evaluate(() => window.__switchMarker), 'survived'); assert.deepEqual((await other.snapshot()).workspaces, []);
+    assert.deepEqual(f.errors, []); assert.deepEqual(other.errors, []);
+    console.log('SVG workspace manager: explicit create/rename/copy/open, automatic modal close, drag-and-drop moves, confirmed session cleanup, anonymous reconnect and server switch passed');
+  } finally { control?.close(); await f.close(); await other?.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

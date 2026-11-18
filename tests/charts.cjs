@@ -43,6 +43,16 @@ const path = require('node:path');
       await page.mouse.move(bounds.x+bounds.width-15,bounds.y+bounds.height/2);
       await page.locator('.live-chart-tooltip').waitFor({state:'visible'});
       if(!(await page.locator('.live-chart-tooltip').innerText()).includes('90.0%'))throw Error('Pointer hover did not inspect latest sample');
+      // Moving onto the tooltip must still inspect the underlying chart. The
+      // overlay's children must not become an input surface with a new origin.
+      const tooltipBounds=await page.locator('.live-chart-tooltip').boundingBox();
+      const hoverX=tooltipBounds.x+tooltipBounds.width/2,hoverY=tooltipBounds.y+tooltipBounds.height/2;
+      if(await page.evaluate(({x,y})=>!!document.elementFromPoint(x,y)?.closest('.live-chart-tooltip'),{x:hoverX,y:hoverY}))throw Error('Tooltip intercepted chart pointer input');
+      const axis=await page.locator('.live-chart-svg').evaluate(svg=>({rect:svg.getBoundingClientRect().toJSON(),view:svg.viewBox.baseVal.width,left:Number(svg.querySelector('.live-chart-grid').getAttribute('x1')),right:Number(svg.querySelector('.live-chart-grid').getAttribute('x2'))}));
+      const chartX=(hoverX-axis.rect.x)/axis.rect.width*axis.view;
+      const expected=[60,70,90][Math.max(0,Math.min(2,Math.round((chartX-axis.left)/(axis.right-axis.left)*2)))];
+      await page.mouse.move(hoverX,hoverY);
+      if(!(await page.locator('.live-chart-tooltip').innerText()).includes(`${expected.toFixed(1)}%`))throw Error('Hovering the tooltip changed the graph coordinate origin');
       await page.locator('.live-chart-svg').dispatchEvent('pointerdown',{pointerType:'touch',clientX:bounds.x+bounds.width-15,clientY:bounds.y+40});
       await page.locator('.live-chart-tooltip').waitFor({state:'visible'});
       await page.evaluate(()=>{

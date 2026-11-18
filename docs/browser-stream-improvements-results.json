@@ -1,0 +1,114 @@
+{
+  "description": "Production CDP capture/Rust codec/Noise/bounded TCP shaper/browser decode+canvas.12 real key inputs per mode; canvas commit timing is not physical input-to-photon. Shaper caps downstream byte rate and delays each observed TCP chunk once from arrival time; RTT is nominal, not emulated WAN packet loss. Software Chromium; default JPEG retained. Initial canonical keyframe excluded from update latency, recorded separately.",
+  "node": "v22.23.2",
+  "chromium": "156.0.8078.4",
+  "arch": "arm64",
+  "serverBinary": "eya-server/target/release/eya-server",
+  "serverSha256": "84f9c28c80c86fa91c94c6d1ab1df5b70d49d399d9e2aeee068841223baac040",
+  "sourceSha256": {
+    "eya-server/src/browser_render.rs": "ee9f738ace339656f55a21a1d7b9314fd4d002ba1f14a431cc6e71f5d652153d",
+    "eya-server/src/browser_tiles.rs": "5557817c1d79748d82621c77d149ada2695452f4bf9f2b8a3007298e6541d441",
+    "client/browser-tiles.js": "0905d048a2c8525caa204580683d31073a7f7dfeb2316a4c5ee1e5ea05cabaef",
+    "client/browser-transport.js": "bd207e0ef71a2f1b848104a4a94eb221b1a007c5d194ac68fc32122a556f1b34",
+    "client/terminal-codec.js": "b69b12343d7a8c1fb31113143b9f7f0d94037a5f386de45efd96b74ad1535754"
+  },
+  "date": "2026-11-17T12:45:53.636Z",
+  "results": [
+    {
+      "profile": "loopback",
+      "mode": "jpeg",
+      "samples": 12,
+      "initialBytes": 282212,
+      "initialCanonicalKeyframeBytes": null,
+      "meanUpdateBytes": 282242.4166666667,
+      "meanDecodeApplyMs": 18.78333333336438,
+      "p50InputToCanvasMs": 122.20000000018626,
+      "p95InputToCanvasMs": 164.70000000018626,
+      "encryptedDownBytes": 3390227,
+      "encryptedUpBytes": 1836,
+      "formats": [
+        "jpeg"
+      ]
+    },
+    {
+      "profile": "loopback",
+      "mode": "png",
+      "samples": 12,
+      "initialBytes": 665451,
+      "initialCanonicalKeyframeBytes": null,
+      "meanUpdateBytes": 665524,
+      "meanDecodeApplyMs": 20.06666666668995,
+      "p50InputToCanvasMs": 122.70000000018626,
+      "p95InputToCanvasMs": 199.29999999981374,
+      "encryptedDownBytes": 7992204,
+      "encryptedUpBytes": 1836,
+      "formats": [
+        "png"
+      ]
+    },
+    {
+      "profile": "loopback",
+      "mode": "tiles",
+      "samples": 12,
+      "initialBytes": 470,
+      "initialCanonicalKeyframeBytes": 626222,
+      "meanUpdateBytes": 225.25,
+      "meanDecodeApplyMs": 7.675000000046566,
+      "p50InputToCanvasMs": 90.90000000037253,
+      "p95InputToCanvasMs": 114.90000000037253,
+      "encryptedDownBytes": 5175,
+      "encryptedUpBytes": 1848,
+      "formats": [
+        "rgba-tiles-v1"
+      ]
+    },
+    {
+      "profile": "5mbit-50ms",
+      "mode": "jpeg",
+      "samples": 12,
+      "initialBytes": 282212,
+      "initialCanonicalKeyframeBytes": null,
+      "meanUpdateBytes": 282242.4166666667,
+      "meanDecodeApplyMs": 25.33333333329453,
+      "p50InputToCanvasMs": 598.8999999999069,
+      "p95InputToCanvasMs": 621.8999999999069,
+      "encryptedDownBytes": 3390227,
+      "encryptedUpBytes": 1809,
+      "formats": [
+        "jpeg"
+      ]
+    },
+    {
+      "profile": "5mbit-50ms",
+      "mode": "png",
+      "samples": 12,
+      "initialBytes": 665451,
+      "initialCanonicalKeyframeBytes": null,
+      "meanUpdateBytes": 665524,
+      "meanDecodeApplyMs": 25.508333333418705,
+      "p50InputToCanvasMs": 1238.5,
+      "p95InputToCanvasMs": 1300.5,
+      "encryptedDownBytes": 7992204,
+      "encryptedUpBytes": 1809,
+      "formats": [
+        "png"
+      ]
+    },
+    {
+      "profile": "5mbit-50ms",
+      "mode": "tiles",
+      "samples": 12,
+      "initialBytes": 470,
+      "initialCanonicalKeyframeBytes": 626222,
+      "meanUpdateBytes": 225.25,
+      "meanDecodeApplyMs": 6.43333333331005,
+      "p50InputToCanvasMs": 162.89999999990687,
+      "p95InputToCanvasMs": 188.39999999990687,
+      "encryptedDownBytes": 5175,
+      "encryptedUpBytes": 1820,
+      "formats": [
+        "rgba-tiles-v1"
+      ]
+    }
+  ]
+}

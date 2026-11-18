@@ -11,11 +11,16 @@ async function main() {
     const page = await browser.newPage();
     await page.goto('about:blank');
     await page.addScriptTag({ content: bundle.outputFiles[0].text });
-    await page.evaluate(async () => {
+    const userScript = `// ==UserScript==
+// @name Resource fixture
+// @match https://example.test/*
+// @grant GM_getResourceURL
+// @resource pixel https://example.test/pixel.gif
+// @run-at document-end
+// ==/UserScript==
+const img=new Image();img.onload=()=>document.querySelector('#asset-check').dataset.resourceLoaded='yes';img.src=GM_getResourceURL('pixel');`;
+    await page.evaluate(() => {
       const encoder = new TextEncoder();
-      const userScript = `// ==UserScript==\n// @name Resource fixture\n// @match https://example.test/*\n// @grant GM_getResourceURL\n// @resource pixel https://example.test/pixel.gif\n// @run-at document-end\n// ==/UserScript==\nconst img=new Image();img.onload=()=>document.querySelector('#asset-check').dataset.resourceLoaded='yes';img.src=GM_getResourceURL('pixel');`;
-      const stored = new Map([['eya-browser-userscripts-v1', JSON.stringify([{ id: 'resource-test', enabled: true, source: userScript }])]]);
-      Object.defineProperty(window, 'localStorage', { configurable: true, value: { getItem: key => stored.get(key) ?? null, setItem: (key, value) => stored.set(key, String(value)) } });
       window.__networkStream = null;
       window.__resourceRequests = [];
       const request = async rawUrl => {
@@ -46,9 +51,16 @@ async function main() {
       };
       const panel = window.EyaBrowser.createBrowserPanel({ request, preferences: { devtoolsOpen: true } });
       window.__browserPanel = panel;
+      panel.element.style.height = '600px';
       document.body.append(panel.element);
-      await panel.api.navigate('https://example.test/');
-      panel.element.querySelector('[aria-label="Network panel"]').click();
+    });
+    await page.locator('input[type=file][accept^=".user.js"]').setInputFiles({
+      name: 'fixture.user.js', mimeType: 'text/javascript', buffer: Buffer.from(userScript),
+    });
+    await page.locator('input[aria-label="Enable Resource fixture"]').waitFor({ state: 'attached' });
+    await page.evaluate(async () => {
+      await window.__browserPanel.api.navigate('https://example.test/');
+      window.__browserPanel.element.querySelector('[aria-label="Network panel"]').click();
     });
     const asset = page.frameLocator('.eya-browser-frame').locator('#asset-check');
     await asset.waitFor({ state: 'visible', timeout: 8000 });

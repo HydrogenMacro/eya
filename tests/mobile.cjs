@@ -29,10 +29,22 @@ const path = require('node:path');
     await page.locator('#status').filter({ hasText: 'Connected' }).waitFor({ timeout: 10000 });
 
     const bar = page.locator('#keybar');
+    async function swipeKey(key, dx, dy) {
+      const r = await page.locator(`[data-key="${key}"]`).boundingBox();
+      await page.mouse.move(r.x + r.width/2, r.y + r.height/2); await page.mouse.down();
+      await page.mouse.move(r.x + r.width/2 + dx, r.y + r.height/2 + dy); await page.mouse.up();
+    }
+
     if (!await bar.isVisible()) throw Error('Mobile key bar is not visible');
     const barLayout = await bar.evaluate(element => ({ clientWidth: element.clientWidth, scrollWidth: element.scrollWidth, clientHeight:element.clientHeight, scrollHeight:element.scrollHeight, bottom: element.getBoundingClientRect().bottom, viewport: innerHeight }));
     if (barLayout.scrollWidth > barLayout.clientWidth || barLayout.scrollHeight > barLayout.clientHeight || Math.abs(barLayout.bottom - barLayout.viewport) > 2) throw Error(`Mobile key bar layout is invalid: ${JSON.stringify(barLayout)}`);
-    if (await bar.locator('button').count() !== 14 || await bar.locator('button > svg').count() !== 14) throw Error('Mobile keys are missing icons or useful controls');
+    if (await bar.locator('button:visible').count() !== 10) throw Error('Mobile keys are missing icons or useful controls');
+    if (await bar.locator('button').first().evaluate(el => el.getBoundingClientRect().height < 44 || el.getBoundingClientRect().height > 48) || await bar.locator('.button-label:visible').count()) throw Error('Auxiliary keys must be keyboard-sized and icon-only');
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      const boxes = await bar.locator('button:visible').evaluateAll(buttons => buttons.map(button => { const r = button.getBoundingClientRect(); return { top: r.top, left: r.left, right: r.right }; }));
+      if (boxes.some(box => Math.abs(box.top - boxes[0].top) > 1) || boxes[0].left > 10 || boxes.at(-1).right < width - 10 || boxes.at(-1).right > width) throw Error(`Auxiliary keys must fill one row at ${width}px: ${JSON.stringify(boxes)}`);
+    }
     if (process.env.EYA_TEST_OUTPUT) await page.screenshot({path:path.join(process.env.EYA_TEST_OUTPUT,'mobile-keybar.png')});
     const scrollLock = await page.evaluate(() => { scrollTo(0, 100); return { y: scrollY, htmlOverflow: getComputedStyle(document.documentElement).overflow, bodyPosition: getComputedStyle(document.body).position }; });
     if (scrollLock.y !== 0 || scrollLock.htmlOverflow !== 'hidden' || scrollLock.bodyPosition !== 'fixed') throw Error(`Full-page mobile scrolling is not locked: ${JSON.stringify(scrollLock)}`);
@@ -84,14 +96,19 @@ const path = require('node:path');
     await page.keyboard.type('c');
     await waitForOutput('CTRL_03');
 
-    const keys = ['home','end','page-up','page-down','interrupt','eof','backspace','enter'];
-    await typeCommand("stty -echo -icanon -isig; v=$(head -c 18 | od -An -t x1 | tr -d ' \\n'); stty sane; printf '\\nEXTRA_%s\\n' \"$v\"");
-    for (const key of keys) await page.locator(`[data-key="${key}"]`).tap();
-    await waitForOutput('EXTRA_1b5b481b5b461b5b357e1b5b367e03047f0a');
+    const keys = [[-20,0],[20,0],[0,-20],[0,20]];
+    await typeCommand("stty -echo -icanon -isig; v=$(head -c 14 | od -An -t x1 | tr -d ' \\n'); stty sane; printf '\\nEXTRA_%s\\n' \"$v\"");
+    for (const [dx,dy] of keys) await swipeKey('page', dx, dy);
+    await waitForOutput('EXTRA_1b5b481b5b461b5b357e1b5b367e');
 
     await typeCommand("stty -echo -icanon -isig; v=$(head -c 6 | od -An -t x1 | tr -d ' \\n'); stty sane; printf '\\nCTRL_HOME_%s\\n' \"$v\"");
-    await page.locator('[data-key=ctrl]').tap(); await page.locator('[data-key=home]').tap();
+    await page.locator('[data-key=ctrl]').tap(); await swipeKey('page', -20, 0);
     await waitForOutput('CTRL_HOME_1b5b313b3548');
+    await typeCommand("stty -echo -icanon -isig; v=$(head -c 3 | od -An -t x1 | tr -d ' \\n'); stty sane; printf '\\nMODS_%s\\n' \"$v\"");
+    await swipeKey('shift-alt', 20, 0); await page.keyboard.type('x');
+    await swipeKey('shift-alt', -20, 0); await page.keyboard.type('a');
+    await waitForOutput('MODS_1b7841');
+
 
     await typeCommand("stty -echo -icanon; v=$(head -c 3 | od -An -t x1 | tr -d ' \\n'); stty sane; printf '\\nARROW_%s\\n' \"$v\"");
     const arrowKey = page.locator('#arrow-pad');
@@ -131,12 +148,32 @@ const path = require('node:path');
     await page.waitForTimeout(550);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [end] });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-    await page.locator('#terminal-menu').waitFor({ state: 'visible', timeout: 3000 });
-    if (await page.locator('#copy-selection').isDisabled()) throw Error('Touch drag did not create a terminal selection');
-
-    await page.locator('#terminal').dispatchEvent('contextmenu', { clientX: 20, clientY: 20, button: 2 });
+    if (await page.evaluate(() => EyaPanels.call(document.querySelector('.panel-group.mobile-active .panel-tab[aria-selected=true]').dataset.panel, 'hasSelection'))) throw Error('Touch drag selected terminal text');
+    await page.locator('.instance-terminal-surface:visible').dispatchEvent('contextmenu', { clientX: 20, clientY: 20, button: 2 });
     await page.locator('#terminal-menu').waitFor({ state: 'visible' });
-    console.log('Mobile scroll lock, file workspace, safe input sizing, key bar, Ctrl, paste, swipe-and-hold arrow key, touch selection and context menu passed');
+    await page.locator('#view-terminal-text').click();
+    const terminalText = page.getByRole('dialog', { name: 'Terminal text', exact: true });
+    if (!(await terminalText.getByRole('textbox', { name: 'Copyable terminal text' }).inputValue()).includes('TOUCH_SELECTION_TEXT')) throw Error('Terminal text modal is missing output');
+    await terminalText.getByRole('button', { name: 'Copy text', exact: true }).click();
+    if (!(await page.evaluate(() => globalThis.__copiedText)).includes('TOUCH_SELECTION_TEXT')) throw Error('Terminal buffer text could not be copied');
+    await terminalText.getByRole('button', { name: 'Close terminal text', exact: true }).click();
+    await page.evaluate(() => { EyaPanels.register({ id: 'aux-browser-test', kind: 'web-browser', title: 'Browser test', element: document.createElement('div'), api: {
+      sendAuxKey(key, modifiers) { window.__auxBrowserKey = { key, modifiers }; },
+      focusInput() {}, setAuxModifiers() {}, paste(text) { window.__auxBrowserPaste = text; },
+    } }); EyaPanels.open('aux-browser-test'); });
+    if (!await bar.isVisible()) throw Error('Auxiliary bar must appear for browser panels');
+    await page.locator('[data-key=ctrl]').tap(); await swipeKey('page', -20, 0);
+    const browserKey = await page.evaluate(() => window.__auxBrowserKey);
+    if (browserKey.key !== 'Home' || !browserKey.modifiers.ctrlKey) throw Error('Auxiliary key did not target the browser');
+    await page.locator('[data-key=paste]').tap();
+    await page.waitForFunction(() => window.__auxBrowserPaste === 'PASTE_OK');
+    await page.evaluate(() => { navigator.clipboard.readText = async () => { throw Error('denied'); }; window.prompt = () => { throw Error('Paste must not prompt'); }; });
+    await page.locator('[data-key=paste]').tap();
+    await page.getByText('Use the native Paste menu or keyboard paste in the focused input.').waitFor();
+    await swipeKey('shift-alt', -20, 0);
+    await page.evaluate(() => EyaPanels.activate('terminal'));
+    if (await page.locator('[data-key=shift-alt] .aux-symbol-active').count()) throw Error('Modifiers leaked between panels');
+    console.log('Mobile scroll lock, file workspace, safe input sizing, key bar, Ctrl, paste, swipe-and-hold arrow key, touch scrolling, copyable buffer and context menu passed');
   } finally {
     await page.evaluate(() => document.getElementById('end-session')?.click()).catch(() => {});
     await browser.close();

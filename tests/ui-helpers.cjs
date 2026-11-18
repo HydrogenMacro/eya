@@ -3,6 +3,14 @@ async function reveal(page, control) {
   const custom = await locator.evaluate(element => element.matches('select.ui-native-select'));
   const visibleControl = custom ? locator.locator('..').locator(':scope > .ui-select-trigger') : locator;
   if (!await visibleControl.isVisible()) {
+    const group = await locator.evaluate(element => element.closest('[data-settings-group]')?.querySelector('h3')?.textContent);
+    if (group) {
+      if (!await page.locator('#settings-dialog').isVisible()) await (await reveal(page, '#settings')).click();
+      if (await page.locator('#settings-dialog .settings-categories').isHidden()) await page.locator('#settings-dialog').getByRole('button', {name:'Back',exact:true}).click();
+      await page.locator('#settings-dialog .settings-categories .settings-category').filter({hasText:group}).first().click();
+      await visibleControl.waitFor({state:'visible'});
+      return locator;
+    }
     const menuId = await locator.evaluate(element => element.closest('.ui-menu')?.id);
     if (!menuId) throw Error('Control is hidden outside a menu');
     await page.locator(`[aria-controls="${menuId}"]`).click();

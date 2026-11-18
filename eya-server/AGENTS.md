@@ -7,9 +7,13 @@ The server is Linux-specific and embeds the generated browser artifacts at compi
 - `src/main.rs`: configuration, HTTP routes, Noise handshake, PTY lifecycle, legacy/current transport dispatch, file-message framing, and native/host terminal commands.
 - `src/files.rs`: logical-to-physical path mapping, host identity switching, bounded listing/search, safe regular-file I/O, uploads, rename, and deletion.
 - `src/resume.rs`: protocol-v4 session registry, PTY replay buffers, input/output offsets, detach/reattach, expiry, and per-session machine jobs.
+- `src/control.rs`, `src/workspaces.rs`: PTY-free authenticated services, durable bounded workspace storage, revisions, leases and atomic tab moves.
+- `src/session_ends.rs`: bounded cancellation markers that prevent an explicit close from racing a late process creation.
 - `src/system.rs`: `/proc` statistics plus validated, bounded process and Docker/Compose operations.
 
 Behavioral details live in `../docs/reconnection.md`, `../docs/file-manager.md`, and `../docs/system-panels.md`.
+
+- `src/browser_render.rs`, `src/browser_tiles.rs`: isolated Chromium, bounded frame writer, and negotiated canonical RGBA tile compression; capture CPU work runs in the blocking pool.
 
 ## Invariants
 

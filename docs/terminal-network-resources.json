@@ -1,0 +1,170 @@
+{
+  "platform": "linux/arm64",
+  "node": "v22.23.2",
+  "codecCpu": [
+    {
+      "name": "source",
+      "bytes": 8192,
+      "sha256": "ab88abdc1f4479719c7b4a69f1e6a7795be934ba90721d26355ddcd74a2f63f9",
+      "encode": [
+        {
+          "compression": false,
+          "opcode": 8,
+          "frameBytes": 8201,
+          "iterations": 2000,
+          "cpuMicrosecondsPerBlock": 1.6728115000000001,
+          "wallMicrosecondsPerBlock": 1.686602
+        },
+        {
+          "compression": true,
+          "opcode": 11,
+          "frameBytes": 3358,
+          "iterations": 2000,
+          "cpuMicrosecondsPerBlock": 141.75200750000002,
+          "wallMicrosecondsPerBlock": 143.7014
+        }
+      ],
+      "decode": {
+        "iterations": 2000,
+        "cpuMicrosecondsPerBlock": 249.1715,
+        "wallMicrosecondsPerBlock": 235.7940990000002
+      }
+    },
+    {
+      "name": "logs",
+      "bytes": 8192,
+      "sha256": "1625b0c252e63cdf8dbcf5d5b8126bd85ad74fea1b575be891b8113bb33d5d10",
+      "encode": [
+        {
+          "compression": false,
+          "opcode": 8,
+          "frameBytes": 8201,
+          "iterations": 2000,
+          "cpuMicrosecondsPerBlock": 1.6781765,
+          "wallMicrosecondsPerBlock": 1.691029
+        },
+        {
+          "compression": true,
+          "opcode": 11,
+          "frameBytes": 404,
+          "iterations": 2000,
+          "cpuMicrosecondsPerBlock": 118.505707,
+          "wallMicrosecondsPerBlock": 121.0563815
+        }
+      ],
+      "decode": {
+        "iterations": 2000,
+        "cpuMicrosecondsPerBlock": 54.575,
+        "wallMicrosecondsPerBlock": 50.4452299999998
+      }
+    },
+    {
+      "name": "entropy",
+      "bytes": 8192,
+      "sha256": "8d3b977dd744d35f396aadef44ebc954f7dd9003cdbfbb454269607b318adb4f",
+      "encode": [
+        {
+          "compression": false,
+          "opcode": 8,
+          "frameBytes": 8201,
+          "iterations": 2000,
+          "cpuMicrosecondsPerBlock": 1.6771610000000001,
+          "wallMicrosecondsPerBlock": 1.7015755000000001
+        },
+        {
+          "compression": true,
+          "opcode": 8,
+          "frameBytes": 8201,
+          "iterations": 2000,
+          "cpuMicrosecondsPerBlock": 168.2613345,
+          "wallMicrosecondsPerBlock": 171.385184
+        }
+      ],
+      "decode": null
+    }
+  ],
+  "browser": [
+    {
+      "compression": false,
+      "cpuSlowdown": 4,
+      "renderer": "DOM",
+      "outputBytes": 672908,
+      "rendererHighWaterKiB": 196748,
+      "rendererRssEndKiB": 196748,
+      "serverBefore": {
+        "rssKiB": 15592,
+        "highWaterKiB": 15592
+      },
+      "serverAfter": {
+        "rssKiB": 16192,
+        "highWaterKiB": 16192
+      },
+      "network": {
+        "compression": null,
+        "rtt": null,
+        "reconnects": 0,
+        "bytesReceived": 688515,
+        "decodedOutputBytes": 684994,
+        "compressedOutputBytes": 0,
+        "outputWireBytes": 688344,
+        "decodeMilliseconds": 0,
+        "maxOutputBacklog": 32768,
+        "pendingInputAge": 0,
+        "sentUnacknowledgedInput": 0,
+        "queuedUnsentInput": 0,
+        "outputBacklog": 0,
+        "outputAcknowledged": 684994,
+        "outputAckAge": 30.100000008940697,
+        "inputAckAge": 2846.2999999970198,
+        "responseAge": 106.79999999701977
+      }
+    },
+    {
+      "compression": true,
+      "cpuSlowdown": 4,
+      "renderer": "DOM",
+      "outputBytes": 672908,
+      "rendererHighWaterKiB": 203748,
+      "rendererRssEndKiB": 203748,
+      "serverBefore": {
+        "rssKiB": 16208,
+        "highWaterKiB": 16208
+      },
+      "serverAfter": {
+        "rssKiB": 17292,
+        "highWaterKiB": 17872
+      },
+      "network": {
+        "compression": "deflate-raw",
+        "rtt": null,
+        "reconnects": 0,
+        "bytesReceived": 45700,
+        "decodedOutputBytes": 684994,
+        "compressedOutputBytes": 40206,
+        "outputWireBytes": 45520,
+        "decodeMilliseconds": 62.499999940395355,
+        "maxOutputBacklog": 32628,
+        "pendingInputAge": 0,
+        "sentUnacknowledgedInput": 0,
+        "queuedUnsentInput": 0,
+        "outputBacklog": 0,
+        "outputAcknowledged": 684994,
+        "outputAckAge": 98.6000000089407,
+        "inputAckAge": 3645,
+        "responseAge": 144.1000000089407
+      }
+    }
+  ],
+  "sourceHashes": {
+    "eya-server/src/resume.rs": "880a81c94d15b87b591ec6165e3cb0136609413d56018e146a76324c9e6fc209",
+    "client/terminal-codec.js": "7fbea4836885e6f31e0195b29006cdc3587be50c4e13cbb4e3ec961ae3c15a9f",
+    "client.html": "3aaca0990747805b444fc83c1259f55820577e27318b69e53606c8a0a2f43d7d",
+    "tests/terminal-network-resources.cjs": "d808930c07125e6ac7101000c01c5dbc84c89077491aa8632bbc0a913f3a8208"
+  },
+  "notes": [
+    "Encoder CPU: actual production output_frame function extracted verbatim and compiled release with identical flate2/Rust backend; CLOCK_THREAD_CPUTIME_ID excludes compilation/I/O.",
+    "Decoder CPU: actual JS module in Node V8, process CPU plus wall duration; real browser timing is also recorded under4x CPU slowdown.",
+    "Linux VmHWM is actual process-lifetime RSS peak, including engine/DOM/startup, not only JS heap. Renderer values take the maximum of active renderer processes.",
+    "Local loopback throughput resource stress, not another WAN latency result or physical battery test."
+  ]
+}

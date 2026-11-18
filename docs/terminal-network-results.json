@@ -1,0 +1,2119 @@
+{
+  "producedAtUtc": "2026-11-09T15:31:03.726Z",
+  "platform": "linux/arm64",
+  "kernel": "6.18.2-current-qcs6490",
+  "node": "v22.23.2",
+  "sourceHashes": {
+    "eya-server/src/main.rs": "cae24377126b3fd87d3a8d288841e18b462153397a83ed5c555d2399ee1e762e",
+    "eya-server/src/resume.rs": "880a81c94d15b87b591ec6165e3cb0136609413d56018e146a76324c9e6fc209",
+    "client/terminal-panel.js": "e294cf043b9bb2bdaabd52320f4993ebbb38a9f531a4e70b114d65d4bf773cdc",
+    "client/terminal-network.js": "89cfb70662cd760fb5dc65fec4caeba45430b3c98fbc834376b7b04797eee4da",
+    "client/terminal-codec.js": "7fbea4836885e6f31e0195b29006cdc3587be50c4e13cbb4e3ec961ae3c15a9f",
+    "client.html": "3aaca0990747805b444fc83c1259f55820577e27318b69e53606c8a0a2f43d7d",
+    "tests/terminal-network-wan.cjs": "87200b4495a6c663cda6b5b57cf3ec126b53799511eb6c86c88273d7c2beefb0"
+  },
+  "serverConfiguration": {
+    "sessionTtlSeconds": 120,
+    "detachedReplayBytes": 65536,
+    "compression": "auto"
+  },
+  "method": "Linux netem in private user/network namespace; real TCP loss recovery, independent per-port-direction qdiscs",
+  "samplesPerProfile": 12,
+  "chromium": "156.0.8078.4",
+  "notes": [
+    "Nominal netem RTT and per-direction rate; real TCP delay, loss, jitter and reordering in a private namespace.",
+    "Twelve key samples/profile: exploratory p50/p95/p99, not production-tail significance.",
+    "Echo uses actual in-page xterm DOM mutations; no local prediction or Playwright polling interval in timing.",
+    "Bulk bytes/messages include Noise, WebSocket framing and terminal controls; exclude TCP/IP, TLS and retransmissions.",
+    "Bulk/reconnect wall time includes automation dispatch and polling overhead; echo/first-output timing uses in-page renderer mutations.",
+    "Server network.outputFramedBytes is plaintext application framing, not full wire bytes.",
+    "CPU is total profile server process CPU; client Script/Task/decode measurements are timing proxies, not physical energy.",
+    "Heap is approximate end-profile Chromium JS heap. Server high-water RSS spans the whole process lifetime.",
+    "Continuous-output Ctrl-C waits for output already emitted; raw/compressed runs can emit different total bytes before stopping.",
+    "Session/client/workspace identifiers removed from this published artifact."
+  ],
+  "profiles": [
+    {
+      "serverCpuMs": 180,
+      "serverRssKiB": 14416,
+      "serverHighWaterKiB": 15848,
+      "clientScriptMs": 383.426,
+      "clientTaskMs": 2005.1,
+      "rtt": 0,
+      "kbit": 32,
+      "compression": false,
+      "samples": 12,
+      "echoMs": {
+        "p50": 125.9,
+        "p95": 132.5,
+        "p99": 132.5
+      },
+      "firstOutputMs": 2197.9,
+      "bulkMs": 8687.345,
+      "ctrlCMs": 7112.8,
+      "reconnectMs": 931.853,
+      "bulkDownBytes": 30815,
+      "bulkDownMessages": 14,
+      "heap": {
+        "used": 23100000,
+        "total": 33100000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": null,
+          "rtt": 813.508,
+          "reconnects": 1,
+          "bytesReceived": 65626,
+          "decodedOutputBytes": 63677,
+          "compressedOutputBytes": 0,
+          "outputWireBytes": 64827,
+          "decodeMilliseconds": 0,
+          "maxOutputBacklog": 8192,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 63677,
+          "outputAckAge": 28.8,
+          "inputAckAge": 28.8,
+          "responseAge": 28.8
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 0,
+          "compression": false,
+          "inputAcks": 17,
+          "outputAckAgeMs": 73,
+          "outputAckRttMs": 105,
+          "outputFramedBytes": 64091,
+          "outputInFlight": 201,
+          "outputOldestAgeMs": 7573,
+          "outputRateBytesPerSecond": 3384,
+          "outputRawBytes": 63677,
+          "outputWindow": 5297,
+          "rawFrames": 46,
+          "writerQueued": 0
+        },
+        "replayBytes": 201,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 110,
+      "serverRssKiB": 15384,
+      "serverHighWaterKiB": 15848,
+      "clientScriptMs": 242.829,
+      "clientTaskMs": 761.71,
+      "rtt": 0,
+      "kbit": 32,
+      "compression": true,
+      "samples": 12,
+      "echoMs": {
+        "p50": 128,
+        "p95": 129.9,
+        "p99": 129.9
+      },
+      "firstOutputMs": 182.7,
+      "bulkMs": 1037.488,
+      "ctrlCMs": 675.5,
+      "reconnectMs": 913.611,
+      "bulkDownBytes": 2312,
+      "bulkDownMessages": 11,
+      "heap": {
+        "used": 19300000,
+        "total": 26000000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": "deflate-raw",
+          "rtt": null,
+          "reconnects": 1,
+          "bytesReceived": 5755,
+          "decodedOutputBytes": 75860,
+          "compressedOutputBytes": 2993,
+          "outputWireBytes": 5013,
+          "decodeMilliseconds": 9.4,
+          "maxOutputBacklog": 8192,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 75860,
+          "outputAckAge": 23,
+          "inputAckAge": 23,
+          "responseAge": 23.2
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 19,
+          "compression": true,
+          "inputAcks": 17,
+          "outputAckAgeMs": 30,
+          "outputAckRttMs": 106,
+          "outputFramedBytes": 4373,
+          "outputInFlight": 0,
+          "outputOldestAgeMs": null,
+          "outputRateBytesPerSecond": 58023,
+          "outputRawBytes": 75860,
+          "outputWindow": 24767,
+          "rawFrames": 21,
+          "writerQueued": 0
+        },
+        "replayBytes": 0,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 140,
+      "serverRssKiB": 15636,
+      "serverHighWaterKiB": 15848,
+      "clientScriptMs": 429.116,
+      "clientTaskMs": 1601.587,
+      "rtt": 0,
+      "kbit": 64,
+      "compression": false,
+      "samples": 12,
+      "echoMs": {
+        "p50": 62.6,
+        "p95": 76.7,
+        "p99": 76.7
+      },
+      "firstOutputMs": 638.4,
+      "bulkMs": 4549.39,
+      "ctrlCMs": 3362.9,
+      "reconnectMs": 662.397,
+      "bulkDownBytes": 30929,
+      "bulkDownMessages": 18,
+      "heap": {
+        "used": 19300000,
+        "total": 26000000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": null,
+          "rtt": 320.7,
+          "reconnects": 1,
+          "bytesReceived": 59420,
+          "decodedOutputBytes": 57196,
+          "compressedOutputBytes": 0,
+          "outputWireBytes": 58671,
+          "decodeMilliseconds": 0,
+          "maxOutputBacklog": 4408,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 57196,
+          "outputAckAge": 29.4,
+          "inputAckAge": 29.4,
+          "responseAge": 29.5
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 0,
+          "compression": false,
+          "inputAcks": 17,
+          "outputAckAgeMs": 24,
+          "outputAckRttMs": 55,
+          "outputFramedBytes": 57727,
+          "outputInFlight": 36,
+          "outputOldestAgeMs": 3704,
+          "outputRateBytesPerSecond": 7100,
+          "outputRawBytes": 57196,
+          "outputWindow": 6262,
+          "rawFrames": 59,
+          "writerQueued": 0
+        },
+        "replayBytes": 36,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 130,
+      "serverRssKiB": 15996,
+      "serverHighWaterKiB": 16268,
+      "clientScriptMs": 221.813,
+      "clientTaskMs": 600.08,
+      "rtt": 0,
+      "kbit": 64,
+      "compression": true,
+      "samples": 12,
+      "echoMs": {
+        "p50": 58.3,
+        "p95": 76.8,
+        "p99": 76.8
+      },
+      "firstOutputMs": 136.4,
+      "bulkMs": 470.309,
+      "ctrlCMs": 293.7,
+      "reconnectMs": 669.419,
+      "bulkDownBytes": 1965,
+      "bulkDownMessages": 8,
+      "heap": {
+        "used": 18200000,
+        "total": 26000000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": "deflate-raw",
+          "rtt": null,
+          "reconnects": 1,
+          "bytesReceived": 5236,
+          "decodedOutputBytes": 94278,
+          "compressedOutputBytes": 3219,
+          "outputWireBytes": 4494,
+          "decodeMilliseconds": 8.5,
+          "maxOutputBacklog": 8192,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 94278,
+          "outputAckAge": 30,
+          "inputAckAge": 30,
+          "responseAge": 30.3
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 20,
+          "compression": true,
+          "inputAcks": 17,
+          "outputAckAgeMs": 32,
+          "outputAckRttMs": 54,
+          "outputFramedBytes": 3918,
+          "outputInFlight": 2053,
+          "outputOldestAgeMs": 405,
+          "outputRateBytesPerSecond": 137049,
+          "outputRawBytes": 94278,
+          "outputWindow": 32768,
+          "rawFrames": 16,
+          "writerQueued": 0
+        },
+        "replayBytes": 2053,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 110,
+      "serverRssKiB": 16204,
+      "serverHighWaterKiB": 16268,
+      "clientScriptMs": 222.98,
+      "clientTaskMs": 711.916,
+      "rtt": 0,
+      "kbit": 256,
+      "compression": false,
+      "samples": 12,
+      "echoMs": {
+        "p50": 27.1,
+        "p95": 37.6,
+        "p99": 37.6
+      },
+      "firstOutputMs": 285.2,
+      "bulkMs": 1123.958,
+      "ctrlCMs": 1005.2,
+      "reconnectMs": 592.214,
+      "bulkDownBytes": 30645,
+      "bulkDownMessages": 8,
+      "heap": {
+        "used": 17100000,
+        "total": 26000000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": null,
+          "rtt": null,
+          "reconnects": 1,
+          "bytesReceived": 68529,
+          "decodedOutputBytes": 66905,
+          "compressedOutputBytes": 0,
+          "outputWireBytes": 67805,
+          "decodeMilliseconds": 0,
+          "maxOutputBacklog": 7828,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 66905,
+          "outputAckAge": 27.7,
+          "inputAckAge": 27.7,
+          "responseAge": 27.8
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 0,
+          "compression": false,
+          "inputAcks": 17,
+          "outputAckAgeMs": 128,
+          "outputAckRttMs": 21,
+          "outputFramedBytes": 67229,
+          "outputInFlight": 4104,
+          "outputOldestAgeMs": 1211,
+          "outputRateBytesPerSecond": 28916,
+          "outputRawBytes": 66905,
+          "outputWindow": 11927,
+          "rawFrames": 36,
+          "writerQueued": 0
+        },
+        "replayBytes": 4104,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 90,
+      "serverRssKiB": 16160,
+      "serverHighWaterKiB": 16424,
+      "clientScriptMs": 176.774,
+      "clientTaskMs": 472.258,
+      "rtt": 0,
+      "kbit": 256,
+      "compression": true,
+      "samples": 12,
+      "echoMs": {
+        "p50": 25.5,
+        "p95": 35.1,
+        "p99": 35.1
+      },
+      "firstOutputMs": 49.7,
+      "bulkMs": 157.187,
+      "ctrlCMs": 83.5,
+      "reconnectMs": 570.239,
+      "bulkDownBytes": 1637,
+      "bulkDownMessages": 6,
+      "heap": {
+        "used": 19300000,
+        "total": 26000000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": "deflate-raw",
+          "rtt": null,
+          "reconnects": 1,
+          "bytesReceived": 5329,
+          "decodedOutputBytes": 101540,
+          "compressedOutputBytes": 3244,
+          "outputWireBytes": 4586,
+          "decodeMilliseconds": 6.3,
+          "maxOutputBacklog": 8192,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 101540,
+          "outputAckAge": 21.3,
+          "inputAckAge": 21.3,
+          "responseAge": 21.4
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 20,
+          "compression": true,
+          "inputAcks": 17,
+          "outputAckAgeMs": 15,
+          "outputAckRttMs": 19,
+          "outputFramedBytes": 3978,
+          "outputInFlight": 5294,
+          "outputOldestAgeMs": 138,
+          "outputRateBytesPerSecond": 519115,
+          "outputRawBytes": 101540,
+          "outputWindow": 32768,
+          "rawFrames": 18,
+          "writerQueued": 0
+        },
+        "replayBytes": 5294,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 180,
+      "serverRssKiB": 16224,
+      "serverHighWaterKiB": 16424,
+      "clientScriptMs": 494.221,
+      "clientTaskMs": 2398.505,
+      "rtt": 80,
+      "kbit": 32,
+      "compression": false,
+      "samples": 12,
+      "echoMs": {
+        "p50": 195.6,
+        "p95": 213.3,
+        "p99": 213.3
+      },
+      "firstOutputMs": 2047.4,
+      "bulkMs": 8499.431,
+      "ctrlCMs": 10500.6,
+      "reconnectMs": 1232.116,
+      "bulkDownBytes": 30931,
+      "bulkDownMessages": 18,
+      "heap": {
+        "used": 23100000,
+        "total": 35100000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": null,
+          "rtt": 1455.513,
+          "reconnects": 1,
+          "bytesReceived": 77286,
+          "decodedOutputBytes": 74987,
+          "compressedOutputBytes": 0,
+          "outputWireBytes": 76462,
+          "decodeMilliseconds": 0,
+          "maxOutputBacklog": 7370,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 74987,
+          "outputAckAge": 25.7,
+          "inputAckAge": 25.7,
+          "responseAge": 25.8
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 0,
+          "compression": false,
+          "inputAcks": 17,
+          "outputAckAgeMs": 30,
+          "outputAckRttMs": 186,
+          "outputFramedBytes": 75518,
+          "outputInFlight": 0,
+          "outputOldestAgeMs": null,
+          "outputRateBytesPerSecond": 3886,
+          "outputRawBytes": 74987,
+          "outputWindow": 5788,
+          "rawFrames": 59,
+          "writerQueued": 0
+        },
+        "replayBytes": 0,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 110,
+      "serverRssKiB": 16240,
+      "serverHighWaterKiB": 16612,
+      "clientScriptMs": 274.56,
+      "clientTaskMs": 940.143,
+      "rtt": 80,
+      "kbit": 32,
+      "compression": true,
+      "samples": 12,
+      "echoMs": {
+        "p50": 207.8,
+        "p95": 212.7,
+        "p99": 212.7
+      },
+      "firstOutputMs": 305.6,
+      "bulkMs": 1150.817,
+      "ctrlCMs": 633.9,
+      "reconnectMs": 1263.032,
+      "bulkDownBytes": 1964,
+      "bulkDownMessages": 8,
+      "heap": {
+        "used": 17100000,
+        "total": 26000000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": "deflate-raw",
+          "rtt": 223.1,
+          "reconnects": 1,
+          "bytesReceived": 5226,
+          "decodedOutputBytes": 77340,
+          "compressedOutputBytes": 2999,
+          "outputWireBytes": 4459,
+          "decodeMilliseconds": 13.4,
+          "maxOutputBacklog": 8192,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 77340,
+          "outputAckAge": 21.5,
+          "inputAckAge": 21.5,
+          "responseAge": 21.7
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 19,
+          "compression": true,
+          "inputAcks": 17,
+          "outputAckAgeMs": 29,
+          "outputAckRttMs": 186,
+          "outputFramedBytes": 3883,
+          "outputInFlight": 0,
+          "outputOldestAgeMs": null,
+          "outputRateBytesPerSecond": 61634,
+          "outputRawBytes": 77340,
+          "outputWindow": 30948,
+          "rawFrames": 17,
+          "writerQueued": 0
+        },
+        "replayBytes": 0,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 140,
+      "serverRssKiB": 16460,
+      "serverHighWaterKiB": 16612,
+      "clientScriptMs": 327.588,
+      "clientTaskMs": 1395.829,
+      "rtt": 80,
+      "kbit": 64,
+      "compression": false,
+      "samples": 12,
+      "echoMs": {
+        "p50": 143,
+        "p95": 157,
+        "p99": 157
+      },
+      "firstOutputMs": 1177.5,
+      "bulkMs": 4543.558,
+      "ctrlCMs": 3858.1,
+      "reconnectMs": 1068.391,
+      "bulkDownBytes": 30788,
+      "bulkDownMessages": 13,
+      "heap": {
+        "used": 17100000,
+        "total": 27600000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": null,
+          "rtt": 809.0,
+          "reconnects": 1,
+          "bytesReceived": 69987,
+          "decodedOutputBytes": 68088,
+          "compressedOutputBytes": 0,
+          "outputWireBytes": 69213,
+          "decodeMilliseconds": 0,
+          "maxOutputBacklog": 8192,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 68088,
+          "outputAckAge": 23.6,
+          "inputAckAge": 23.6,
+          "responseAge": 23.9
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 0,
+          "compression": false,
+          "inputAcks": 17,
+          "outputAckAgeMs": 64,
+          "outputAckRttMs": 133,
+          "outputFramedBytes": 68493,
+          "outputInFlight": 371,
+          "outputOldestAgeMs": 4214,
+          "outputRateBytesPerSecond": 7348,
+          "outputRawBytes": 68088,
+          "outputWindow": 6913,
+          "rawFrames": 45,
+          "writerQueued": 0
+        },
+        "replayBytes": 371,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 130,
+      "serverRssKiB": 16408,
+      "serverHighWaterKiB": 16756,
+      "clientScriptMs": 257.747,
+      "clientTaskMs": 800.261,
+      "rtt": 80,
+      "kbit": 64,
+      "compression": true,
+      "samples": 12,
+      "echoMs": {
+        "p50": 144.8,
+        "p95": 147.8,
+        "p99": 147.8
+      },
+      "firstOutputMs": 202.3,
+      "bulkMs": 1047.602,
+      "ctrlCMs": 429.5,
+      "reconnectMs": 982.93,
+      "bulkDownBytes": 2327,
+      "bulkDownMessages": 11,
+      "heap": {
+        "used": 18200000,
+        "total": 27600000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": "deflate-raw",
+          "rtt": null,
+          "reconnects": 1,
+          "bytesReceived": 6303,
+          "decodedOutputBytes": 104655,
+          "compressedOutputBytes": 3986,
+          "outputWireBytes": 5560,
+          "decodeMilliseconds": 9.1,
+          "maxOutputBacklog": 8192,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 104655,
+          "outputAckAge": 20.5,
+          "inputAckAge": 20.5,
+          "responseAge": 20.6
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 29,
+          "compression": true,
+          "inputAcks": 17,
+          "outputAckAgeMs": 14,
+          "outputAckRttMs": 135,
+          "outputFramedBytes": 4824,
+          "outputInFlight": 13,
+          "outputOldestAgeMs": 647,
+          "outputRateBytesPerSecond": 110112,
+          "outputRawBytes": 104655,
+          "outputWindow": 32768,
+          "rawFrames": 17,
+          "writerQueued": 0
+        },
+        "replayBytes": 13,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 120,
+      "serverRssKiB": 16528,
+      "serverHighWaterKiB": 16756,
+      "clientScriptMs": 260.867,
+      "clientTaskMs": 912.197,
+      "rtt": 80,
+      "kbit": 256,
+      "compression": false,
+      "samples": 12,
+      "echoMs": {
+        "p50": 111.6,
+        "p95": 114.5,
+        "p99": 114.5
+      },
+      "firstOutputMs": 358,
+      "bulkMs": 1693.242,
+      "ctrlCMs": 992.9,
+      "reconnectMs": 799.725,
+      "bulkDownBytes": 30674,
+      "bulkDownMessages": 9,
+      "heap": {
+        "used": 18200000,
+        "total": 26000000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": null,
+          "rtt": null,
+          "reconnects": 1,
+          "bytesReceived": 69420,
+          "decodedOutputBytes": 67796,
+          "compressedOutputBytes": 0,
+          "outputWireBytes": 68696,
+          "decodeMilliseconds": 0,
+          "maxOutputBacklog": 8192,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 67796,
+          "outputAckAge": 12.1,
+          "inputAckAge": 12.1,
+          "responseAge": 12.1
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 0,
+          "compression": false,
+          "inputAcks": 17,
+          "outputAckAgeMs": 16,
+          "outputAckRttMs": 100,
+          "outputFramedBytes": 68120,
+          "outputInFlight": 0,
+          "outputOldestAgeMs": null,
+          "outputRateBytesPerSecond": 31424,
+          "outputRawBytes": 67796,
+          "outputWindow": 15095,
+          "rawFrames": 36,
+          "writerQueued": 0
+        },
+        "replayBytes": 0,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 110,
+      "serverRssKiB": 16364,
+      "serverHighWaterKiB": 16756,
+      "clientScriptMs": 198.246,
+      "clientTaskMs": 588.377,
+      "rtt": 80,
+      "kbit": 256,
+      "compression": true,
+      "samples": 12,
+      "echoMs": {
+        "p50": 109.4,
+        "p95": 114.4,
+        "p99": 114.4
+      },
+      "firstOutputMs": 120.1,
+      "bulkMs": 335.624,
+      "ctrlCMs": 183.7,
+      "reconnectMs": 849.382,
+      "bulkDownBytes": 2465,
+      "bulkDownMessages": 12,
+      "heap": {
+        "used": 20500000,
+        "total": 27600000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": "deflate-raw",
+          "rtt": null,
+          "reconnects": 1,
+          "bytesReceived": 6936,
+          "decodedOutputBytes": 126586,
+          "compressedOutputBytes": 4020,
+          "outputWireBytes": 6193,
+          "decodeMilliseconds": 5.5,
+          "maxOutputBacklog": 8192,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 126586,
+          "outputAckAge": 25.5,
+          "inputAckAge": 25.5,
+          "responseAge": 25.6
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 27,
+          "compression": true,
+          "inputAcks": 17,
+          "outputAckAgeMs": 19,
+          "outputAckRttMs": 101,
+          "outputFramedBytes": 5425,
+          "outputInFlight": 7157,
+          "outputOldestAgeMs": 392,
+          "outputRateBytesPerSecond": 313679,
+          "outputRawBytes": 126586,
+          "outputWindow": 32768,
+          "rawFrames": 21,
+          "writerQueued": 0
+        },
+        "replayBytes": 7157,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 170,
+      "serverRssKiB": 16392,
+      "serverHighWaterKiB": 16756,
+      "clientScriptMs": 296.091,
+      "clientTaskMs": 1830.978,
+      "rtt": 250,
+      "kbit": 32,
+      "compression": false,
+      "samples": 12,
+      "echoMs": {
+        "p50": 377.5,
+        "p95": 380.5,
+        "p99": 380.5
+      },
+      "firstOutputMs": 2435.7,
+      "bulkMs": 9369.501,
+      "ctrlCMs": 6214.7,
+      "reconnectMs": 1902.706,
+      "bulkDownBytes": 30730,
+      "bulkDownMessages": 11,
+      "heap": {
+        "used": 18200000,
+        "total": 23100000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": null,
+          "rtt": 775.678,
+          "reconnects": 1,
+          "bytesReceived": 61250,
+          "decodedOutputBytes": 59426,
+          "compressedOutputBytes": 0,
+          "outputWireBytes": 60426,
+          "decodeMilliseconds": 0,
+          "maxOutputBacklog": 8192,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 59426,
+          "outputAckAge": 27.8,
+          "inputAckAge": 27.8,
+          "responseAge": 28
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 0,
+          "compression": false,
+          "inputAcks": 17,
+          "outputAckAgeMs": 29,
+          "outputAckRttMs": 356,
+          "outputFramedBytes": 59786,
+          "outputInFlight": 0,
+          "outputOldestAgeMs": null,
+          "outputRateBytesPerSecond": 3603,
+          "outputRawBytes": 59426,
+          "outputWindow": 6278,
+          "rawFrames": 40,
+          "writerQueued": 0
+        },
+        "replayBytes": 0,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 160,
+      "serverRssKiB": 16716,
+      "serverHighWaterKiB": 16756,
+      "clientScriptMs": 372.243,
+      "clientTaskMs": 1412.135,
+      "rtt": 250,
+      "kbit": 32,
+      "compression": true,
+      "samples": 12,
+      "echoMs": {
+        "p50": 375.7,
+        "p95": 380.4,
+        "p99": 380.4
+      },
+      "firstOutputMs": 383.4,
+      "bulkMs": 1713.741,
+      "ctrlCMs": 1033.8,
+      "reconnectMs": 1935.999,
+      "bulkDownBytes": 2092,
+      "bulkDownMessages": 9,
+      "heap": {
+        "used": 20500000,
+        "total": 27600000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": "deflate-raw",
+          "rtt": 301.9,
+          "reconnects": 1,
+          "bytesReceived": 7243,
+          "decodedOutputBytes": 109943,
+          "compressedOutputBytes": 4245,
+          "outputWireBytes": 6475,
+          "decodeMilliseconds": 15.8,
+          "maxOutputBacklog": 8192,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 109943,
+          "outputAckAge": 31.6,
+          "inputAckAge": 31.6,
+          "responseAge": 31.8
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 32,
+          "compression": true,
+          "inputAcks": 17,
+          "outputAckAgeMs": 50,
+          "outputAckRttMs": 356,
+          "outputFramedBytes": 5659,
+          "outputInFlight": 1109,
+          "outputOldestAgeMs": 1864,
+          "outputRateBytesPerSecond": 68331,
+          "outputRawBytes": 109943,
+          "outputWindow": 32768,
+          "rawFrames": 19,
+          "writerQueued": 0
+        },
+        "replayBytes": 1109,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 170,
+      "serverRssKiB": 16636,
+      "serverHighWaterKiB": 16756,
+      "clientScriptMs": 347.764,
+      "clientTaskMs": 1543.173,
+      "rtt": 250,
+      "kbit": 64,
+      "compression": false,
+      "samples": 12,
+      "echoMs": {
+        "p50": 311.6,
+        "p95": 327.1,
+        "p99": 327.1
+      },
+      "firstOutputMs": 1242.9,
+      "bulkMs": 4644.489,
+      "ctrlCMs": 3588.9,
+      "reconnectMs": 1730.822,
+      "bulkDownBytes": 30759,
+      "bulkDownMessages": 12,
+      "heap": {
+        "used": 17100000,
+        "total": 26000000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": null,
+          "rtt": 1187.68,
+          "reconnects": 1,
+          "bytesReceived": 63327,
+          "decodedOutputBytes": 61453,
+          "compressedOutputBytes": 0,
+          "outputWireBytes": 62553,
+          "decodeMilliseconds": 0,
+          "maxOutputBacklog": 7144,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 61453,
+          "outputAckAge": 20.2,
+          "inputAckAge": 20.2,
+          "responseAge": 20.3
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 0,
+          "compression": false,
+          "inputAcks": 17,
+          "outputAckAgeMs": 334,
+          "outputAckRttMs": 304,
+          "outputFramedBytes": 61849,
+          "outputInFlight": 2578,
+          "outputOldestAgeMs": 4418,
+          "outputRateBytesPerSecond": 6513,
+          "outputRawBytes": 61453,
+          "outputWindow": 7705,
+          "rawFrames": 44,
+          "writerQueued": 0
+        },
+        "replayBytes": 2578,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 130,
+      "serverRssKiB": 16796,
+      "serverHighWaterKiB": 16796,
+      "clientScriptMs": 312.456,
+      "clientTaskMs": 1103.834,
+      "rtt": 250,
+      "kbit": 64,
+      "compression": true,
+      "samples": 12,
+      "echoMs": {
+        "p50": 311,
+        "p95": 328,
+        "p99": 328
+      },
+      "firstOutputMs": 394.9,
+      "bulkMs": 1235.145,
+      "ctrlCMs": 418.3,
+      "reconnectMs": 1730.035,
+      "bulkDownBytes": 2000,
+      "bulkDownMessages": 9,
+      "heap": {
+        "used": 17100000,
+        "total": 26000000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": "deflate-raw",
+          "rtt": 277.8,
+          "reconnects": 1,
+          "bytesReceived": 5358,
+          "decodedOutputBytes": 73580,
+          "compressedOutputBytes": 3096,
+          "outputWireBytes": 4591,
+          "decodeMilliseconds": 15.3,
+          "maxOutputBacklog": 8192,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 73580,
+          "outputAckAge": 28,
+          "inputAckAge": 28,
+          "responseAge": 28.1
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 21,
+          "compression": true,
+          "inputAcks": 17,
+          "outputAckAgeMs": 16,
+          "outputAckRttMs": 304,
+          "outputFramedBytes": 3951,
+          "outputInFlight": 2,
+          "outputOldestAgeMs": 800,
+          "outputRateBytesPerSecond": 84144,
+          "outputRawBytes": 73580,
+          "outputWindow": 32768,
+          "rawFrames": 19,
+          "writerQueued": 0
+        },
+        "replayBytes": 2,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 160,
+      "serverRssKiB": 16924,
+      "serverHighWaterKiB": 16924,
+      "clientScriptMs": 385.177,
+      "clientTaskMs": 1509.813,
+      "rtt": 250,
+      "kbit": 256,
+      "compression": false,
+      "samples": 12,
+      "echoMs": {
+        "p50": 277,
+        "p95": 281.4,
+        "p99": 281.4
+      },
+      "firstOutputMs": 567.9,
+      "bulkMs": 1926.673,
+      "ctrlCMs": 1231.9,
+      "reconnectMs": 1547.234,
+      "bulkDownBytes": 30643,
+      "bulkDownMessages": 8,
+      "heap": {
+        "used": 17100000,
+        "total": 26000000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": null,
+          "rtt": 260.8,
+          "reconnects": 1,
+          "bytesReceived": 84828,
+          "decodedOutputBytes": 83154,
+          "compressedOutputBytes": 0,
+          "outputWireBytes": 84079,
+          "decodeMilliseconds": 0,
+          "maxOutputBacklog": 8192,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 83154,
+          "outputAckAge": 26.6,
+          "inputAckAge": 26.6,
+          "responseAge": 26.7
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 0,
+          "compression": false,
+          "inputAcks": 17,
+          "outputAckAgeMs": 21,
+          "outputAckRttMs": 278,
+          "outputFramedBytes": 83487,
+          "outputInFlight": 0,
+          "outputOldestAgeMs": null,
+          "outputRateBytesPerSecond": 30972,
+          "outputRawBytes": 83154,
+          "outputWindow": 20446,
+          "rawFrames": 37,
+          "writerQueued": 0
+        },
+        "replayBytes": 0,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 110,
+      "serverRssKiB": 17588,
+      "serverHighWaterKiB": 17588,
+      "clientScriptMs": 271.553,
+      "clientTaskMs": 1047.303,
+      "rtt": 250,
+      "kbit": 256,
+      "compression": true,
+      "samples": 12,
+      "echoMs": {
+        "p50": 276.1,
+        "p95": 282.8,
+        "p99": 282.8
+      },
+      "firstOutputMs": 330.6,
+      "bulkMs": 1162.667,
+      "ctrlCMs": 631.8,
+      "reconnectMs": 1497.27,
+      "bulkDownBytes": 1727,
+      "bulkDownMessages": 6,
+      "heap": {
+        "used": 18200000,
+        "total": 27600000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": "deflate-raw",
+          "rtt": 261,
+          "reconnects": 1,
+          "bytesReceived": 5707,
+          "decodedOutputBytes": 107505,
+          "compressedOutputBytes": 3442,
+          "outputWireBytes": 4939,
+          "decodeMilliseconds": 12.8,
+          "maxOutputBacklog": 11597,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 107505,
+          "outputAckAge": 18.8,
+          "inputAckAge": 18.8,
+          "responseAge": 18.8
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 22,
+          "compression": true,
+          "inputAcks": 17,
+          "outputAckAgeMs": 24,
+          "outputAckRttMs": 270,
+          "outputFramedBytes": 4283,
+          "outputInFlight": 7164,
+          "outputOldestAgeMs": 978,
+          "outputRateBytesPerSecond": 387278,
+          "outputRawBytes": 107505,
+          "outputWindow": 32768,
+          "rawFrames": 19,
+          "writerQueued": 0
+        },
+        "replayBytes": 7164,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 160,
+      "serverRssKiB": 17092,
+      "serverHighWaterKiB": 17092,
+      "clientScriptMs": 430.595,
+      "clientTaskMs": 3155.391,
+      "rtt": 600,
+      "kbit": 32,
+      "compression": false,
+      "samples": 12,
+      "echoMs": {
+        "p50": 724.6,
+        "p95": 732.4,
+        "p99": 732.4
+      },
+      "firstOutputMs": 2608.9,
+      "bulkMs": 10074.718,
+      "ctrlCMs": 8046.2,
+      "reconnectMs": 3318.01,
+      "bulkDownBytes": 30900,
+      "bulkDownMessages": 17,
+      "heap": {
+        "used": 13400000,
+        "total": 17100000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": null,
+          "rtt": 1506.644,
+          "reconnects": 1,
+          "bytesReceived": 64442,
+          "decodedOutputBytes": 62493,
+          "compressedOutputBytes": 0,
+          "outputWireBytes": 63568,
+          "decodeMilliseconds": 0,
+          "maxOutputBacklog": 7448,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 62493,
+          "outputAckAge": 36.2,
+          "inputAckAge": 36.2,
+          "responseAge": 36.3
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 0,
+          "compression": false,
+          "inputAcks": 17,
+          "outputAckAgeMs": 29,
+          "outputAckRttMs": 706,
+          "outputFramedBytes": 62880,
+          "outputInFlight": 0,
+          "outputOldestAgeMs": null,
+          "outputRateBytesPerSecond": 2862,
+          "outputRawBytes": 62493,
+          "outputWindow": 6831,
+          "rawFrames": 43,
+          "writerQueued": 0
+        },
+        "replayBytes": 0,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 130,
+      "serverRssKiB": 17312,
+      "serverHighWaterKiB": 17312,
+      "clientScriptMs": 350.477,
+      "clientTaskMs": 1682.348,
+      "rtt": 600,
+      "kbit": 32,
+      "compression": true,
+      "samples": 12,
+      "echoMs": {
+        "p50": 725.2,
+        "p95": 730.6,
+        "p99": 730.6
+      },
+      "firstOutputMs": 735.2,
+      "bulkMs": 2587.805,
+      "ctrlCMs": 1271.8,
+      "reconnectMs": 3316.063,
+      "bulkDownBytes": 2114,
+      "bulkDownMessages": 10,
+      "heap": {
+        "used": 18200000,
+        "total": 23100000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": "deflate-raw",
+          "rtt": 663.72,
+          "reconnects": 1,
+          "bytesReceived": 6412,
+          "decodedOutputBytes": 92801,
+          "compressedOutputBytes": 3629,
+          "outputWireBytes": 5620,
+          "decodeMilliseconds": 13.7,
+          "maxOutputBacklog": 8190,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 92801,
+          "outputAckAge": 24.5,
+          "inputAckAge": 24.5,
+          "responseAge": 24.6
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 26,
+          "compression": true,
+          "inputAcks": 17,
+          "outputAckAgeMs": 29,
+          "outputAckRttMs": 706,
+          "outputFramedBytes": 4900,
+          "outputInFlight": 0,
+          "outputOldestAgeMs": null,
+          "outputRateBytesPerSecond": 60737,
+          "outputRawBytes": 92801,
+          "outputWindow": 32768,
+          "rawFrames": 19,
+          "writerQueued": 0
+        },
+        "replayBytes": 0,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 160,
+      "serverRssKiB": 17024,
+      "serverHighWaterKiB": 17044,
+      "clientScriptMs": 321.312,
+      "clientTaskMs": 1822.396,
+      "rtt": 600,
+      "kbit": 64,
+      "compression": false,
+      "samples": 12,
+      "echoMs": {
+        "p50": 660,
+        "p95": 678.1,
+        "p99": 678.1
+      },
+      "firstOutputMs": 1718.5,
+      "bulkMs": 5606.484,
+      "ctrlCMs": 3783.7,
+      "reconnectMs": 3133.612,
+      "bulkDownBytes": 30759,
+      "bulkDownMessages": 12,
+      "heap": {
+        "used": 17100000,
+        "total": 23100000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": null,
+          "rtt": 882.64,
+          "reconnects": 1,
+          "bytesReceived": 66259,
+          "decodedOutputBytes": 64460,
+          "compressedOutputBytes": 0,
+          "outputWireBytes": 65460,
+          "decodeMilliseconds": 0,
+          "maxOutputBacklog": 8192,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 64460,
+          "outputAckAge": 18.8,
+          "inputAckAge": 18.8,
+          "responseAge": 18.9
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 0,
+          "compression": false,
+          "inputAcks": 17,
+          "outputAckAgeMs": 151,
+          "outputAckRttMs": 643,
+          "outputFramedBytes": 64820,
+          "outputInFlight": 1139,
+          "outputOldestAgeMs": 5124,
+          "outputRateBytesPerSecond": 7520,
+          "outputRawBytes": 64460,
+          "outputWindow": 10808,
+          "rawFrames": 40,
+          "writerQueued": 0
+        },
+        "replayBytes": 1139,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 150,
+      "serverRssKiB": 17616,
+      "serverHighWaterKiB": 17616,
+      "clientScriptMs": 275.93,
+      "clientTaskMs": 1471.439,
+      "rtt": 600,
+      "kbit": 64,
+      "compression": true,
+      "samples": 12,
+      "echoMs": {
+        "p50": 661.3,
+        "p95": 678.3,
+        "p99": 678.3
+      },
+      "firstOutputMs": 713.9,
+      "bulkMs": 2559.985,
+      "ctrlCMs": 1328.7,
+      "reconnectMs": 3100.866,
+      "bulkDownBytes": 1752,
+      "bulkDownMessages": 7,
+      "heap": {
+        "used": 20500000,
+        "total": 26000000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": "deflate-raw",
+          "rtt": 627.94,
+          "reconnects": 1,
+          "bytesReceived": 5985,
+          "decodedOutputBytes": 119115,
+          "compressedOutputBytes": 3772,
+          "outputWireBytes": 5192,
+          "decodeMilliseconds": 9.3,
+          "maxOutputBacklog": 8192,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 119115,
+          "outputAckAge": 34.1,
+          "inputAckAge": 34.1,
+          "responseAge": 34.3
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 25,
+          "compression": true,
+          "inputAcks": 17,
+          "outputAckAgeMs": 15,
+          "outputAckRttMs": 654,
+          "outputFramedBytes": 4536,
+          "outputInFlight": 0,
+          "outputOldestAgeMs": null,
+          "outputRateBytesPerSecond": 146139,
+          "outputRawBytes": 119115,
+          "outputWindow": 32768,
+          "rawFrames": 16,
+          "writerQueued": 0
+        },
+        "replayBytes": 0,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 120,
+      "serverRssKiB": 17112,
+      "serverHighWaterKiB": 17164,
+      "clientScriptMs": 296.693,
+      "clientTaskMs": 1547.621,
+      "rtt": 600,
+      "kbit": 256,
+      "compression": false,
+      "samples": 12,
+      "echoMs": {
+        "p50": 625.9,
+        "p95": 629.5,
+        "p99": 629.5
+      },
+      "firstOutputMs": 889.5,
+      "bulkMs": 3248.356,
+      "ctrlCMs": 1534.1,
+      "reconnectMs": 2946.802,
+      "bulkDownBytes": 30643,
+      "bulkDownMessages": 8,
+      "heap": {
+        "used": 18200000,
+        "total": 21700000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": null,
+          "rtt": 609.36,
+          "reconnects": 1,
+          "bytesReceived": 78023,
+          "decodedOutputBytes": 76424,
+          "compressedOutputBytes": 0,
+          "outputWireBytes": 77249,
+          "decodeMilliseconds": 0,
+          "maxOutputBacklog": 8192,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 76424,
+          "outputAckAge": 31.9,
+          "inputAckAge": 31.9,
+          "responseAge": 32
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 0,
+          "compression": false,
+          "inputAcks": 17,
+          "outputAckAgeMs": 21,
+          "outputAckRttMs": 619,
+          "outputFramedBytes": 76721,
+          "outputInFlight": 0,
+          "outputOldestAgeMs": null,
+          "outputRateBytesPerSecond": 36072,
+          "outputRawBytes": 76424,
+          "outputWindow": 32768,
+          "rawFrames": 33,
+          "writerQueued": 0
+        },
+        "replayBytes": 0,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 150,
+      "serverRssKiB": 16996,
+      "serverHighWaterKiB": 17164,
+      "clientScriptMs": 246.41,
+      "clientTaskMs": 1388.75,
+      "rtt": 600,
+      "kbit": 256,
+      "compression": true,
+      "samples": 12,
+      "echoMs": {
+        "p50": 626.1,
+        "p95": 628.7,
+        "p99": 628.7
+      },
+      "firstOutputMs": 646.3,
+      "bulkMs": 1994.225,
+      "ctrlCMs": 1133,
+      "reconnectMs": 2927.666,
+      "bulkDownBytes": 2016,
+      "bulkDownMessages": 10,
+      "heap": {
+        "used": 18200000,
+        "total": 24500000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": "deflate-raw",
+          "rtt": 612.52,
+          "reconnects": 1,
+          "bytesReceived": 5890,
+          "decodedOutputBytes": 114527,
+          "compressedOutputBytes": 3679,
+          "outputWireBytes": 5097,
+          "decodeMilliseconds": 6.2,
+          "maxOutputBacklog": 8707,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 114527,
+          "outputAckAge": 29.9,
+          "inputAckAge": 29.9,
+          "responseAge": 30.1
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 24,
+          "compression": true,
+          "inputAcks": 17,
+          "outputAckAgeMs": 34,
+          "outputAckRttMs": 619,
+          "outputFramedBytes": 4441,
+          "outputInFlight": 8990,
+          "outputOldestAgeMs": 1968,
+          "outputRateBytesPerSecond": 304396,
+          "outputRawBytes": 114527,
+          "outputWindow": 32768,
+          "rawFrames": 17,
+          "writerQueued": 0
+        },
+        "replayBytes": 8990,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 180,
+      "serverRssKiB": 16776,
+      "serverHighWaterKiB": 17164,
+      "clientScriptMs": 476.852,
+      "clientTaskMs": 2608.113,
+      "rtt": 250,
+      "kbit": 64,
+      "jitter": 20,
+      "loss": 1,
+      "reorder": true,
+      "compression": false,
+      "samples": 12,
+      "echoMs": {
+        "p50": 327.2,
+        "p95": 1394,
+        "p99": 1394
+      },
+      "firstOutputMs": 733,
+      "bulkMs": 6697.586,
+      "ctrlCMs": 5060.2,
+      "reconnectMs": 2883.452,
+      "bulkDownBytes": 30817,
+      "bulkDownMessages": 14,
+      "heap": {
+        "used": 19300000,
+        "total": 24500000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": null,
+          "rtt": 625.492,
+          "reconnects": 1,
+          "bytesReceived": 78062,
+          "decodedOutputBytes": 75963,
+          "compressedOutputBytes": 0,
+          "outputWireBytes": 77263,
+          "decodeMilliseconds": 0,
+          "maxOutputBacklog": 6395,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 75963,
+          "outputAckAge": 32,
+          "inputAckAge": 32,
+          "responseAge": 32.2
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 0,
+          "compression": false,
+          "inputAcks": 17,
+          "outputAckAgeMs": 81,
+          "outputAckRttMs": 290,
+          "outputFramedBytes": 76431,
+          "outputInFlight": 378,
+          "outputOldestAgeMs": 6417,
+          "outputRateBytesPerSecond": 9099,
+          "outputRawBytes": 75963,
+          "outputWindow": 9010,
+          "rawFrames": 52,
+          "writerQueued": 0
+        },
+        "replayBytes": 378,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 140,
+      "serverRssKiB": 17144,
+      "serverHighWaterKiB": 17164,
+      "clientScriptMs": 277.198,
+      "clientTaskMs": 1127.445,
+      "rtt": 250,
+      "kbit": 64,
+      "jitter": 20,
+      "loss": 1,
+      "reorder": true,
+      "compression": true,
+      "samples": 12,
+      "echoMs": {
+        "p50": 329.1,
+        "p95": 377.8,
+        "p99": 377.8
+      },
+      "firstOutputMs": 358.8,
+      "bulkMs": 1201.409,
+      "ctrlCMs": 886.7,
+      "reconnectMs": 1685.682,
+      "bulkDownBytes": 1845,
+      "bulkDownMessages": 7,
+      "heap": {
+        "used": 21700000,
+        "total": 29400000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": "deflate-raw",
+          "rtt": 248.8,
+          "reconnects": 1,
+          "bytesReceived": 6366,
+          "decodedOutputBytes": 152418,
+          "compressedOutputBytes": 4093,
+          "outputWireBytes": 5598,
+          "decodeMilliseconds": 9.7,
+          "maxOutputBacklog": 31603,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 152418,
+          "outputAckAge": 28.9,
+          "inputAckAge": 28.9,
+          "responseAge": 28.9
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 25,
+          "compression": true,
+          "inputAcks": 17,
+          "outputAckAgeMs": 84,
+          "outputAckRttMs": 296,
+          "outputFramedBytes": 4910,
+          "outputInFlight": 8205,
+          "outputOldestAgeMs": 1724,
+          "outputRateBytesPerSecond": 293388,
+          "outputRawBytes": 152418,
+          "outputWindow": 32768,
+          "rawFrames": 18,
+          "writerQueued": 0
+        },
+        "replayBytes": 8205,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 170,
+      "serverRssKiB": 17172,
+      "serverHighWaterKiB": 17172,
+      "clientScriptMs": 349.903,
+      "clientTaskMs": 3020.444,
+      "rtt": 600,
+      "kbit": 32,
+      "jitter": 15,
+      "loss": 1,
+      "compression": false,
+      "samples": 12,
+      "echoMs": {
+        "p50": 723.2,
+        "p95": 2013.6,
+        "p99": 2013.6
+      },
+      "firstOutputMs": 2786.8,
+      "bulkMs": 10258.112,
+      "ctrlCMs": 9632.3,
+      "reconnectMs": 3334.241,
+      "bulkDownBytes": 30757,
+      "bulkDownMessages": 12,
+      "heap": {
+        "used": 12700000,
+        "total": 14300000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": null,
+          "rtt": 1218.115,
+          "reconnects": 1,
+          "bytesReceived": 70291,
+          "decodedOutputBytes": 68267,
+          "compressedOutputBytes": 0,
+          "outputWireBytes": 69417,
+          "decodeMilliseconds": 0,
+          "maxOutputBacklog": 8192,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 68267,
+          "outputAckAge": 26,
+          "inputAckAge": 26,
+          "responseAge": 26.3
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 0,
+          "compression": false,
+          "inputAcks": 17,
+          "outputAckAgeMs": 29,
+          "outputAckRttMs": 677,
+          "outputFramedBytes": 68681,
+          "outputInFlight": 0,
+          "outputOldestAgeMs": null,
+          "outputRateBytesPerSecond": 2614,
+          "outputRawBytes": 68267,
+          "outputWindow": 6519,
+          "rawFrames": 46,
+          "writerQueued": 0
+        },
+        "replayBytes": 0,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 130,
+      "serverRssKiB": 17452,
+      "serverHighWaterKiB": 17648,
+      "clientScriptMs": 313.332,
+      "clientTaskMs": 2151.973,
+      "rtt": 600,
+      "kbit": 32,
+      "jitter": 15,
+      "loss": 1,
+      "compression": true,
+      "samples": 12,
+      "echoMs": {
+        "p50": 727.5,
+        "p95": 5211.4,
+        "p99": 5211.4
+      },
+      "firstOutputMs": 771.4,
+      "bulkMs": 3138.246,
+      "ctrlCMs": 2053.3,
+      "reconnectMs": 3420.162,
+      "bulkDownBytes": 2065,
+      "bulkDownMessages": 9,
+      "heap": {
+        "used": 18200000,
+        "total": 23100000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": "deflate-raw",
+          "rtt": 761.414,
+          "reconnects": 1,
+          "bytesReceived": 5505,
+          "decodedOutputBytes": 87863,
+          "compressedOutputBytes": 3130,
+          "outputWireBytes": 4663,
+          "decodeMilliseconds": 12.7,
+          "maxOutputBacklog": 14577,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 87863,
+          "outputAckAge": 18.2,
+          "inputAckAge": 18.2,
+          "responseAge": 18.3
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 20,
+          "compression": true,
+          "inputAcks": 17,
+          "outputAckAgeMs": 30,
+          "outputAckRttMs": 711,
+          "outputFramedBytes": 4039,
+          "outputInFlight": 7,
+          "outputOldestAgeMs": 2900,
+          "outputRateBytesPerSecond": 50560,
+          "outputRawBytes": 87863,
+          "outputWindow": 32768,
+          "rawFrames": 19,
+          "writerQueued": 0
+        },
+        "replayBytes": 7,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 650,
+      "serverRssKiB": 17676,
+      "serverHighWaterKiB": 17676,
+      "clientScriptMs": 409.019,
+      "clientTaskMs": 3853.533,
+      "rtt": 250,
+      "kbit": 64,
+      "competing": true,
+      "compression": false,
+      "samples": 12,
+      "echoMs": {
+        "p50": 939.5,
+        "p95": 4366.4,
+        "p99": 4366.4
+      },
+      "firstOutputMs": 1896.7,
+      "bulkMs": 7299.507,
+      "ctrlCMs": 5986.6,
+      "reconnectMs": 3914.949,
+      "bulkDownBytes": 30757,
+      "bulkDownMessages": 12,
+      "heap": {
+        "used": 12700000,
+        "total": 14300000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": null,
+          "rtt": 1548.443,
+          "reconnects": 1,
+          "bytesReceived": 70411,
+          "decodedOutputBytes": 68537,
+          "compressedOutputBytes": 0,
+          "outputWireBytes": 69487,
+          "decodeMilliseconds": 0,
+          "maxOutputBacklog": 8192,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 68537,
+          "outputAckAge": 20.2,
+          "inputAckAge": 20.2,
+          "responseAge": 20.3
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 0,
+          "compression": false,
+          "inputAcks": 17,
+          "outputAckAgeMs": 19,
+          "outputAckRttMs": 804,
+          "outputFramedBytes": 68879,
+          "outputInFlight": 0,
+          "outputOldestAgeMs": null,
+          "outputRateBytesPerSecond": 6165,
+          "outputRawBytes": 68537,
+          "outputWindow": 10594,
+          "rawFrames": 38,
+          "writerQueued": 0
+        },
+        "replayBytes": 0,
+        "queuedInput": 0
+      }
+    },
+    {
+      "serverCpuMs": 710,
+      "serverRssKiB": 17524,
+      "serverHighWaterKiB": 17708,
+      "clientScriptMs": 298.989,
+      "clientTaskMs": 2510.82,
+      "rtt": 250,
+      "kbit": 64,
+      "competing": true,
+      "compression": true,
+      "samples": 12,
+      "echoMs": {
+        "p50": 996.2,
+        "p95": 4533.5,
+        "p99": 4533.5
+      },
+      "firstOutputMs": 782.1,
+      "bulkMs": 2130.3,
+      "ctrlCMs": 1215.2,
+      "reconnectMs": 3964.997,
+      "bulkDownBytes": 2578,
+      "bulkDownMessages": 13,
+      "heap": {
+        "used": 18200000,
+        "total": 23100000
+      },
+      "client": {
+        "connected": true,
+        "ended": false,
+        "pendingInput": 0,
+        "network": {
+          "compression": "deflate-raw",
+          "rtt": 2466.368,
+          "reconnects": 1,
+          "bytesReceived": 6061,
+          "decodedOutputBytes": 77456,
+          "compressedOutputBytes": 3651,
+          "outputWireBytes": 5169,
+          "decodeMilliseconds": 9.8,
+          "maxOutputBacklog": 8192,
+          "pendingInputAge": 0,
+          "sentUnacknowledgedInput": 0,
+          "queuedUnsentInput": 0,
+          "outputBacklog": 0,
+          "outputAcknowledged": 77456,
+          "outputAckAge": 29.2,
+          "inputAckAge": 29.2,
+          "responseAge": 29.3
+        }
+      },
+      "server": {
+        "network": {
+          "compressedFrames": 27,
+          "compression": true,
+          "inputAcks": 17,
+          "outputAckAgeMs": 18,
+          "outputAckRttMs": 836,
+          "outputFramedBytes": 4465,
+          "outputInFlight": 15,
+          "outputOldestAgeMs": 2052,
+          "outputRateBytesPerSecond": 86256,
+          "outputRawBytes": 77456,
+          "outputWindow": 32768,
+          "rawFrames": 17,
+          "writerQueued": 0
+        },
+        "replayBytes": 15,
+        "queuedInput": 0
+      }
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { matchesKeybind } from './keybinds-core.js';
 import { buttonIcon, createMenu, menuAction, notify } from './ui.js';
 import { createChart } from './charts.js';
 
@@ -14,8 +15,8 @@ function styles(){if(document.getElementById('docker-advanced-style'))return;con
 @media(max-width:760px){.docker-secondary{display:none}.docker-table th:nth-child(2){width:96px}.docker-table th:nth-child(3){width:50px}.docker-table th:nth-child(4){width:76px}.docker-table td,.docker-table th{padding:7px 5px}.docker-table .machine-row-actions{width:36px}.docker-table .machine-row-actions button{width:32px;min-height:36px}.docker-overview{grid-template-columns:repeat(2,minmax(0,1fr))}.docker-nav button{padding:5px;font-size:12px}.docker-nav .ui-icon{display:none}.docker-graphs{gap:4px;padding:4px}.docker-detail-tools button{font-size:12px;padding:5px}.docker-tools .icon-button{width:34px}}
 `;(document.head||document.querySelector('head')).append(style);}
 
-export function createDockerPanel({request,openFile,openTerminal,refreshInterval=5000}){
-  styles();let saved={};try{saved=JSON.parse(localStorage.getItem('eya-docker-ui')||'{}');}catch{}
+export function createDockerPanel({request,openFile,openTerminal,refreshInterval=5000,lifecycle,preferences={},onSettingsChange=()=>{}}){
+  styles();const saved=preferences;
   const prefs={interval:[3000,5000,10000,30000].includes(saved.interval)?saved.interval:Math.max(3000,refreshInterval),density:saved.density==='compact'?'compact':'comfortable',charts:saved.charts!==false,chartStyle:saved.chartStyle==='line'?'line':'area',columns:{image:saved.columns?.image!==false,ports:saved.columns?.ports!==false},tail:[100,200,500,1000,5000].includes(saved.tail)?saved.tail:200,timestamps:saved.timestamps!==false};
   const element=el('section','docker-panel machine-panel');element.setAttribute('aria-label','Docker');element.dataset.density=prefs.density;
   const nav=el('nav','docker-nav');nav.setAttribute('aria-label','Docker views');const toolbar=el('div','docker-tools');
@@ -39,13 +40,14 @@ export function createDockerPanel({request,openFile,openTerminal,refreshInterval
   const density=setting('Density',select('Docker density',[['comfortable','Comfortable'],['compact','Compact']],prefs.density));
   const chartStyle=setting('Charts',select('Docker chart style',[['area','Area'],['line','Line']],prefs.chartStyle));
   function toggle(label,value,onchange){const input=el('input');input.type='checkbox';input.checked=value;setting(label,input);input.onchange=()=>onchange(input.checked);return input;}
-  toggle('Show charts',prefs.charts,value=>{prefs.charts=value;graphs.hidden=!value;persist();});
+  toggle('Show charts',prefs.charts,value=>{prefs.charts=value;graphs.hidden=!value||!['containers','compose'].includes(mode);persist();});
   toggle('Image column',prefs.columns.image,value=>{prefs.columns.image=value;persist();render();});toggle('Ports column',prefs.columns.ports,value=>{prefs.columns.ports=value;persist();render();});
   settings.panel.append(button('Clear graph history','Trash2',()=>{aggregate.length=0;histories.clear();cpuChart.clear();memoryChart.clear();}));
   interval.onchange=()=>{prefs.interval=Number(interval.value);persist();schedule();};density.onchange=()=>{prefs.density=density.value;element.dataset.density=prefs.density;persist();};chartStyle.onchange=()=>{prefs.chartStyle=chartStyle.value;cpuChart.setOptions({style:prefs.chartStyle});memoryChart.setOptions({style:prefs.chartStyle});persist();};
+  element.addEventListener('keydown',event=>{if(matchesKeybind('docker.search',event)){event.preventDefault();event.stopPropagation();search.focus();search.select();}});
   toolbar.append(search,sort,state,reload,liveLabel,settings.element);const navButtons=new Map();
   for(const [key,label,icon] of [['containers','Containers','Container'],['compose','Compose','Layers'],['images','Images','Box'],['networks','Networks','Link'],['volumes','Volumes','Folder']]){const value=button(label,icon,()=>switchMode(key));nav.append(value);navButtons.set(key,value);}
-  function persist(){try{localStorage.setItem('eya-docker-ui',JSON.stringify(prefs));}catch{}}
+  function persist(){onSettingsChange(structuredClone(prefs));}
   function message(text,error=false){status.textContent=text;status.dataset.error=String(error);}
   function clearMenus(){for(const menu of menus)menu.destroy();menus=[];}
   function menuFor(row,label,actions){const cell=el('td','machine-row-actions');const menu=createMenu(label);menus.push(menu);for(const [name,icon,run] of actions)menuAction(menu.panel,button(name,icon,run),icon);cell.append(menu.element);cell.onclick=event=>event.stopPropagation();row.append(cell);}
@@ -56,7 +58,7 @@ export function createDockerPanel({request,openFile,openTerminal,refreshInterval
   async function projectAction(project,value,service=''){if(['stop','restart','up'].includes(value)&&!confirm(`${value[0].toUpperCase()+value.slice(1)} ${project.Name}${service?` / ${service}`:''}?`))return;await execute('compose.action',{project:project.Name,action:value,service},`${project.Name}: ${value}`);}
   function columns(labels){const row=el('tr');for(const [text,cls] of labels)row.append(el('th',cls||'',text));head.replaceChildren(row);}
   function cell(row,text,cls=''){const value=el('td',cls,text);value.title=String(text??'');row.append(value);return value;}
-  function rowFor(item,name,open){const row=el('tr');row.tabIndex=0;row.setAttribute('aria-selected',String(selected?.key===name));row.onclick=open;row.onkeydown=event=>{if(event.target===row&&event.key==='Enter'){event.preventDefault();open();}};return row;}
+  function rowFor(item,name,open){const row=el('tr');row.tabIndex=0;row.setAttribute('aria-selected',String(selected?.key===name));row.onclick=open;row.onkeydown=event=>{if(event.target===row&&matchesKeybind('docker.open',event)){event.preventDefault();open();}};return row;}
   function render(){if(disposed)return;clearMenus();body.replaceChildren();table.dataset.view=mode;for(const [key,value]of navButtons)value.setAttribute('aria-pressed',String(mode===key));
     const query=search.value.toLowerCase();state.parentElement?.classList.toggle('docker-state-filter',mode==='containers');state.hidden=mode!=='containers';
     if(mode==='containers'){
@@ -123,7 +125,22 @@ export function createDockerPanel({request,openFile,openTerminal,refreshInterval
     }
     if(disposed||loadingMode!==mode||element.querySelector('[aria-expanded=true]'))return;const selectedBefore=selected;render();if(selectedBefore&&!detail.hidden){if(selectedBefore.kind==='compose')showProject(projects.find(p=>p.Name===selectedBefore.key)||selectedBefore.item);else if(selectedBefore.kind==='container'&&detailTab==='logs'&&logLive&&!detailContent.contains(document.activeElement))await loadLogs(selectedBefore.item);}
   }catch(error){if(!disposed&&loadingMode===mode)message(error.message||String(error),true);}finally{busy=false;reload.disabled=false;if(!disposed&&loadingMode!==mode)queueMicrotask(load);}}
-  function schedule(){clearTimeout(timer);if(disposed)return;timer=setTimeout(async()=>{if(active&&live.checked&&!document.hidden&&element.getClientRects().length&&!element.querySelector('[aria-expanded=true]'))await load();schedule();},prefs.interval);}
+  function schedule(){clearTimeout(timer);if(disposed||lifecycle?.state.ready===false)return;timer=setTimeout(async()=>{if(active&&live.checked&&!document.hidden&&element.getClientRects().length&&!element.querySelector('[aria-expanded=true]'))await load();schedule();},prefs.interval);}
   live.onchange=()=>{if(live.checked)load();};schedule();render();
-  return {element,onActivate(){active=true;load();},onDeactivate(){active=false;},onClose(){disposed=true;detailGeneration++;clearTimeout(timer);clearMenus();settings.destroy();cpuChart.destroy();memoryChart.destroy();},api:{refresh:load,focusSearch:()=>search.focus(),setView:switchMode,openContainer:showContainer,getState:()=>({view:mode,selected:selected?.key,lastSample,preferences:{...prefs}})}};
+  const unsubscribe=lifecycle?.subscribe(state=>{if(!state.ready){clearTimeout(timer);detailGeneration++;}else if(active){load();schedule();}});
+  return {element,onActivate(){active=true;load();},onDeactivate(){active=false;},onClose(){disposed=true;unsubscribe?.();detailGeneration++;clearTimeout(timer);clearMenus();settings.destroy();cpuChart.destroy();memoryChart.destroy();},api:{openSettings(){settings.open();},getSettings:()=>structuredClone(prefs),updateSettings(value={}){
+    const previousTail=prefs.tail,previousTimestamps=prefs.timestamps;
+    if([3000,5000,10000,30000].includes(value.interval))prefs.interval=value.interval;
+    if(['comfortable','compact'].includes(value.density))prefs.density=value.density;
+    if(['line','area'].includes(value.chartStyle))prefs.chartStyle=value.chartStyle;
+    if(typeof value.charts==='boolean')prefs.charts=value.charts;
+    for(const key of ['image','ports'])if(typeof value.columns?.[key]==='boolean')prefs.columns[key]=value.columns[key];
+    if([100,200,500,1000,5000].includes(value.tail))prefs.tail=value.tail;
+    if(typeof value.timestamps==='boolean')prefs.timestamps=value.timestamps;
+    interval.value=prefs.interval;density.value=prefs.density;chartStyle.value=prefs.chartStyle;element.dataset.density=prefs.density;graphs.hidden=!prefs.charts||!['containers','compose'].includes(mode);
+    cpuChart.setOptions({style:prefs.chartStyle});memoryChart.setOptions({style:prefs.chartStyle});
+    for(const row of settings.panel.querySelectorAll('label')){const input=row.querySelector('input[type=checkbox]');if(input){const name=row.textContent;input.checked=name==='Show charts'?prefs.charts:name==='Image column'?prefs.columns.image:prefs.columns.ports;}}
+    render();schedule();
+    if((previousTail!==prefs.tail||previousTimestamps!==prefs.timestamps)&&selected?.kind==='container'&&detailTab==='logs'&&!detail.hidden)loadLogs(selected.item).catch(error=>message(error.message,true));
+  },refresh:load,focusSearch:()=>search.focus(),setView:switchMode,openContainer:showContainer,getState:()=>({view:mode,selected:selected?.key,lastSample,preferences:{...prefs}})}};
 }

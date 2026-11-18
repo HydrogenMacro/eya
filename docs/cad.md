@@ -1,6 +1,6 @@
 # CAD as code with build123d
 
-Eya opens binary or ASCII STL, binary glTF (`.glb`), and `.gltf` files with embedded or relative sidecar resources in independent CAD panels. Use GLB for build123d when you want one file: it retains assembly names, colors, and transforms and reloads over the same encrypted connection as the terminal. Rendering libraries are bundled into the standalone client; no CDN or additional viewer service is required.
+Eya opens binary or ASCII STL, 3MF (`.3mf`), binary glTF (`.glb`), and `.gltf` files with embedded or relative sidecar resources in independent CAD panels. Use GLB for build123d when you want one file: it retains assembly names, colors, and transforms and reloads over the independent encrypted workspace connection. Rendering libraries are bundled into the standalone client; no CDN or additional viewer service is required.
 
 ## Why a file viewer instead of ocp_vscode?
 
@@ -64,19 +64,29 @@ STL also works. Use `export_stl(part, "preview.tmp.stl")`, then `os.replace("pre
 
 ## Inspection controls
 
-The compact toolbar keeps View, Fit, Measure, Select, Sections, and CAD options available. Secondary controls are grouped in popovers so the canvas keeps its available space.
+The toolbar provides Fit, Display, and CAD options. Sections, Parts, and Selection use a compact resizable sidebar. The thin handle at the middle-right edge of the viewport opens or closes it. Its side, tab order, split layout, size, and collapsed state survive model reloads. Drag a tab anywhere in another area to merge or reorder it; its center snaps between tabs and a vertical line previews insertion. Use Divide sidebar to create a split. Separators support dragging, arrow keys, and double-click reset. See [panels.md](panels.md) for the docking API.
 
-- Orbit by dragging; pan with right-drag or two fingers; zoom with the wheel or pinch. Camera settings also provide turntable/free orbit and first-person movement: focus the canvas, use WASD to move, Q/E to move vertically, and drag to look. Movement speed, look sensitivity, and inverted look are configurable.
-- Choose isometric, front/back, top/bottom, or left/right orthographic views. **Fit** frames the complete model.
-- The corner rotation gizmo shows the projected X/Y/Z axes and its colored axis buttons jump to orthographic views. The model helpers can show the XY grid alone or all XY/XZ/YZ grids, plus labeled minimum and maximum axis coordinates.
-- Switch between shaded, shaded plus sharp edges, and triangle wireframe. Imported normals are validated and repaired when missing or invalid; the edges are extracted from the mesh and are not original CAD topology.
-- **Parts** lists model meshes by their exported names, with visibility checkboxes. **Show all** now lives in that dropdown and restores hidden parts. Bounds report the entire model, including hidden parts.
-- **Sections** provides independent minimum and maximum clipping handles for X, Y, and Z. Each end has both a slider and a wheel/keyboard-adjustable numerical coordinate input. A separate camera-normal section stays perpendicular to the current view and can be flipped. Colored in-scene handles and the rotation gizmo are independently toggleable. Sections are visual clipping planes; cut surfaces are not capped or exported.
-- **Measure distance** picks two points and reports distance plus X/Y/Z deltas. **Measure angle** picks three points; the second point is the angle's vertex. **Face area** measures a connected coplanar triangle region. **Mesh volume** measures a closed, manifold mesh and rejects open geometry. **Snap vertices** chooses the nearest vertex of the clicked triangle. Measurement points are larger and use a high-contrast configurable color.
-- **Select** supports whole parts, connected coplanar faces, and face-boundary loops. Shift-click adds to the current selection. Hover highlighting, annotation colors, and default selection mode are configurable.
-- Display units can be mm, cm, or inches. All measurements are explicitly approximate tessellated-mesh measurements. Curved surfaces, hidden topology, and mesh resolution limit their accuracy; no analytic diameter/radius or exact BRep measurements are inferred.
+- Drag to orbit; right-drag, middle-drag, or two fingers pan; wheel or pinch moves forward/backward and changes magnification. Hold Space to capture the pointer and pan without holding a mouse button; release Space or press Escape to release it. The browser must allow pointer lock. Selecting geometry leaves camera controls available. Fit frames the complete model.
+- WASD/QE movement is always available when the canvas is focused. W/S moves forward/backward with visible orthographic magnification; A/D strafes and Q/E moves vertically. Holding a key continues movement independently of keyboard repeat. Releasing it, losing focus, or hiding the page stops movement. Shift speeds movement up and Ctrl slows it down by the configured factor. **Keyboard shortcuts → 3D viewer** rebinds movement, pointer pan, speed modifiers, and mouse gestures, including their modifier keys. Alt-right-drag looks around from the camera position by default.
+- **Turntable** keeps Z up and clamps pitch at the poles; **Free orbit** rotates around the camera's own up/right axes and can pass over the poles. **Orbit around** chooses the current view target, world origin, or model center. The six colored ±X/±Y/±Z gizmo dots jump to orthographic views; dragging the gizmo uses the same orbit behavior. Its size is configurable.
+- XY, XZ, and YZ reference planes use blue, green, and red respectively. **Grid lines** and **Grid fill** are independent: turn lines off for axes only, or leave fill enabled for translucent planes without lines. **Grid planes → Off** hides these references. **Infinite grids** extends the planes beyond the viewport with a horizon fade; finite grids are the default. Reference planes remain continuous across the orthographic camera's near plane. **Grid tick marks** keeps the saved `axisCoordinates` field; subtle labels stay outside the projected model. Cells and ticks choose 1/2/5 spacing from zoom and the shorter viewport dimension.
+- **Decimal places** controls displayed measurements, bounds, section coordinates, and grid ticks (0–10, default 3), strips trailing zeros, and normalizes negative zero. Geometry calculations retain their full precision. Tiny positive camera-section distances use compact scientific notation when ordinary rounding would display zero.
+- Display offers Flat, Zebra, and Shaded, opacity, and independent Edges and Points. Edges represent sharp tessellation boundaries, rather than original CAD topology. Existing `edges` and `wireframe` configuration values retain their rendering behavior. Missing or invalid imported normals are repaired.
+- Parts lists exported mesh names. Visibility and Show all survive reloads; bounds include hidden meshes.
+- Sections has X/Y/Z minimum and maximum coordinates on the ends of each shared slider. Touch dragging chooses the nearer handle; when handles coincide, drag direction chooses the endpoint. Moving an endpoint activates its axis automatically. Reset restores the full axis ranges and a small positive camera-section distance. The perpendicular camera section is always applied, just beyond the camera by default, and follows its direction; its distance and flip remain adjustable. Only model geometry is clipped: grids, ticks, axes, and section gizmos remain intact. Display units apply to coordinates; `viewSectionDistance` stores millimetres. Legacy `viewSectionPosition` is preserved without repurposing it.
+- Clicking geometry permanently toggles its selection. At most two items can be selected; a third is rejected with a small message at the bottom-left of the viewport. The second item is dark orange. Modifier keys do not change selection behavior. **Pick** chooses Auto (points, edges, or faces), Face, Part, or Boundary. Escape clears selections.
+- Selection's **Overview** radio subtab presents a concise measurement table. **Selection 1** and **Selection 2** show detailed tables with **Zoom to selection** and **Deselect** actions below them. Vectors share one X/Y/Z row; cells scroll horizontally. Measurements include coordinates, lengths, face area/perimeter, part surface area, bounds, and volume for closed manifold meshes. Two entities add closest distance and displacement, with angles for edge/edge, face/face, and edge/face combinations. Geometry guides show closest points and perpendicular feet without floating text.
+- Closed planar boundaries are checked for circles and rectangles. Recognized circles report approximate radius, diameter, and center; rectangles report side lengths. Circle fitting requires at least twelve segments and rejects radial errors above 0.5%, nonplanar/open/branching boundaries, and self-crossing rings. All results use tessellated geometry, rather than analytic BRep surfaces.
 
-Viewer display defaults, units, grids, gizmos, navigation, hover, measurement styling, selection, snapping, source STL units, live reload, and interval are saved in browser storage. They can be changed directly in each CAD panel; the main **Settings → 3D viewer** section changes the shared defaults and updates open viewers. On mobile the toolbar scrolls within a bounded area, leaving room for the model canvas.
+Viewer preferences also appear in Settings → 3D viewer and the standalone generator. Legacy navigation-mode, selection-behavior, and view-section-enable fields are ignored; movement, two-item toggle selection, and the camera section are always active. Unknown embedded configuration fields survive client updates. A fresh client can restore shared settings from a saved server workspace; camera and selections start fresh.
+
+On touch screens, separators have padded 20-pixel resize targets, held tabs drag with a translucent preview and insertion line, slider thumbs are enlarged, and controls preserve touch targets while reducing whitespace. Numeric inputs retain a 16-pixel minimum font size. The fixed workspace uses shared keyboard geometry for every input surface; see [mobile keyboard guidelines](interface.md#mobile-keyboards-and-input-placement). Narrow sidebars keep a bounded canvas area; top/bottom placement gives the canvas more width.
+
+## 3MF files
+
+3MF archives load locally with their core meshes, component transforms, object names, colors, and the materials/extensions supported by the bundled Three.js 3MF loader. Declared micron, millimetre, centimetre, inch, foot, or metre units convert to the workspace's millimetres. The viewer keeps 3MF's Z-up orientation. Embedded textures stay inside archive-backed blob resources; external relationships never trigger HTTP requests. Slicer-specific metadata, unsupported extensions, and mixed-unit submodels are not interpreted as CAD topology.
+
+Archives are limited to 4096 entries, 64 MiB per expanded entry and 128 MiB total compressed/expanded data. Component cycles, nesting beyond 128 levels, and scenes expanding beyond 100,000 nodes or 2,000,000 triangles are rejected before building the scene. Malformed reloads keep the previous model.
 
 ## Live reload behavior
 
@@ -84,20 +94,29 @@ The default interval is one second, configurable from 0.5–5 seconds. **Live re
 
 Only visible CAD panels in the active browser page poll. Closing the Files browser does not stop a visible CAD panel. Each panel prevents overlapping background reload requests. The new geometry is validated before replacing the old model; a failed transfer, missing file, or invalid export keeps the last good model and reports the error in its status line. Atomic exports are recommended because an in-place write may momentarily be a syntactically valid but incomplete model.
 
-The camera, zoom, display mode, section controls, and hidden-part indices survive reload. Measurements and selections are cleared because old picked geometry may no longer exist. If a rebuild moves or greatly enlarges geometry, use **Fit**. Hidden-part identity is based on mesh order; changing assembly structure can change which mesh an index denotes.
+The camera position, target, zoom and framing scale, display mode, opacity, edges/points, units, sections, grids, navigation, gizmo settings, sidebar layout, and part visibility survive reload. Measurements and selections are cleared because old picked geometry may no longer exist. If a rebuild moves or greatly enlarges geometry, use **Fit**. Hidden-part identity uses the named scene path and same-name sibling occurrence, so reordering distinct named parts preserves visibility. Replacing anonymous or identically named siblings can change which part that occurrence denotes.
 
 ## Panel API and limits
 
-CAD files use the same panel registration and lifecycle as other viewers. They expose `EyaPanels.call(panelId, "fit")` and `EyaPanels.call(panelId, "cadState")` in addition to download/refresh. CAD state returns camera position, target, zoom, revision, navigation/grid settings, active section-plane count, and hovered part for integrations. Closing a CAD tab releases controls, observers, WebGL resources, geometry, and textures.
+CAD files use the same panel registration and lifecycle as other viewers. They expose `EyaPanels.call(panelId, "fit")` and `EyaPanels.call(panelId, "cadState")` in addition to download/refresh. CAD state returns camera position, target, zoom, revision, navigation/grid settings, active section-plane count, and hovered part for integrations. Version 2.0 removes the obsolete `navigationMode` and `selectionBehavior` state fields; orbit settings and the `navigation` diagnostics describe the unified camera controls. Selection count is limited to two. Closing a CAD tab releases controls, observers, WebGL resources, geometry, and textures.
 
 WebGL2 is required; if unavailable, the panel reports it and its Download button remains available. Very dense models consume browser CPU/GPU memory, including an additional sharp-edge representation. Tune build123d tessellation tolerances and `EYA_MAX_FILE_BYTES` for your workload. The client bundle is larger because it includes the renderer and parsers; compressed HTML generation remains available. No separate network port is opened and previewing a file does not execute its source script.
 
-Run the integration test with a disposable server working directory:
+Run the focused checks after rebuilding the client and server:
 
 ```sh
-NODE_PATH=client/node_modules EYA_TEST_ROOT=/path/to/test-directory node tests/cad.cjs
+NODE_PATH=client/node_modules node tests/cad-selection.cjs
+NODE_PATH=client/node_modules node tests/cad-3mf.cjs
+NODE_PATH=client/node_modules node tests/cad-viewer.cjs
+NODE_PATH=client/node_modules node tests/cad-mobile.cjs
+NODE_PATH=client/node_modules node tests/cad-layout.cjs
+NODE_PATH=client/node_modules node tests/cad-selection-ui.cjs
+NODE_PATH=client/node_modules node tests/cad-navigation.cjs
+NODE_PATH=client/node_modules node tests/cad-grid.cjs
+NODE_PATH=client/node_modules node tests/docking.cjs
+NODE_PATH=client/node_modules node tests/cad.cjs
 ```
 
-The test browser must have WebGL2 support. `tests/Dockerfile.browser` includes Chromium's software renderer for headless CI. The suite verifies invalid-STL-normal repair, STL and GLB dimensions, distance/angle/area/volume measurement, face/loop selection, hover and first-person movement, paired sections, part visibility, camera-preserving reload without Files, same-sized rebuilds, invalid-export recovery, pause, and mobile layout.
+The last suite starts its own disposable server, or accepts an existing server at port 18765 with `EYA_TEST_ROOT`. Browser tests require WebGL2; the interaction suite explicitly enables Chromium's software renderer. Coverage includes actual picking/modifiers/measurements and camera gestures, all six gizmo views, held movement and speed factors, sections, rendered display modes, sidebar splits/resizing, complete reload state, invalid-export recovery, 3MF unit/transform/archive validation, and encrypted live reload.
 
 `tests/viewer-regressions.cjs` additionally verifies actual Enter-key editing, blank-line undo/redo, glTF sidecar reads, visible model pixels, and sidecar-only reloads in hosted and standalone HTML/SVG clients.

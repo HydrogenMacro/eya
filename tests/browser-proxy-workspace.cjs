@@ -1,0 +1,60 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const { fixture } = require('./continuity-fixture.cjs');
+
+(async () => {
+  const f = await fixture();
+  try {
+    await fs.writeFile(path.join(f.files, 'index.html'), '<!doctype html><title>Local panel fixture</title><p>Authenticated local HTML</p><script>parent.__localRan=true</script>');
+    const first = await f.client({ webgl: false }); await f.named(first, 'Proxy fixture');
+    const types = await first.evaluate(() => EyaPanels.listTypes());
+    assert.ok(types.some(type => type.id === 'proxy-browser' && type.keywords.includes('html')));
+    const chromiumId = await first.evaluate(() => EyaPanels.create('web-browser'));
+    await first.getByLabel('Browser options').click();
+    assert.equal(await first.getByRole('button', { name: 'Open a local HTML file', exact: true }).count(), 0, 'Chromium no longer offers Local HTML');
+    await first.evaluate(id => EyaPanels.close(id), chromiumId);
+    await first.getByRole('button', { name: 'New panel', exact: true }).first().click();
+    await first.locator('.panel-start').getByRole('searchbox', { name: 'Search panels' }).fill('proxy');
+    await first.locator('.panel-start').getByRole('button', { name: 'Proxy browser', exact: true }).click();
+    await first.locator('.eya-browser-proxy-warning').waitFor();
+    const proxyId = await first.evaluate(() => EyaPanels.layout().flatMap(group => group.panels).find(id => id.startsWith('proxy-browser-')));
+    assert.ok(proxyId);
+    await first.getByLabel('Browser options').click();
+    await first.getByRole('button', { name: 'Open a local HTML file', exact: true }).click();
+    await first.getByLabel('Path to local HTML file under the Eya file root').fill(path.join(f.files, 'index.html'));
+    await first.getByRole('button', { name: 'Open the selected local HTML file' }).click();
+    await first.frameLocator('.html-viewer-frame').getByText('Authenticated local HTML').waitFor();
+    assert.equal(await first.evaluate(() => window.__localRan), undefined);
+    await first.getByRole('button', { name: 'Return to proxy browsing' }).click();
+    await first.evaluate(id => EyaPanels.call(id, 'openSettings'), proxyId);
+    await first.getByTitle('Zoom in', { exact: true }).click();
+    await first.getByLabel('Browser options').click();
+    await first.evaluate(id => { EyaPanels.call(id, 'newTab'); }, proxyId);
+    const socketCount = await first.evaluate(() => __sockets.filter(socket => /\/browser-ws(?:\?|$)/.test(socket.url)).length);
+    await first.evaluate(() => __sockets.find(socket => /\/browser-ws(?:\?|$)/.test(socket.url) && socket.readyState === WebSocket.OPEN).close());
+    await first.waitForFunction(count => __sockets.filter(socket => /\/browser-ws(?:\?|$)/.test(socket.url)).length > count, socketCount);
+    await first.locator('.eya-browser-connection[data-state="ready"]').waitFor();
+    assert.equal(await first.evaluate(() => __sockets.filter(socket => /\/browser-ws(?:\?|$)/.test(socket.url)).length), socketCount + 1, 'Automatic reconnect opens one fresh authenticated proxy channel');
+
+    await f.saved(first);
+    const workspace = await first.evaluate(() => EyaWorkspaces.getState().workspace);
+    const descriptor = workspace.tabs.find(tab => tab.id === proxyId);
+    assert.equal(descriptor.kind, 'proxy-browser');
+    assert.equal(descriptor.session ?? null, null, 'Proxy panels never claim Chromium sessions');
+    assert.deepEqual(descriptor.config, { initialUrl: '', proxyState: { v: 1, tabs: [{ url: '' }, { url: '' }], active: 1, zoom: 1.1 } });
+    assert.equal(await first.evaluate(() => __sockets.some(socket => /\/browser-render-ws(?:\?|$)/.test(socket.url))), false, 'Proxy/local viewing must not start remote Chromium');
+    await first.context().close();
+    const restored = await f.client({ type: 'svg', webgl: false });
+    await restored.evaluate(id => EyaWorkspaces.open(id), workspace.id);
+    await restored.locator('.eya-browser-proxy-warning').waitFor();
+    assert.equal(await restored.getByLabel('Address or search').evaluate(el => el.value || ''), '');
+    assert.equal(await restored.locator('.eya-browser-frame').count(), 2);
+    assert.equal(await restored.locator('.eya-browser-frame').last().evaluate(frame => frame.style.transform), 'scale(1.1)');
+    await restored.getByLabel('Browser options').click();
+    assert.equal(await restored.getByRole('button', { name: 'Open a local HTML file', exact: true }).count(), 1);
+    await restored.evaluate(id => EyaPanels.close(id), proxyId);
+    assert.deepEqual(f.errors, []);
+    console.log('Proxy workspaces: launcher, Chromium/local split, authenticated scripts-off HTML, automatic reconnect, sessionless save, SVG restoration and cleanup passed.');
+  } finally { await f.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

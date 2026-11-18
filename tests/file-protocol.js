@@ -46,6 +46,10 @@ function read(path) {
   const id = ++requestId;
   return new Promise((resolve, reject) => { pending.set(id, { resolve, reject, chunks: [] }); control(id, 'read', { path }); });
 }
+function readRange(path, offset, length, version) {
+  const id = ++requestId;
+  return new Promise((resolve, reject) => { pending.set(id, { resolve, reject, chunks: [] }); control(id, 'read_range', { path, offset, length, version }); });
+}
 function write(path, bytes) {
   const id = ++requestId;
   return new Promise((resolve, reject) => { pending.set(id, { resolve, reject, bytes }); control(id, 'write', { path, size: bytes.length, overwrite: false }); });
@@ -81,6 +85,14 @@ const timer = setTimeout(() => { console.error('File protocol test timed out'); 
   if (decoder.decode(seed.bytes) !== 'seed contents\n') throw Error('seed file contents differed');
   const stat = await request('stat', { path: `${listing.path}/seed.txt` });
   if (typeof stat.version !== 'string' || !stat.version || stat.version !== seed.meta.version || stat.size !== seed.bytes.length) throw Error('File stat version does not match the opened file');
+  const range = await readRange(`${listing.path}/seed.txt`, 5, 4, seed.meta.version);
+  if (decoder.decode(range.bytes) !== 'cont' || range.meta.offset !== 5 || range.meta.size !== seed.bytes.length) throw Error('Range read returned wrong data');
+  const end = await readRange(`${listing.path}/seed.txt`, seed.bytes.length, 10, seed.meta.version);
+  if (end.bytes.length !== 0) throw Error('Range at EOF should be empty');
+  for (const values of [[seed.bytes.length + 1, 1, seed.meta.version], [0, 1048577, seed.meta.version], [0, 1, 'stale']]) {
+    let rejected = false; try { await readRange(`${listing.path}/seed.txt`, ...values); } catch { rejected = true; }
+    if (!rejected) throw Error('Invalid range was accepted');
+  }
   await write(`${listing.path}/protocol.txt`, encoder.encode('protocol contents'));
   await request('rename', { path: `${listing.path}/protocol.txt`, newPath: 'renamed.txt' });
   const results = await request('search', { path: listing.path, query: 'renamed', showHidden: false });

@@ -1,18 +1,18 @@
 import {
-  createElement, ArrowLeft, ArrowRight, ArrowUp, CornerUpLeft, X, Ellipsis, EllipsisVertical,
-  Settings, Unplug, Plug, Folder, FolderOpen, FolderPlus, Upload, Download, RefreshCw,
+  createElement, Film, Music, ArrowLeft, ArrowRight, ArrowUp, CornerUpLeft, X, Ellipsis, EllipsisVertical,
+  Settings, Unplug, Plug, Folder, FolderOpen, FolderPlus, Upload, Download, RefreshCw, Undo2, Redo2, Type, Hash,
   Search, Save, Copy, File, FileCode, Image, Box, Link, Columns2, Rows2, MoveRight,
   Maximize, Ruler, SlidersHorizontal, Layers, Terminal, ChevronDown, Check, Pencil, Trash2,
-  Plus, Cpu, Container, Play, Square, Activity, Palette, ListFilter, Pause, Logs, Info, Globe,
-  CornerDownLeft, ClipboardPaste, Delete, Command, Move, ChevronsUp, ChevronsDown, ChevronFirst, ChevronLast, LogOut, IndentIncrease, ArrowDown,
+  Plus, Minus, ZoomIn, ZoomOut, RotateCcw, Focus, Cpu, Container, Play, Square, Activity, Palette, ListFilter, Pause, Logs, Info, Globe,
+  CornerDownLeft, ClipboardPaste, Delete, Command, Move, ChevronsUp, ChevronsDown, ChevronFirst, ChevronLast, LogOut, IndentIncrease, ArrowDown, Option, ArrowBigUpDash, ChevronUp, CircleArrowOutUpLeft, Keyboard,
 } from 'lucide';
 
-const icons = { ArrowLeft, ArrowRight, ArrowUp, CornerUpLeft, X, Ellipsis, EllipsisVertical,
-  Settings, Unplug, Plug, Folder, FolderOpen, FolderPlus, Upload, Download, RefreshCw,
+const icons = { Film, Music, ArrowLeft, ArrowRight, ArrowUp, CornerUpLeft, X, Ellipsis, EllipsisVertical,
+  Settings, Unplug, Plug, Folder, FolderOpen, FolderPlus, Upload, Download, RefreshCw, Undo2, Redo2, Type, Hash,
   Search, Save, Copy, File, FileCode, Image, Box, Link, Columns2, Rows2, MoveRight,
   Maximize, Ruler, SlidersHorizontal, Layers, Terminal, ChevronDown, Check, Pencil, Trash2,
-  Plus, Cpu, Container, Play, Square, Activity, Palette, ListFilter, Pause, Logs, Info, Globe,
-  CornerDownLeft, ClipboardPaste, Delete, Command, Move, ChevronsUp, ChevronsDown, ChevronFirst, ChevronLast, LogOut, IndentIncrease, ArrowDown };
+  Plus, Minus, ZoomIn, ZoomOut, RotateCcw, Focus, Cpu, Container, Play, Square, Activity, Palette, ListFilter, Pause, Logs, Info, Globe,
+  CornerDownLeft, ClipboardPaste, Delete, Command, Move, ChevronsUp, ChevronsDown, ChevronFirst, ChevronLast, LogOut, IndentIncrease, ArrowDown, Option, ArrowBigUpDash, ChevronUp, CircleArrowOutUpLeft, Keyboard };
 
 export function icon(name) {
   return createElement(icons[name] || File, { class: 'ui-icon', width: 18, height: 18, 'stroke-width': 1.8, 'aria-hidden': 'true', focusable: 'false' });
@@ -27,9 +27,18 @@ export function buttonIcon(button, name, label = button.textContent.trim(), icon
   return button;
 }
 
+const menuLayers = new Map();
+export function registerMenuLayer(owner, layer) {
+  if (!menuLayers.has(owner)) menuLayers.set(owner, new Set());
+  menuLayers.get(owner).add(layer);
+  return () => { const layers = menuLayers.get(owner); layers?.delete(layer); if (!layers?.size) menuLayers.delete(owner); };
+}
+function menuContains(owner, target) {
+  return owner.contains(target) || [...(menuLayers.get(owner) || [])].some(layer => layer.contains(target));
+}
 const menus = new Set();
 let menuSequence = 0;
-export function closeMenus(inside) { for (const menu of menus) if (!inside || !menu.panel.contains(inside)) menu.close(); }
+export function closeMenus(inside) { for (const menu of menus) if (!inside || !menuContains(menu.panel, inside)) menu.close(); }
 let toast, toastTimer;
 export function notify(message) {
   if (!toast) {
@@ -44,7 +53,7 @@ export function notify(message) {
 // touch browsers. Auto-popover light-dismiss can run between pointerup and click
 // on its trigger, making the same tap close and then reopen the popup.
 // The fallback temporarily portals the panel into the page body on older browsers.
-export function createMenu(label, { iconName = 'Ellipsis', role = 'menu', iconOnly = true, onOpen } = {}) {
+export function createMenu(label, { iconName = 'Ellipsis', role = 'menu', iconOnly = true, onOpen, consumeDismiss = false } = {}) {
   const element = document.createElement('div'); element.className = 'ui-menu-anchor';
   const trigger = document.createElement('button'); trigger.type = 'button';
   buttonIcon(trigger, iconName, label, iconOnly);
@@ -57,6 +66,7 @@ export function createMenu(label, { iconName = 'Ellipsis', role = 'menu', iconOn
   trigger.setAttribute('aria-controls', panel.id);
   element.append(trigger, panel);
   const native = typeof panel.showPopover === 'function';
+  if (!native) panel.removeAttribute('popover');
   const abort = new AbortController();
   let opened = false;
   function close(restoreFocus = false) {
@@ -96,7 +106,7 @@ export function createMenu(label, { iconName = 'Ellipsis', role = 'menu', iconOn
   panel.addEventListener('keydown', event => {
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(true); return; }
     if (role !== 'menu' || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-    const items = [...panel.querySelectorAll('button:not(:disabled)')];
+    const items = [...panel.querySelectorAll('button:not(:disabled)')].filter(button => button.closest('[role=menu]') === panel && !button.closest('[hidden]'));
     const index = items.indexOf(document.activeElement);
     const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (index + (event.key === 'ArrowUp' ? -1 : 1) + items.length) % items.length;
     event.preventDefault(); items[next]?.focus();
@@ -104,9 +114,23 @@ export function createMenu(label, { iconName = 'Ellipsis', role = 'menu', iconOn
   document.addEventListener('keydown', event => {
     if (opened && event.key === 'Escape') { event.preventDefault(); close(true); }
   }, { signal: abort.signal });
+  let dismissedPointer = null, dismissTimer;
+  const consume = event => { event.preventDefault(); event.stopImmediatePropagation(); };
   document.addEventListener('pointerdown', event => {
-    if (opened && !element.contains(event.target) && !panel.contains(event.target)) close();
-  }, { signal: abort.signal });
+    if (opened && !element.contains(event.target) && !menuContains(panel, event.target)) {
+      if (consumeDismiss) {
+        consume(event); dismissedPointer = event.pointerId;
+        clearTimeout(dismissTimer); dismissTimer = setTimeout(() => { dismissedPointer = null; }, 1500);
+      }
+      close();
+    } else if (dismissedPointer !== null) { dismissedPointer = null; clearTimeout(dismissTimer); }
+  }, { capture: true, signal: abort.signal });
+  for (const type of ['pointerup', 'pointercancel', 'click', 'contextmenu']) document.addEventListener(type, event => {
+    if (dismissedPointer === null || ('pointerId' in event && event.pointerId !== dismissedPointer)) return;
+    consume(event);
+    if (type === 'click' || type === 'pointercancel' || type === 'contextmenu') { dismissedPointer = null; clearTimeout(dismissTimer); }
+  }, { capture: true, signal: abort.signal });
+  abort.signal.addEventListener('abort', () => clearTimeout(dismissTimer), { once: true });
   window.addEventListener('resize', () => { if (opened) position(); }, { signal: abort.signal });
   window.visualViewport?.addEventListener('resize', () => { if (opened) position(); }, { signal: abort.signal });
   return api;

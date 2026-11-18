@@ -1,0 +1,43 @@
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const vm = require('node:vm');
+const { buildSync } = require('esbuild');
+const bundle = buildSync({ stdin: { contents: "export * from './cad-selection.js'; export * as THREE from 'three';", resolveDir:path.resolve('client') }, bundle:true, write:false, format:'cjs', platform:'node' }).outputFiles[0].text;
+const sandbox = { module:{exports:{}}, exports:{} }; sandbox.exports=sandbox.module.exports; vm.runInNewContext(bundle,sandbox);
+const { THREE, cadPrimitiveClosest, cadClosestGeometry, cadGeometryMetrics, cadTopology, cadFaceRegion, cadDetectPatterns } = sandbox.module.exports;
+const p = (x,y,z=0) => new THREE.Vector3(x,y,z);
+const near = (a,b) => assert.ok(Math.abs(a-b)<1e-8, `${a} != ${b}`);
+function distance(a,b,expected) { for (const [x,y] of [[a,b],[b,a]]) { const pair=cadPrimitiveClosest(x,y); near(pair[0].distanceTo(pair[1]),expected); } }
+distance([p(0,0)],[p(3,4)],5);
+distance([p(2,3)],[p(0,0),p(4,0)],3);
+distance([p(6,3)],[p(0,0),p(4,0)],Math.sqrt(13));
+distance([p(1,1,3)],[p(0,0),p(4,0),p(0,4)],3);
+distance([p(-1,1,2),p(3,1,2)],[p(0,0),p(4,0),p(0,4)],2);
+distance([p(1,1,-2),p(1,1,2)],[p(0,0),p(4,0),p(0,4)],0);
+distance([p(0,0),p(4,0)],[p(2,3),p(2,3)],3);
+distance([p(0,0),p(4,0)],[p(1,2),p(3,2)],2);
+distance([p(0,0),p(4,0)],[p(2,-1),p(2,1)],0);
+distance([p(0,0),p(4,0),p(0,4)],[p(0,0,2),p(4,0,2),p(0,4,2)],2);
+const box = new THREE.Mesh(new THREE.BoxGeometry(40,30,8)); box.position.set(1e7,-1e7,1e7); box.updateMatrixWorld();
+const data=cadTopology(box); assert.equal(data.closed,true); assert.equal(cadFaceRegion(data,0).size,2);
+const triangles=data.triangles.map(triangle=>triangle.points.map(point=>point.clone().applyMatrix4(box.matrixWorld)));
+const metrics=cadGeometryMetrics(triangles,true); near(metrics.volume,9600); near(metrics.area,3520);
+const closest=cadClosestGeometry(triangles,[[p(1e7+25,-1e7,1e7)]]); near(closest[0].distanceTo(closest[1]),5);
+assert.equal(cadGeometryMetrics(triangles).volume,undefined);
+console.log('CAD vertex/edge/face closest distances, intersections, coplanar faces, transformed area and volume passed');
+
+const segments=points=>points.map((point,i)=>[point,points[(i+1)%points.length]]);
+const rectangle=[p(0,0),p(4,0),p(4,3),p(0,3)];
+const rectangular=cadDetectPatterns(segments(rectangle));assert.equal(rectangular.length,1);assert.equal(rectangular[0].kind,'rectangle');near(rectangular[0].sides[0],4);near(rectangular[0].sides[1],3);
+const circle=Array.from({length:64},(_,i)=>p(3+10*Math.cos(i*Math.PI/32),-4+10*Math.sin(i*Math.PI/32),7));
+const circular=cadDetectPatterns(segments(circle));assert.equal(circular.length,1);assert.equal(circular[0].kind,'circle');near(circular[0].radius,10);near(circular[0].center.distanceTo(p(3,-4,7)),0);
+const rotate=point=>point.clone().applyAxisAngle(p(1,2,3).normalize(),.8).add(p(1e6,-1e6,1e6));
+const transformed=cadDetectPatterns(segments(circle.map(rotate)));assert.equal(transformed[0].kind,'circle');near(transformed[0].radius,10);
+const ellipse=circle.map(point=>p(point.x*2,point.y,point.z));assert.equal(cadDetectPatterns(segments(ellipse)).length,0);
+assert.equal(cadDetectPatterns(segments(circle).slice(1)).length,0);
+assert.equal(cadDetectPatterns(segments([p(0,0),p(3,0),p(4,3),p(0,3)])).length,0);
+assert.equal(cadDetectPatterns(segments(rectangle).concat(segments(circle))).length,2);
+const nonplanar=rectangle.map(point=>point.clone());nonplanar[0].z=1;assert.equal(cadDetectPatterns(segments(nonplanar)).length,0);
+console.log('CAD circles/rectangles, transformed rings, multiple rings and rejected open/elliptical/nonplanar boundaries passed');
+
+const star=circle.map((_,i)=>circle[i*3%circle.length]);assert.equal(cadDetectPatterns(segments(star)).length,0);

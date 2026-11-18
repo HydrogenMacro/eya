@@ -1,123 +1,83 @@
-const { chromium } = require('playwright');
-const { pathToFileURL } = require('node:url');
-const fs = require('node:fs');
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
 const path = require('node:path');
-const { reveal, selectControl, controlValue } = require('./ui-helpers.cjs');
-(async () => {
-  const browser = await chromium.launch({ headless: true, executablePath: process.env.EYA_BROWSER_EXECUTABLE, args: process.env.EYA_BROWSER_NO_SANDBOX ? ['--no-sandbox'] : [] });
+const {gunzipSync} = require('node:zlib');
+const {pathToFileURL} = require('node:url');
+const {fixture,KEY} = require('./continuity-fixture.cjs');
+
+async function connected(page) {
+  await page.waitForFunction(() => window.EyaWorkspaces);
+  // Configured clients authenticate automatically; manual Connect remains usable.
+  try {await page.waitForFunction(() => EyaWorkspaces.getState().workspace, null, {timeout:15000});}catch{throw Error('Automatic connection failed: '+JSON.stringify(await page.evaluate(()=>({status:document.querySelector('#status')?.textContent,error:document.querySelector('#dialog-error')?.textContent,body:document.querySelector('#connect-dialog')?.textContent}))))}
+}
+async function terminal(page) {
+  await page.waitForFunction(() => EyaPanels.layout().flatMap(group=>group.panels).some(id=>id.startsWith('terminal-') && EyaPanels.call(id,'getState').connected));
+  return page.evaluate(() => EyaPanels.layout().flatMap(group=>group.panels).find(id=>id.startsWith('terminal-')));
+}
+(async()=>{
+  const f=await fixture();
   try {
-    const page = await browser.newPage({ acceptDownloads: true });
-    page.on('pageerror', e => console.error('Page error:', e.message));
-    const key = Object.hasOwn(process.env, 'EYA_TEST_KEY')
-      ? process.env.EYA_TEST_KEY
-      : '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f';
-    await page.goto('http://127.0.0.1:18765/');
-    const launchers = await page.locator('.launchers a').evaluateAll(links => links.map(link => new URL(link.href).pathname));
-    if (launchers.join(',') !== '/client.html,/client.svg') throw Error(`Hosted client launchers are invalid: ${launchers}`);
-    const htmlResponse = await page.goto('http://127.0.0.1:18765/client.html');
-    if (!htmlResponse.headers()['content-type']?.startsWith('text/html') || !await page.locator('#connect-dialog').isVisible()) throw Error('Hosted HTML client is unavailable');
-    if (await page.locator('#url').inputValue() !== 'ws://127.0.0.1:18765/ws' || await page.locator('#key').inputValue() !== key) throw Error('Hosted HTML did not inherit the server URL and password');
-    const svgResponse = await page.goto('http://127.0.0.1:18765/client.svg');
-    if (!svgResponse.headers()['content-type']?.startsWith('image/svg+xml')) throw Error('Hosted SVG has the wrong content type');
-    try { await page.locator('#connect-dialog').waitFor({ state: 'visible', timeout: 5000 }); }
-    catch { throw Error(`Hosted SVG client did not initialize: ${await page.locator('foreignObject').textContent()}`); }
-    const svgLayout = await page.locator('body').evaluate(body => ({ width: body.getBoundingClientRect().width, viewport: innerWidth }));
-    if (Math.abs(svgLayout.width - svgLayout.viewport) > 2) throw Error(`Hosted SVG client is not responsive: ${JSON.stringify(svgLayout)}`);
-    const hostedSvgConfig = await page.locator('#url,#key').evaluateAll(elements => elements.map(element => element.value));
-    if (hostedSvgConfig[0] !== 'ws://127.0.0.1:18765/ws' || hostedSvgConfig[1] !== key) throw Error('Hosted SVG did not inherit the server URL and password');
-    await page.locator('#start-connection').click();
-    await page.locator('#status').filter({ hasText: 'Connected' }).waitFor({ timeout: 10000 });
-    await page.locator('#terminal').click();
-    await page.keyboard.type("printf '\110\117\123\124\105\104\137\123\126\107\137\117\113\n'");
-    await page.keyboard.press('Enter');
-    await page.locator('.xterm-screen').filter({ hasText: 'HOSTED_SVG_OK' }).waitFor({ timeout: 5000 });
-    await page.evaluate(() => document.getElementById('end-session').click());
-    await page.locator('#status').filter({ hasText: 'ended explicitly' }).waitFor();
-    await page.goto('http://127.0.0.1:18765/');
-    await page.locator('#key').fill(key);
-    const defaultCommand = "printf '\\104\\105\\106\\101\\125\\114\\124\\137\\103\\117\\115\\115\\101\\116\\104\\n'";
-    await page.locator('#command').fill(defaultCommand);
-    await page.locator('#font').setInputFiles(process.env.EYA_TEST_FONT || '/usr/share/fonts/adobe-source-code-pro-fonts/SourceCodePro-Bold.otf');
-    await page.locator('#size').fill('18');
-    const [download] = await Promise.all([page.waitForEvent('download'), page.locator('button[type=submit]').click()]);
-    const outputDirectory = process.env.EYA_TEST_OUTPUT || '/tmp';
-    const filename = path.join(outputDirectory, 'eya-generated-test.html');
-    await download.saveAs(filename);
-    const html = fs.readFileSync(filename, 'utf8');
-    if (!html.includes(key) || !html.includes('127.0.0.1:18765/ws') || !html.includes(JSON.stringify(defaultCommand).slice(1, -1)) || !html.includes('data:') || !html.includes('id="keybar"')) throw Error('Generated HTML configuration or mobile controls are missing');
-    await page.locator('#format').selectOption('svg');
-    const svgDownloadPromise = page.waitForEvent('download', { timeout: 10000 });
-    await page.locator('button[type=submit]').click();
-    let svgDownload;
-    try { svgDownload = await svgDownloadPromise; }
-    catch { throw Error(`SVG generation failed: ${await page.locator('#error').textContent()}`); }
-    const svgFilename = path.join(outputDirectory, 'eya-generated-test.svg');
-    await svgDownload.saveAs(svgFilename);
-    const svg = fs.readFileSync(svgFilename, 'utf8');
-    if (!svg.includes('<foreignObject') || !svg.includes('xmlns="http://www.w3.org/1999/xhtml"') || !svg.includes(key) || !svg.includes('id="keybar"')) throw Error('Generated SVG client is invalid');
-    await page.locator('#format').selectOption('compressed-html');
-    const compressedDownloadPromise = page.waitForEvent('download');
-    await page.locator('button[type=submit]').click();
-    const compressedDownload = await compressedDownloadPromise;
-    const compressedFilename = path.join(outputDirectory, 'eya-generated-compressed-test.html');
-    await compressedDownload.saveAs(compressedFilename);
-    const compressedSize = fs.statSync(compressedFilename).size;
-    if (compressedSize >= Buffer.byteLength(html) * 0.8) throw Error(`Compressed HTML was not materially smaller (${compressedSize} vs ${Buffer.byteLength(html)})`);
-    await page.locator('#format').selectOption('data-url');
-    await page.locator('button[type=submit]').click();
-    await page.locator('#data-url-result').waitFor({ state: 'visible' });
-    const dataUrl = await page.locator('#data-url').inputValue();
-    if (!dataUrl.startsWith('data:text/html') || dataUrl.length >= Buffer.byteLength(html) * 0.9) throw Error('Compressed HTML data URL is missing or unexpectedly large');
-    const dataPage = await browser.newPage();
-    await dataPage.goto(dataUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
-    await dataPage.locator('#connect-dialog').waitFor({ state: 'visible', timeout: 10000 });
-    if (await dataPage.locator('#key').inputValue() !== key) throw Error('HTML data URL lost its embedded configuration');
-    await dataPage.close();
-    await page.goto(pathToFileURL(filename).href);
-    if (await page.locator('#url').inputValue() !== 'ws://127.0.0.1:18765/ws') throw Error('URL not configured');
-    if (await page.locator('#key').inputValue() !== key || await page.locator('#font-size').inputValue() !== '18') throw Error('Client defaults not configured');
-    await page.waitForFunction(() => [...document.fonts].some(font => font.family === 'EyaEmbeddedFont' && font.status === 'loaded'), null, { timeout: 5000 });
-    await page.locator('#start-connection').click();
-    try {
-      await page.waitForFunction(() => document.querySelector('#status').textContent === 'Connected', null, { timeout: 10000 });
-    } catch {
-      const state = await page.locator('#status').textContent();
-      const detail = await page.locator('#error').textContent();
-      throw Error(`Generated HTML did not connect (status: ${state}; error: ${detail})`);
+    const page=await f.client({connect:false});
+    await page.goto(f.http);
+    assert.deepEqual(await page.locator('.launchers a').evaluateAll(links=>links.map(link=>new URL(link.href).pathname)),['/client.html','/client.svg']);
+    for(const type of ['html','svg']) {
+      const response=await page.goto(f.http+'/client.'+type);assert.match(response.headers()['content-type'],type==='svg'?/^image\/svg\+xml/:/^text\/html/);
+      await page.locator('#url').waitFor();assert.equal(await page.locator('#url').evaluate(element=>element.value),f.url);assert.equal(await page.locator('#key').evaluate(element=>element.value),KEY);
+      await connected(page);const id=await terminal(page);
+      await page.evaluate(id=>EyaPanels.call(id,'sendInput',"stty -echo; printf 'HOSTED_CLIENT_OK\\n'\r"),id);
+      await page.waitForFunction(id=>EyaPanels.call(id,'getText').includes('HOSTED_CLIENT_OK'),id);
+      if(type==='svg')assert.ok(await page.locator('body').evaluate(body=>Math.abs(body.getBoundingClientRect().width-innerWidth)<2));
+      await page.evaluate(id=>EyaPanels.close(id),id);
     }
-    await page.waitForFunction(() => document.querySelector('.xterm-screen').innerText.includes('DEFAULT_COMMAND'), null, { timeout: 5000 });
-    await page.keyboard.type("head -c 400000 /dev/zero | tr '\\0' x; printf '\\n\\106\\114\\117\\127\\137\\124\\105\\123\\124\\137\\120\\101\\123\\123\\105\\104\\n'");
-    await page.keyboard.press('Enter');
-    await page.waitForFunction(() => document.querySelector('.xterm-screen').innerText.includes('FLOW_TEST_PASSED'), null, { timeout: 20000 });
-    await (await reveal(page, '#settings')).click();
-    await page.locator('#font-size').fill('21');
-    await page.locator('#font-size').blur();
-    await selectControl(page, '#theme', 'midnight');
-    await selectControl(page, '#ui-style', 'rounded');
-    await page.locator('#close-settings').click();
-    await page.evaluate(() => document.getElementById('end-session').click());
-    await page.locator('#status').filter({ hasText: 'ended explicitly' }).waitFor();
-    await page.reload();
-    if (await page.locator('#font-size').inputValue() !== '21') throw Error('Display settings were not saved');
-    if (await controlValue(page.locator('#theme')) !== 'midnight' || await controlValue(page.locator('#ui-style')) !== 'rounded') throw Error('Appearance settings were not saved');
-    await page.goto(pathToFileURL(svgFilename).href);
-    const svgUrl = await page.locator('#url').evaluate(element => ({ value: element.value, namespace: element.namespaceURI, type: element.constructor.name }));
-    if (svgUrl.value !== 'ws://127.0.0.1:18765/ws') {
-      const script = await page.locator('svg > script').evaluateAll(elements => elements.map(element => {
-        try { Function(element.textContent); return { syntax: 'valid', length: element.textContent.length, start: element.textContent.slice(0, 40), namespace: element.namespaceURI }; }
-        catch (error) { return { syntax: error.message, length: element.textContent.length, start: element.textContent.slice(0, 40), namespace: element.namespaceURI }; }
-      }));
-      const dom = await page.evaluate(() => ({ configLength: document.getElementById('eya-config')?.textContent.length, terminals: document.querySelectorAll('.xterm-screen').length, dialogOpen: document.getElementById('connect-dialog')?.open }));
-      throw Error(`SVG client did not load: ${JSON.stringify({ svgUrl, script, dom })}`);
+    await page.goto(f.http);await page.locator('#key').fill(KEY);
+    await page.locator('#generator-nav [data-page=terminal]').click();
+    const command="printf 'DEFAULT_COMMAND\\n'";
+    await page.locator('#command').fill(command);await page.locator('#size').fill('18');await page.locator('#font').setInputFiles('client/fonts/0xProto.woff2');
+    await page.locator('#generator-nav [data-page=appearance]').click();await page.locator('#theme').selectOption('midnight');
+    await page.locator('#generator-nav [data-page=export]').click();
+    const artifacts=[];
+    for(const format of ['html','svg','compressed-html','compressed-svg','data-url']) {
+      await page.locator('#format').selectOption(format);
+      let content,filename,url;
+      if(format==='data-url') {await page.locator('button[type=submit]').click();await page.locator('#data-url-result').waitFor();content=await page.locator('#data-url').evaluate(element=>element.value);url=content;assert.match(content,/^data:text\/html/);}
+      else {const [download]=await Promise.all([page.waitForEvent('download'),page.locator('button[type=submit]').click()]);filename=path.join(f.root,download.suggestedFilename());await download.saveAs(filename);content=await fs.readFile(filename,'utf8');url=pathToFileURL(filename).href;}
+      artifacts.push({format,content,url});
     }
-    await page.locator('#start-connection').click();
-    await page.locator('#status').filter({ hasText: 'Connected' }).waitFor({ timeout: 10000 });
-    await page.locator('#terminal').click();
-    await page.keyboard.type("printf '\123\126\107\137\103\114\111\105\116\124\137\117\113\n'");
-    await page.keyboard.press('Enter');
-    await page.locator('.xterm-screen').filter({ hasText: 'SVG_CLIENT_OK' }).waitFor({ timeout: 5000 });
-    await page.evaluate(() => document.getElementById('end-session').click());
-    await page.locator('#status').filter({ hasText: 'ended explicitly' }).waitFor();
-    console.log('Hosted credential inheritance, HTML/SVG/data-URL generation, compression, encrypted terminal and large output passed');
-  } finally { await browser.close(); }
-})().catch(error => { console.error(error); process.exit(1); });
+    const html=artifacts[0].content;assert.ok(html.includes(KEY));assert.ok(html.includes('"fontSize":18'));assert.ok(html.includes('"theme":"midnight"'));assert.ok(html.includes('"defaultCommand":'+JSON.stringify(command)));assert.ok(html.includes('data:font/'));
+    assert.ok(Buffer.byteLength(artifacts[2].content)<Buffer.byteLength(html)*0.8);assert.ok(artifacts[4].content.length<Buffer.byteLength(html)*0.9);
+    for(const artifact of artifacts) {
+      const {format}=artifact;let url=artifact.url,expectsFont=true;
+      if(format==='data-url') {
+        const wrapper=decodeURIComponent(url.slice(url.indexOf(',')+1)),payload=wrapper.match(/atob\("([^"]+)"\)/);assert.ok(payload);assert.equal(gunzipSync(Buffer.from(payload[1],'base64')).toString('utf8'),html);
+        if(url.length>2_000_000) {
+          // Chromium bounds navigation URLs. Verify full packaging above and run
+          // the actual application using the same settings without the large font.
+          const compact=html.replace(/(<script id="eya-config" type="application\/json">)([\s\S]*?)(<\/script>)/,(_,start,json,end)=>{const config=JSON.parse(json);delete config.font;return start+JSON.stringify(config).replace(/</g,'\\u003c')+end;});
+          url=await page.evaluate(html=>EyaGenerator.dataUrl(html),compact);expectsFont=false;
+          assert.ok(url.length<2_000_000,'The compact data URL fits browser navigation limits');
+          console.log('data-url: full font packaging checked; runtime uses font-free artifact to fit Chromium URL limits');
+        }
+      }
+      const output=await page.context().newPage();output.on('pageerror',error=>f.errors.push(error.message));output.on('dialog',dialog=>dialog.accept());
+      await output.goto(url,{waitUntil:'domcontentloaded',timeout:20000});await output.locator('#url').waitFor();
+      assert.equal(await output.locator('#url').evaluate(element=>element.value),f.url,format);assert.equal(await output.locator('#key').evaluate(element=>element.value),KEY,format);assert.equal(await output.locator('#font-size').evaluate(element=>element.value),'18',format);
+      if(expectsFont)await output.waitForFunction(()=>[...document.fonts].some(font=>font.family==='EyaEmbeddedFont'&&font.status==='loaded'));
+      if(format==='data-url') {
+        await output.waitForFunction(()=>window.EyaWorkspaces && (EyaWorkspaces.getState().workspace || document.querySelector('#dialog-error')?.textContent));
+        if(!await output.evaluate(()=>!!EyaWorkspaces.getState().workspace)) {
+          assert.match(await output.locator('#dialog-error').textContent(),/Cannot reach the server/);assert.equal(await output.locator('#start-connection').isEnabled(),true);
+          const recovery=output.getByRole('button',{name:'Open server client',exact:true});
+          const popupPromise=output.context().waitForEvent('page');await recovery.press('Enter');
+          const popup=await popupPromise;await popup.waitForURL(f.http+'/client.html');
+          assert.equal(await popup.evaluate(()=>window.opener),null);await popup.close();
+          console.log('data-url: runtime initialized; browser local-network policy blocks loopback WebSocket, recoverable connection error checked');await output.close();continue;
+        }
+      }
+      await connected(output);const id=await terminal(output);await output.waitForFunction(id=>EyaPanels.call(id,'getText').includes('DEFAULT_COMMAND'),id);
+      if(format==='html') {await output.evaluate(id=>EyaPanels.call(id,'sendInput',"head -c 400000 /dev/zero | tr '\\0' x; printf '\\nFLOW_TEST_PASSED\\n'\r"),id);await output.waitForFunction(id=>EyaPanels.call(id,'getText').includes('FLOW_TEST_PASSED'),id,{timeout:20000});}
+      await output.evaluate(id=>EyaPanels.close(id),id);await output.close();
+      console.log(format+': configured artifact, embedded font, automatic encrypted connection and one-time command passed');
+    }
+    assert.deepEqual(f.errors,[]);
+  } finally {await f.close();}
+})().catch(error=>{console.error(error);process.exitCode=1;});

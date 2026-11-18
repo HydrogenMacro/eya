@@ -1,10 +1,25 @@
+import { deriveKey } from './noise-key.js';
+import { randomId } from './ids.js';
+import { setKeybinds, getKeybinds, matchesKeybind, createKeybindSettings } from './keybinds.js';
+import { SETTINGS_FIELDS, SETTINGS_GROUPS, normalizeSettings, getSetting, setSetting, readSettingsControls, writeSettingsControls, createSettingControl } from './settings-schema.js';
+import { checkCredentials, hostedClientUrl, normalizeConnectionUrl } from './connection-form.js';
+import { settingsNavigation } from './settings-navigation.js';
+import { discoverSubtitles } from './video-subtitles.js';
+import { createFileClipboard, createFileSelection } from './file-selection.js';
+import { fileProgress, setFileProgressUnit } from './file-progress.js';
+import { bindFileSorting, sortFiles, modifiedDate } from './file-presentation.js';
+import { fileIcon } from './file-icons.js';
+import { createAuxiliaryBar } from './auxiliary-bar.js';
+import { preventPageZoom } from './mobile-zoom.js';
+import { trackWorkspaceViewport } from './mobile-viewport.js';
+import { setupClientUpdates } from './client-updates.js';
+import { WIRE_CAPABILITIES, selectedCapabilities, receiveExtension } from './wire.js';
 import Noise from 'noise-handshake';
 import Cipher from 'noise-handshake/cipher';
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection } from '@codemirror/view';
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap, indentWithTab, undo, redo } from '@codemirror/commands';
+import { openSearchPanel } from '@codemirror/search';
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import { json } from '@codemirror/lang-json';
 import { javascript } from '@codemirror/lang-javascript';
@@ -13,14 +28,30 @@ import { css } from '@codemirror/lang-css';
 import { markdown } from '@codemirror/lang-markdown';
 import { python } from '@codemirror/lang-python';
 import { PanelWorkbench } from './panels.js';
+import { createWorkspaces } from './workspaces.js';
+import { createConnectionLifecycle, PendingRequests } from './connection-lifecycle.js';
 import { createCadViewer, isCadFile } from './cad.js';
 import { createTerminalPanel } from './terminal-panel.js';
 import { createFileBrowser } from './file-browser.js';
+import { createFileCombobox, normalizeFilePath } from './file-combobox.js';
+import { bindFileEntryInteractions } from './file-entry-interactions.js';
 import { createHtmlViewer } from './html-viewer.js';
+import { createMarkdownViewer } from './markdown-viewer.js';
+import { createBinaryViewer } from './binary-viewer.js';
+import { createMobileWorkspaceNavigator } from './mobile-workspace.js';
+import { createSubmenu } from './submenu.js';
+import { FILE_OPENER_TYPES, fileExtension, isBinaryContent } from './file-openers.js';
+import { createServerSettings } from './server-settings.js';
+import { createImageViewer } from './image-viewer.js';
+import { nativeVideoStream } from './native-video-stream.js';
+import { createVideoControls } from './video-controls.js';
 import { createBrowserPanel } from './browser-panel.js';
-import { createBrowserRenderTransport, createBrowserTransport } from './browser-transport.js';
+import { sanitizeProxyState } from './browser-proxy-state.js';
+import { createBrowserRenderTransport, createRecoveringBrowserTransport } from './browser-transport.js';
 import { createTaskManager, createDockerPanel } from './system-panels.js';
 import { icon, buttonIcon, createMenu, menuAction, menuHeading, closeMenus, notify, startControlEnhancement, attachFileDropzone } from './ui.js';
+
+preventPageZoom();
 
 // Chromium exposes this legacy method on SVG documents but throws when xterm probes it.
 try { document.queryCommandSupported?.('copy'); }
@@ -28,18 +59,26 @@ catch { Object.defineProperty(document, 'queryCommandSupported', { configurable:
 
 const $ = id => document.getElementById(id);
 const pageBody = document.body || document.querySelector('body');
+let legacyPathCombo, legacySearchCombo, legacySearchRoot = null;
+let legacyOpenWith;
 const workspaceMenu = createMenu('Workspace menu');
 $('app-menu-slot').append(workspaceMenu.element);
-menuHeading(workspaceMenu.panel, 'Workspace');
+menuHeading(workspaceMenu.panel, 'General');
 menuAction(workspaceMenu.panel, $('settings'), 'Settings');
+const serverSettingsButton = document.createElement('button'); serverSettingsButton.textContent = 'Server configuration';
+menuAction(workspaceMenu.panel, serverSettingsButton, 'SlidersHorizontal');
+const updatesButton = document.createElement('button'); updatesButton.textContent = 'Client updates';
+menuAction(workspaceMenu.panel, updatesButton, 'Download');
+updatesButton.onclick = () => openDialog($('updates-dialog'));
+$('close-updates').onclick = () => closeDialog($('updates-dialog'));
+buttonIcon($('close-updates'), 'X', 'Close', true);
 menuHeading(workspaceMenu.panel, 'Connection');
 menuAction(workspaceMenu.panel, $('disconnect'), 'Unplug');
 buttonIcon($('connect'), 'Plug', 'Connect');
-buttonIcon($('files'), 'FolderOpen', 'Files');
 const fileMenu = createMenu('File browser menu');
 $('file-menu-slot').append(fileMenu.element);
 menuAction(fileMenu.panel, $('file-new-folder'), 'FolderPlus');
-menuAction(fileMenu.panel, $('file-refresh'), 'RefreshCw');
+buttonIcon($('file-refresh'), 'RefreshCw', 'Refresh', true);
 menuHeading(fileMenu.panel, 'Navigate');
 menuAction(fileMenu.panel, $('file-up'), 'ArrowUp');
 menuAction(fileMenu.panel, $('file-forward'), 'ArrowRight');
@@ -48,8 +87,10 @@ menuAction(fileMenu.panel, $('file-close'), 'X');
 buttonIcon($('file-back'), 'ArrowLeft', 'Back', true);
 buttonIcon($('file-go'), 'ArrowRight', 'Go', true);
 buttonIcon($('file-upload'), 'Upload', 'Upload', true);
+const directoryTerminal = document.createElement('button'); directoryTerminal.type = 'button'; buttonIcon(directoryTerminal, 'Terminal', 'Open directory in terminal', true);
+directoryTerminal.onclick = () => openDirectoryTerminal(currentPath); $('file-upload').before(directoryTerminal);
 $('path-toolbar').prepend(icon('Search'));
-for (const [action, name] of Object.entries({ open: 'File', download: 'Download', rename: 'Pencil', delete: 'Trash2' })) {
+for (const [action, name] of Object.entries({ open: 'File', download: 'Download', copy: 'Copy', rename: 'Pencil', delete: 'Trash2' })) {
   const button = $('file-entry-menu').querySelector(`[data-file-action=${action}]`);
   buttonIcon(button, name); button.setAttribute('role', 'menuitem');
 }
@@ -57,11 +98,22 @@ const encoder = new TextEncoder();
 const MAX_COMMAND_LENGTH = 8192;
 let config = {};
 try { config = JSON.parse($('eya-config').textContent) || {}; } catch { /* Defaults are safe. */ }
-let preferences = {};
-try { preferences = JSON.parse(localStorage.getItem('eya-settings') || '{}') || {}; } catch { /* Storage is optional. */ }
-let cadPreferences = {};
-try { cadPreferences = JSON.parse(localStorage.getItem('eya-cad-settings') || '{}') || {}; } catch { /* Storage is optional. */ }
-const CAD_SHARED_KEYS = ['mode', 'gridPlanes', 'axisCoordinates', 'sectionGizmos', 'rotationGizmo', 'navigationMode', 'orbitStyle', 'movementSpeed', 'lookSpeed', 'invertLook', 'hoverHighlights', 'measurementColor', 'measurementPointSize', 'selectionColor', 'selectionMode'];
+const clientUpdates = setupClientUpdates({ config, notify, getConnection: () => ({ url: $('url').value.trim(), key: $('key').value }) });
+const startupPanel = ['terminal', 'files', 'web-browser', 'proxy-browser', 'task-manager', 'docker', 'start', 'none'].includes(config.startupPanel) ? config.startupPanel : 'terminal';
+let preferences = normalizeSettings(config);
+if (typeof config.reduceMotion !== 'boolean') preferences.reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Registry additions appear in both configuration surfaces without extra markup.
+for (const group of SETTINGS_GROUPS) {
+  let section = [...document.querySelectorAll('[data-settings]')].find(node => node.querySelector('h3')?.textContent === group.title);
+  if (!section) { section = document.createElement('section'); section.className = 'settings-section'; section.dataset.settings = ''; const heading = document.createElement('h3'); heading.textContent = group.title; section.append(heading); $('settings-error').before(section); }
+  for (const field of SETTINGS_FIELDS.filter(item => item.group === group.id)) if (!$(field.id)) section.append(createSettingControl(field));
+}
+writeSettingsControls($('settings-dialog'), preferences);
+
+setKeybinds(config.keybinds);
+let cadPreferences = { ...preferences.cad };
+
+const CAD_SHARED_KEYS = ['unit', 'stlUnit', 'live', 'interval', 'snap', 'viewSectionPosition', 'viewSectionDistance', 'viewSectionFlip', 'sectionAxes', 'sectionRanges', 'mode', 'opacity', 'showEdges', 'showPoints', 'gizmoSize', 'speedModifier', 'sidebar', 'gridPlanes', 'infiniteGrid', 'gridLines', 'gridFill', 'decimalPlaces', 'axisCoordinates', 'sectionGizmos', 'rotationGizmo', 'orbitStyle', 'orbitPivot', 'movementSpeed', 'lookSpeed', 'invertLook', 'hoverHighlights', 'measurementColor', 'measurementPointSize', 'selectionColor', 'selectionMode'];
 const themes = {
   dark: { background: '#10151b', foreground: '#e4edf2' },
   light: { background: '#f4f5f1', foreground: '#1c2830', cursor: '#1c2830' },
@@ -85,61 +137,62 @@ const editorWrap = validBoolean(preferences.editorWrap, true);
 const editorLineNumbers = validBoolean(preferences.editorLineNumbers, true);
 const confirmDelete = validBoolean(preferences.confirmDelete, true);
 const startingDirectory = typeof preferences.startingDirectory === 'string' ? preferences.startingDirectory : (typeof config.startingDirectory === 'string' ? config.startingDirectory : '');
-const terminal = new Terminal({ cursorBlink, cursorStyle, fontSize, scrollback, scrollOnUserInput, rightClickSelectsWord: true, theme: themes[theme] });
-const fit = new FitAddon();
-terminal.loadAddon(fit); terminal.open($('terminal')); fit.fit();
-
 let socket, outbound, inbound, awaitingHandshake = false, pingTimer, failed = false, connectionId = 0;
 let resumableSession = null, transportReady = false, reconnectTimer, handshakeTimer, inputFlushTimer, reconnectAttempts = 0, reconnectEnabled = false;
-const MAX_PENDING_INPUT = 256 * 1024;
+let wireCapabilities = [];
+setInterval(() => { if ($('key').value) clientUpdates.connected(); }, 60000);
 let ctrlArmed = false;
-let viewportFrame;
-let directionTimer, directionInterval, activeDirection = '', directionGesture, directionData = '';
-let touchGesture;
+let altArmed = false, shiftArmed = false;
+let auxiliaryBar;
+const modifierLocks = new Set();
 let fileRequestId = 0, fileRefreshTimer, fileSearchTimer;
 let fileNavigationPending = 0, fileNavigationGeneration = 0;
 let currentPath = '', directoryEntries = [], selectedEntry, historyPaths = [], historyIndex = -1;
 let fileMenuEntry;
 let activeFileTab = 'browser';
-const filePending = new Map();
+const filePending = new PendingRequests();
+const lifecycle = createConnectionLifecycle();
+let workspacePreferences = { ...preferences };
+let workspaceGeneration = 0;
+const pendingSessionEnds = new Set();
+function endRemote(session) {
+  pendingSessionEnds.add(session);
+  if (transportReady) fileRequest('session.end', { session }).then(() => pendingSessionEnds.delete(session)).catch(cause => notify(cause.message));
+}
 const fileTabs = new Map();
 const fileOpenings = new Map();
+const fileClipboard = createFileClipboard({ read: readFile, upload: uploadBytes, request: fileRequest, identity: () => resumableSession });
 const decoder = new TextDecoder();
 const fatalDecoder = new TextDecoder('utf-8', { fatal: true });
 const TEXT_EDITOR_LIMIT = 5 * 1024 * 1024;
-const terminalPanelElement = $('terminal-pane');
-const connectionNotice = document.createElement('div');
-connectionNotice.id = 'connection-notice'; connectionNotice.setAttribute('role', 'status');
-connectionNotice.hidden = true; terminalPanelElement.append(connectionNotice);
 const browserPanelElement = $('file-panel');
 const workbench = new PanelWorkbench($('workspace'));
-workbench.register({
-  id: 'terminal', title: 'Terminal', kind: 'terminal', element: terminalPanelElement, retain: true,
-  onActivate: () => { activeFileTab = ''; scheduleResize(); },
-  onLayout: scheduleResize,
-  api: { focus: () => terminal.focus(), sendInput: text => sendInput(String(text)), clear: () => terminal.clear() },
-});
+const mobileNavigator = createMobileWorkspaceNavigator({ workbench, onPositionChange: position => {
+  preferences.mobilePanelButtonPosition = { ...position }; workspacePreferences.mobilePanelButtonPosition = { ...position };
+  $('mobile-panel-button-position').value = JSON.stringify(position); workspaces.changed();
+} });
 workbench.register({
   id: 'browser', title: 'Files', kind: 'browser', legacyTab: 'browser', element: browserPanelElement, retain: true,
+  serialize: () => ({ id: 'browser', kind: 'files', title: 'Files', config: { cwd: currentPath } }),
   onActivate: () => {
-    activeFileTab = 'browser';
+    activeFileTab = 'browser'; browserSelection.update();
     if (outbound && !currentPath) navigateTo($('starting-directory').value.trim(), true);
   },
   onClose: () => {
     pageBody.classList.remove('panel-visible');
-    $('files').setAttribute('aria-pressed', 'false');
+    legacyPathCombo?.close(); legacySearchCombo?.close();
   },
-  api: { navigate: path => navigateTo(path), refresh: () => refreshFiles(false), getPath: () => currentPath,
+  onDeactivate: () => { legacyPathCombo?.close(); legacySearchCombo?.close(); },
+  api: { openSettings: () => openSettingsGroup('files'), navigate: path => navigateTo(path), refresh: () => refreshFiles(false), getPath: () => currentPath,
     focusPath: () => $('file-path').focus(), focusSearch: () => $('file-search').focus() },
 });
-workbench.open('terminal');
 
-async function deriveKey(secret) {
-  // Keep generated clients compatible with the original hexadecimal key format.
-  if (/^[0-9a-f]{64}$/i.test(secret)) return Uint8Array.from(secret.match(/../g), hex => parseInt(hex, 16));
-  if (!crypto?.subtle) throw Error('This browser cannot derive a key from a password.');
-  return new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(secret)));
-}
+let directorySort = {};
+const browserSelection = createFileSelection({ body: $('file-list'), getEntries: () => sortFiles(directoryEntries, directorySort), getPath: () => currentPath,
+  clipboard: fileClipboard, request: fileRequest, refresh: () => navigateTo(currentPath, false), preferences: browserPreferences,
+  report: message => { $('file-status').textContent = message; }, onDelete: closeDeletedFiles, beforeDelete: prepareFileDeletion,
+  identity: () => `${connectionId}:${workspaceGeneration}`, valid: () => transportReady });
+$('path-toolbar').after(browserSelection.element);
 
 function inheritedWebSocketUrl() {
   if (!['http:', 'https:'].includes(location.protocol)) return '';
@@ -148,9 +201,10 @@ function inheritedWebSocketUrl() {
   return url.href;
 }
 const inheritedUrl = inheritedWebSocketUrl();
-try { $('url').value = config.url || (config.hosted ? inheritedUrl : localStorage.getItem('eya-url')) || inheritedUrl; }
-catch { $('url').value = config.url || inheritedUrl; }
+$('url').value = config.url || inheritedUrl;
 $('key').value = config.key || '';
+buttonIcon($('client-update-indicator'), 'Download', 'Download client update', true);
+if ($('key').value) queueMicrotask(() => clientUpdates.connected());
 $('default-command').value = typeof config.defaultCommand === 'string' ? config.defaultCommand : '';
 $('font-size').value = fontSize;
 $('scrollback').value = scrollback;
@@ -158,16 +212,17 @@ $('theme').value = theme;
 $('ui-density').value = ['comfortable', 'compact'].includes(preferences.uiDensity) ? preferences.uiDensity : 'comfortable';
 $('ui-style').value = ['default', 'rounded', 'square'].includes(preferences.uiStyle) ? preferences.uiStyle : 'default';
 $('accent-color').value = ['mint', 'blue', 'violet', 'amber'].includes(preferences.accentColor) ? preferences.accentColor : 'mint';
+$('panel-focus-mode').value = validChoice(preferences.panelFocusMode, ['click', 'hover'], 'click');
+$('panel-focus-border').checked = validBoolean(preferences.panelFocusBorder, false);
 $('reduce-motion').checked = validBoolean(preferences.reduceMotion, matchMedia('(prefers-reduced-motion: reduce)').matches);
 $('editor-font-size').value = validNumber(preferences.editorFontSize, 12, 28, 16);
 $('editor-tab-size').value = [2, 4, 8].includes(preferences.editorTabSize) ? preferences.editorTabSize : 4;
 $('file-details').checked = validBoolean(preferences.fileDetails, true);
-$('cad-display-mode').value = validChoice(cadPreferences.mode, ['shaded', 'edges', 'wireframe'], 'edges');
+$('cad-display-mode').value = validChoice(cadPreferences.mode, ['flat', 'zebra', 'shaded', 'edges', 'wireframe'], 'shaded');
 $('cad-grid-planes').value = validChoice(cadPreferences.gridPlanes, ['off', 'xy', 'all'], cadPreferences.grid === false ? 'off' : 'all');
 $('cad-axis-coordinates').checked = validBoolean(cadPreferences.axisCoordinates, true);
 $('cad-section-gizmos').checked = validBoolean(cadPreferences.sectionGizmos, true);
 $('cad-rotation-gizmo').checked = validBoolean(cadPreferences.rotationGizmo, true);
-$('cad-navigation-mode').value = validChoice(cadPreferences.navigationMode, ['orbit', 'firstPerson'], 'orbit');
 $('cad-orbit-style').value = validChoice(cadPreferences.orbitStyle, ['turntable', 'free'], 'turntable');
 $('cad-movement-speed').value = validDecimal(cadPreferences.movementSpeed, 0.25, 4, 1);
 $('cad-look-speed').value = validDecimal(cadPreferences.lookSpeed, 0.25, 3, 1);
@@ -176,11 +231,13 @@ $('cad-hover-highlights').checked = validBoolean(cadPreferences.hoverHighlights,
 $('cad-measurement-color').value = validColor(cadPreferences.measurementColor, '#ff4f9a');
 $('cad-measurement-point-size').value = validDecimal(cadPreferences.measurementPointSize, 0.5, 3, 1.5);
 $('cad-selection-color').value = validColor(cadPreferences.selectionColor, '#66ff99');
-$('cad-selection-mode').value = validChoice(cadPreferences.selectionMode, ['part', 'face', 'loop'], 'face');
 $('cursor-blink').checked = cursorBlink;
 $('cursor-style').value = cursorStyle;
 $('scroll-on-input').checked = scrollOnUserInput;
 $('refresh-interval').value = refreshInterval;
+$('file-autoreload').checked = validBoolean(preferences.fileAutoreload, true);
+$('transfer-unit').value = validChoice(preferences.transferUnit, ['auto', 'bytes', 'kb', 'mb'], 'bytes');
+setFileProgressUnit($('transfer-unit').value);
 $('show-hidden').checked = showHidden;
 $('editor-wrap').checked = editorWrap;
 $('editor-line-numbers').checked = editorLineNumbers;
@@ -188,24 +245,26 @@ $('confirm-delete').checked = confirmDelete;
 $('starting-directory').value = startingDirectory;
 applyAppearance();
 pageBody.classList.add('connection-offline');
-$('files').setAttribute('aria-pressed', 'false');
 
 function syncCadSettingsForm(value) {
-  if (['shaded', 'edges', 'wireframe'].includes(value.mode)) $('cad-display-mode').value = value.mode;
+  if (typeof value.infiniteGrid === 'boolean') $('cad-infinite-grid').checked = value.infiniteGrid;
+  if (Number.isInteger(value.decimalPlaces)) $('cad-decimal-places').value = value.decimalPlaces;
+  for (const key of ['gridLines','gridFill']) if (typeof value[key] === 'boolean') $(key === 'gridLines' ? 'cad-grid-lines' : 'cad-grid-fill').checked = value[key];
+  if (value.sidebar?.side) $('cad-sidebar-side').value = value.sidebar.side;
+  if (Number.isFinite(value.viewSectionDistance)) $('cad-view-section-distance').value = value.viewSectionDistance;
+  if (['flat', 'zebra', 'shaded', 'edges', 'wireframe'].includes(value.mode)) $('cad-display-mode').value = value.mode;
   if (['off', 'xy', 'all'].includes(value.gridPlanes)) $('cad-grid-planes').value = value.gridPlanes;
-  if (['orbit', 'firstPerson'].includes(value.navigationMode)) $('cad-navigation-mode').value = value.navigationMode;
+  if (['target', 'origin', 'model'].includes(value.orbitPivot)) $('cad-orbit-pivot').value = value.orbitPivot;
   if (['turntable', 'free'].includes(value.orbitStyle)) $('cad-orbit-style').value = value.orbitStyle;
-  if (['part', 'face', 'loop'].includes(value.selectionMode)) $('cad-selection-mode').value = value.selectionMode;
-  for (const [key, id] of [['axisCoordinates', 'cad-axis-coordinates'], ['sectionGizmos', 'cad-section-gizmos'], ['rotationGizmo', 'cad-rotation-gizmo'], ['invertLook', 'cad-invert-look'], ['hoverHighlights', 'cad-hover-highlights']]) if (typeof value[key] === 'boolean') $(id).checked = value[key];
-  for (const [key, id] of [['movementSpeed', 'cad-movement-speed'], ['lookSpeed', 'cad-look-speed'], ['measurementPointSize', 'cad-measurement-point-size']]) if (Number.isFinite(Number(value[key]))) $(id).value = value[key];
+  for (const [key, id] of [['axisCoordinates', 'cad-axis-coordinates'], ['sectionGizmos', 'cad-section-gizmos'], ['rotationGizmo', 'cad-rotation-gizmo'], ['invertLook', 'cad-invert-look'], ['hoverHighlights', 'cad-hover-highlights'], ['showEdges','cad-show-edges'], ['showPoints','cad-show-points']]) if (typeof value[key] === 'boolean') $(id).checked = value[key];
+  for (const [key, id] of [['movementSpeed', 'cad-movement-speed'], ['lookSpeed', 'cad-look-speed'], ['measurementPointSize', 'cad-measurement-point-size'], ['opacity','cad-opacity'], ['gizmoSize','cad-gizmo-size'], ['speedModifier','cad-speed-modifier']]) if (Number.isFinite(Number(value[key]))) $(id).value = value[key];
   for (const [key, id] of [['measurementColor', 'cad-measurement-color'], ['selectionColor', 'cad-selection-color']]) if (/^#[\da-f]{6}$/i.test(value[key] || '')) $(id).value = value[key];
 }
 
 function status(text) {
   $('status').textContent = text;
-  if (!transportReady) connectionNotice.textContent = text;
 }
-function error(text) { $('error').textContent = text; $('error').hidden = !text; }
+function error(text) { $('error').textContent = text; $('error').hidden = !text; if ($('connect-dialog').open && text) { $('dialog-error').textContent = text; $('dialog-error').hidden = false; connectionFeedback('', false); } }
 function setDialogError(text) {
   const target = $('settings-dialog').open ? $('settings-error') : $('dialog-error');
   target.textContent = text;
@@ -223,103 +282,59 @@ function send(bytes) {
   }
   try { socket.send(outbound.encrypt(bytes)); return true; } catch {
     failed = true;
-    error('Could not send encrypted terminal data.');
+    error('Could not send encrypted request.');
     socket.close();
     return false;
   }
 }
-function offsetMessage(type, offset) {
-  const message = new Uint8Array(9); message[0] = type;
-  new DataView(message.buffer).setBigUint64(1, BigInt(offset));
-  return message;
+function setModifier(name, value) {
+  if (name === 'ctrl') ctrlArmed = value;
+  if (name === 'alt') altArmed = value;
+  if (name === 'shift') shiftArmed = value;
+  auxiliaryBar?.sync({ ctrlKey: ctrlArmed, altKey: altArmed, shiftKey: shiftArmed }, modifierLocks);
+  workbench.activePanel?.api?.setAuxModifiers?.({ ctrlKey: ctrlArmed, altKey: altArmed, shiftKey: shiftArmed });
 }
-function readOffset(message, offset = 1) {
-  const value = Number(new DataView(message.buffer, message.byteOffset, message.byteLength).getBigUint64(offset));
-  if (!Number.isSafeInteger(value)) throw Error('Terminal sequence limit reached.');
-  return value;
+document.addEventListener('eya-active-panel-change', () => { modifierLocks.clear(); for (const name of ['ctrl','alt','shift']) setModifier(name, false); stopDirection(); });
+function takeModifiers() {
+  const modifiers = { ctrlKey: ctrlArmed, altKey: altArmed, shiftKey: shiftArmed };
+  for (const name of ['ctrl', 'alt', 'shift']) setModifier(name, modifierLocks.has(name));
+  return modifiers;
 }
-function acknowledgeInput(offset) {
-  const session = resumableSession;
-  if (!session || !Number.isSafeInteger(offset) || offset < session.inputAck || offset > session.input) throw Error('Invalid input acknowledgement');
-  session.inputAck = offset;
-  while (session.pending[0] && session.pending[0].offset + session.pending[0].bytes.length <= offset) session.pending.shift();
-}
-function flushInput() {
-  clearTimeout(inputFlushTimer);
-  if (!transportReady || !resumableSession || resumableSession.ending) return;
-  for (const entry of resumableSession.pending) {
-    if (entry.sent === connectionId) continue;
-    if (socket?.bufferedAmount > 512 * 1024) { inputFlushTimer = setTimeout(flushInput, 20); return; }
-    const message = new Uint8Array(9 + entry.bytes.length);
-    message.set(offsetMessage(0, entry.offset)); message.set(entry.bytes, 9);
-    if (!send(message)) return;
-    entry.sent = connectionId;
+function applyModifiers(data) {
+  if (!data) return data;
+  const { ctrlKey, altKey, shiftKey } = takeModifiers();
+  const navigation = /^\x1b\[(?:([ABCDHF])|(\d+)~)$/.exec(data);
+  const modifier = 1 + (shiftKey ? 1 : 0) + (altKey ? 2 : 0) + (ctrlKey ? 4 : 0);
+  if (/^\x1bO[PQRS]$/.test(data) && modifier > 1) return `\x1b[1;${modifier}${data.at(-1)}`;
+  if (navigation && modifier > 1) return navigation[1] ? `\x1b[1;${modifier}${navigation[1]}` : `\x1b[${navigation[2]};${modifier}~`;
+  if (data === '\t' && shiftKey) data = '\x1b[Z';
+  else if (shiftKey && data.length === 1) data = data.toUpperCase();
+  if (ctrlKey && data === '\x7f') data = '\x17';
+  else if (ctrlKey && data.length === 1) {
+    const code = data.toUpperCase().charCodeAt(0);
+    if (code >= 64 && code <= 95) data = String.fromCharCode(code - 64);
+    else if (code === 32) data = '\0';
   }
+  return (altKey ? '\x1b' : '') + data;
 }
-function sendInput(data) {
-  const session = resumableSession;
-  if (!session || session.ended || session.ending) return false;
-  const bytes = encoder.encode(data);
-  if (session.input - session.inputAck + bytes.length > MAX_PENDING_INPUT) {
-    error('The pending input buffer is full (256 KiB). Wait for reconnection before typing more.');
-    return false;
-  }
-  for (let i = 0; i < bytes.length; i += 60000) {
-    const chunk = bytes.slice(i, i + 60000);
-    session.pending.push({ offset: session.input, bytes: chunk, sent: -1 });
-    session.input += chunk.length;
-  }
-  flushInput();
-  if (!transportReady) status(`${reconnectEnabled ? 'Reconnecting' : 'Disconnected'} — session retained; ${session.input - session.inputAck} input bytes buffered`);
-  return true;
-}
-function setCtrlArmed(value) {
-  ctrlArmed = value;
-  $('ctrl-key').classList.toggle('active', value);
-  $('ctrl-key').setAttribute('aria-pressed', String(value));
-}
-function applyCtrl(data) {
-  if (!ctrlArmed || !data) return data;
-  setCtrlArmed(false);
-  const code = data.charCodeAt(0);
-  let control;
-  if (code >= 0x40 && code <= 0x5f) control = code - 0x40;
-  else if (code >= 0x60 && code <= 0x7f) control = code - 0x60;
-  else if (code === 0x20) control = 0;
-  else return data;
-  return String.fromCharCode(control) + data.slice(1);
-}
-function sendKey(data) {
-  if (ctrlArmed) {
-    const navigation = /^\x1b\[(?:([ABCDHF])|(\d+)~)$/.exec(data);
-    if (navigation) data = navigation[1] ? `\x1b[1;5${navigation[1]}` : `\x1b[${navigation[2]};5~`;
-    else if (data === '\x7f') data = '\x17';
-    setCtrlArmed(false);
-  }
+const auxiliaryKeyNames = { '\x1b': 'Escape', '\t': 'Tab', '\x1b[H': 'Home', '\x1b[F': 'End', '\x1b[5~': 'PageUp', '\x1b[6~': 'PageDown', '\x1b[3~': 'Delete', '\x1b[A': 'ArrowUp', '\x1b[B': 'ArrowDown', '\x1b[C': 'ArrowRight', '\x1b[D': 'ArrowLeft' };
+for (const [i, code] of ['\x1bOP','\x1bOQ','\x1bOR','\x1bOS', ...[15,17,18,19,20,21,23,24].map(n => `\x1b[${n}~`)].entries()) auxiliaryKeyNames[code] = `F${i+1}`;
+function sendKey(data, repeatedModifiers) {
   const active = workbench.activePanel;
-  if (active?.kind === 'terminal' && active.id !== 'terminal') { active.api.sendInput(data); active.api.focus(); }
-  else { sendInput(data); terminal.focus(); }
-  return data;
+  if (active?.api?.sendAuxKey) {
+    const modifiers = repeatedModifiers || takeModifiers();
+    active.api.sendAuxKey(auxiliaryKeyNames[data] || (data.length === 1 ? data : undefined), modifiers, true);
+    return () => active.api.sendAuxKey(auxiliaryKeyNames[data] || (data.length === 1 ? data : undefined), modifiers, true);
+  }
+  if (active?.kind !== 'terminal') return '';
+  data = applyModifiers(data);
+  active.api.sendInput(data); active.api.focus();
+  return () => active.api.sendInput(data);
 }
 function resize() {
-  try { fit.fit(); } catch { return; }
-  if (transportReady) {
-    const cols = terminal.cols, rows = terminal.rows;
-    send(Uint8Array.of(1, cols >> 8, cols & 255, rows >> 8, rows & 255));
-  }
+  for (const panel of workbench.panels.values()) if (panel.groupId && !panel.element.hidden) panel.onLayout?.();
 }
-function scheduleResize() {
-  cancelAnimationFrame(viewportFrame);
-  viewportFrame = requestAnimationFrame(() => {
-    const editing = document.activeElement?.closest?.('.cm-editor');
-    if (window.visualViewport && !editing) document.documentElement.style.setProperty('--eya-viewport-height', `${window.visualViewport.height}px`);
-    resize();
-  });
-}
-window.addEventListener('resize', scheduleResize);
-window.visualViewport?.addEventListener('resize', scheduleResize);
-window.visualViewport?.addEventListener('scroll', scheduleResize);
-document.addEventListener('focusout', scheduleResize);
+const { schedule: scheduleResize } = trackWorkspaceViewport(resize);
 let scrollTouch;
 document.addEventListener('touchstart', event => {
   const touch = event.touches.length === 1 ? event.touches[0] : null;
@@ -351,110 +366,63 @@ document.addEventListener('touchmove', event => {
   }
   if (event.cancelable) event.preventDefault();
 }, { passive: false });
-terminal.onData(data => {
-  data = applyCtrl(data);
-  sendInput(data);
+auxiliaryBar = createAuxiliaryBar($('keybar'), {
+  send: sendKey, paste: pasteFromClipboard, panelId: () => workbench.activePanel?.id,
+  activateKeyboard() {
+    const panel = workbench.activePanel;
+    if (panel?.kind === 'web-browser') activateBrowserKeyboard();
+    else if (panel?.api?.focusInput) panel.api.focusInput();
+    else panel?.api?.focus?.();
+  },
+  toggleModifier(name, value, locked) {
+    if (locked) modifierLocks.add(name); else modifierLocks.delete(name);
+    setModifier(name, value);
+    const api = workbench.activePanel?.api;
+    if (api?.focusInput) api.focusInput(); else api?.focus?.();
+  },
 });
-
-const keyActions = {
-  escape: () => sendKey('\x1b'),
-  tab: () => sendKey('\t'),
-  ctrl: () => { setCtrlArmed(!ctrlArmed); (workbench.activePanel?.api?.focus || (() => terminal.focus()))(); },
-  paste: () => pasteFromClipboard(),
-  copy: () => copySelection(),
-  home: () => sendKey('\x1b[H'), end: () => sendKey('\x1b[F'),
-  'page-up': () => sendKey('\x1b[5~'), 'page-down': () => sendKey('\x1b[6~'),
-  interrupt: () => { setCtrlArmed(false); sendKey('\x03'); },
-  eof: () => { setCtrlArmed(false); sendKey('\x04'); },
-  backspace: () => sendKey('\x7f'), enter: () => sendKey('\r'),
-};
-const keyIcons = {
-  escape: ['LogOut','Esc','Escape'], tab: ['IndentIncrease','Tab','Tab'], ctrl: ['Command','Ctrl','Ctrl'],
-  home: ['ChevronFirst','Home','Home'], end: ['ChevronLast','End','End'],
-  'page-up': ['ChevronsUp','PgUp','Page Up'], 'page-down': ['ChevronsDown','PgDn','Page Down'],
-  copy: ['Copy','Copy','Copy selection'], paste: ['ClipboardPaste','Paste','Paste'],
-  interrupt: ['Square','^C','Interrupt (Ctrl+C)'], eof: ['LogOut','^D','End of input (Ctrl+D)'],
-  backspace: ['Delete','Bksp','Backspace'], enter: ['CornerDownLeft','Enter','Enter'],
-};
-for (const button of document.querySelectorAll('#keybar [data-key]')) {
-  let pointerActivated = false;
-  const [glyph, label, accessible] = keyIcons[button.dataset.key];
-  buttonIcon(button, glyph, label); button.setAttribute('aria-label', accessible); button.title = accessible;
-  button.addEventListener('pointerdown', event => {
-    if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
-    event.preventDefault();
-    pointerActivated = true;
-    keyActions[button.dataset.key]?.();
-  });
-  button.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') pointerActivated = false; });
-  button.addEventListener('click', event => {
-    // Some mobile browsers synthesize detail=0 clicks after touch pointerdown.
-    // Consume that click rather than sending the key twice; keyboard/AT clicks
-    // without a preceding pointer activation still work.
-    if (pointerActivated) { pointerActivated = false; event.preventDefault(); return; }
-    if (event.detail === 0) keyActions[button.dataset.key]?.();
-  });
+const keyboardButton = document.createElement('button');
+keyboardButton.type = 'button'; keyboardButton.textContent = 'Activate keyboard';
+keyboardButton.className = 'browser-keyboard-activate';
+$('keybar').append(keyboardButton);
+let browserKeyboardRequested = false, browserKeyboardWasVisible = false;
+function updateBrowserKeyboardBar() {
+  const browser = workbench.activePanel?.kind === 'web-browser';
+  const viewport = window.visualViewport;
+  const visible = !!viewport && window.innerHeight - viewport.height > 120;
+  if (browserKeyboardWasVisible && !visible && browser) {
+    browserKeyboardRequested = false;
+    workbench.activePanel?.api?.dismissKeyboard?.();
+  }
+  browserKeyboardWasVisible = visible;
+  const editing = document.activeElement?.matches?.('input:not([inputmode=none]), textarea:not([inputmode=none]), [contenteditable=true]:not([inputmode=none])');
+  $('keybar').classList.toggle('browser-keyboard-inactive', browser && !visible && !browserKeyboardRequested && !editing);
 }
-
-const directionKeys = { up: '\x1b[A', down: '\x1b[B', right: '\x1b[C', left: '\x1b[D' };
-buttonIcon($('arrow-pad'), 'Move', 'Arrows');
-$('arrow-pad').setAttribute('aria-label', 'Arrow key; swipe in a direction, then hold to repeat');
-function directionIcon(direction) {
-  $('arrow-pad').querySelector('.ui-icon').replaceWith(icon(({up:'ArrowUp',down:'ArrowDown',left:'ArrowLeft',right:'ArrowRight'})[direction] || 'Move'));
+function activateBrowserKeyboard() {
+  // Set this before focusing: focus events synchronously update the bar.
+  browserKeyboardRequested = true;
+  if (!workbench.activePanel?.api?.activateKeyboard?.()) browserKeyboardRequested = false;
+  updateBrowserKeyboardBar();
 }
-function directionFromDrag(event) {
-  if (!directionGesture || event.pointerId !== directionGesture.pointerId) return '';
-  const x = event.clientX - directionGesture.x;
-  const y = event.clientY - directionGesture.y;
-  if (Math.hypot(x, y) < 10) return '';
-  return Math.abs(x) > Math.abs(y) ? (x < 0 ? 'left' : 'right') : (y < 0 ? 'up' : 'down');
-}
-function stopDirection(event) {
-  if (event && directionGesture && event.pointerId !== directionGesture.pointerId) return;
-  clearTimeout(directionTimer);
-  clearInterval(directionInterval);
-  directionTimer = directionInterval = undefined;
-  activeDirection = '';
-  directionData = '';
-  directionGesture = undefined;
-  $('arrow-pad').dataset.direction = '';
-  directionIcon('');
-}
-function setDirection(direction) {
-  if (direction === activeDirection) return;
-  clearTimeout(directionTimer);
-  clearInterval(directionInterval);
-  activeDirection = direction;
-  $('arrow-pad').dataset.direction = direction;
-  directionIcon(direction);
-  if (!direction) return;
-  directionData = sendKey(directionKeys[direction]);
-  const repeat = () => {
-    if (directionGesture?.panel !== workbench.activePanel?.id) { stopDirection(); return; }
-    if (directionData) sendKey(directionData);
-  };
-  directionTimer = setTimeout(() => {
-    repeat();
-    if (directionGesture) directionInterval = setInterval(repeat, 75);
-  }, 400);
-}
-$('arrow-pad').addEventListener('pointerdown', event => {
-  if (directionGesture) return;
+// Keep the current page input from losing focus to the button. Focus the text
+// input directly from the touch gesture, while mobile browsers allow a keyboard.
+keyboardButton.addEventListener('pointerdown', event => { if (event.isPrimary && event.button === 0) event.preventDefault(); });
+// Request focus in the native touch event, before the browser synthesizes a
+// click. Cancel that click to avoid focusing twice.
+keyboardButton.addEventListener('touchend', event => {
+  if (event.changedTouches.length !== 1 || event.touches.length) return;
   event.preventDefault();
-  directionGesture = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, panel: workbench.activePanel?.id };
-  $('arrow-pad').setPointerCapture(event.pointerId);
-  setDirection('');
-});
-$('arrow-pad').addEventListener('pointermove', event => {
-  if ($('arrow-pad').hasPointerCapture(event.pointerId)) setDirection(directionFromDrag(event));
-});
-for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) $('arrow-pad').addEventListener(type, event => stopDirection(event));
-window.addEventListener('blur', () => stopDirection());
-document.addEventListener('visibilitychange', () => { if (document.hidden) stopDirection(); });
-$('arrow-pad').addEventListener('keydown', event => {
-  const direction = ({ ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' })[event.key];
-  if (direction) { event.preventDefault(); sendKey(directionKeys[direction]); }
-});
+  activateBrowserKeyboard();
+}, { passive: false });
+keyboardButton.addEventListener('click', activateBrowserKeyboard);
+document.addEventListener('eya-active-panel-change', () => { browserKeyboardRequested = false; updateBrowserKeyboardBar(); });
+document.addEventListener('focusin', updateBrowserKeyboardBar);
+document.addEventListener('focusout', () => { queueMicrotask(() => {
+  if (!document.activeElement?.matches?.('.eya-browser-text-surface')) browserKeyboardRequested = false;
+  updateBrowserKeyboardBar();
+}); });
+window.visualViewport?.addEventListener('resize', updateBrowserKeyboardBar);
+function stopDirection() { auxiliaryBar?.stop(); }
 
 function fallbackCopy(text) {
   const area = document.createElement('textarea');
@@ -467,32 +435,27 @@ function fallbackCopy(text) {
   area.remove();
   return copied;
 }
-async function copySelection() {
-  const active = workbench.activePanel;
-  const target = active?.kind === 'terminal' && active.id !== 'terminal' ? active.api : terminal;
-  const text = target.getSelection();
-  if (!text) { notify('Select terminal text to copy'); return; }
-  try { await navigator.clipboard.writeText(text); }
-  catch { if (!fallbackCopy(text)) error('The selection could not be copied.'); }
-  hideTerminalMenu();
-  target.focus();
-}
 async function pasteFromClipboard() {
-  setCtrlArmed(false);
-  let text;
-  try { text = await navigator.clipboard.readText(); }
-  catch { text = window.prompt('Paste terminal text:'); }
+  takeModifiers();
   const active = workbench.activePanel;
-  if (typeof text === 'string' && text) {
-    if (active?.kind === 'terminal' && active.id !== 'terminal') active.api.paste(text);
-    else terminal.paste(text);
-  }
+  const target = active?.api;
+  const focus = () => { if (target?.focusInput) target.focusInput(); else target?.focus?.(); };
+  focus();
   hideTerminalMenu();
-  if (active?.kind === 'terminal' && active.id !== 'terminal') active.api.focus(); else terminal.focus();
+  try {
+    const text = await navigator.clipboard.readText();
+    // Clipboard permission may resolve after the user changes panels.
+    if (workbench.activePanel?.id !== active?.id) return;
+    if (text) target?.paste?.(text);
+    focus();
+  } catch {
+    if (workbench.activePanel?.id !== active?.id) return;
+    focus();
+    notify('Use the native Paste menu or keyboard paste in the focused input.');
+  }
 }
 function showTerminalMenu(x, y) {
   const menu = $('terminal-menu');
-  $('copy-selection').disabled = !terminal.hasSelection();
   menu.hidden = false;
   const width = menu.offsetWidth, height = menu.offsetHeight;
   const viewport = window.visualViewport || { offsetLeft: 0, offsetTop: 0, width: innerWidth, height: innerHeight };
@@ -500,73 +463,15 @@ function showTerminalMenu(x, y) {
   menu.style.top = `${Math.max(viewport.offsetTop + 6, Math.min(y, viewport.offsetTop + viewport.height - height - 6))}px`;
 }
 function hideTerminalMenu() { $('terminal-menu').hidden = true; }
-$('copy-selection').onclick = copySelection;
+$('view-terminal-text').onclick = () => { hideTerminalMenu(); workbench.activePanel?.api?.viewText?.(); };
 $('paste-selection').onclick = pasteFromClipboard;
-$('select-all').onclick = () => { terminal.selectAll(); $('copy-selection').disabled = false; };
-$('clear-selection').onclick = () => { terminal.clearSelection(); hideTerminalMenu(); terminal.focus(); };
 $('terminal-menu').addEventListener('pointerdown', event => event.stopPropagation());
 document.addEventListener('pointerdown', event => { if (!$('terminal-menu').contains(event.target)) hideTerminalMenu(); });
-$('terminal').addEventListener('contextmenu', event => {
+document.addEventListener('contextmenu', event => {
+  if (!event.target.closest?.('.instance-terminal-surface')) return;
   event.preventDefault();
-  showTerminalMenu(event.clientX, event.clientY);
+  if (workbench.activePanel?.api?.getState?.().mouseTracking === 'none') showTerminalMenu(event.clientX, event.clientY);
 });
-
-function terminalCell(event) {
-  const screen = $('terminal').querySelector('.xterm-screen');
-  if (!screen || !terminal.cols || !terminal.rows) return null;
-  const rect = screen.getBoundingClientRect();
-  const col = Math.max(0, Math.min(terminal.cols - 1, Math.floor((event.clientX - rect.left) * terminal.cols / rect.width)));
-  const visibleRow = Math.max(0, Math.min(terminal.rows - 1, Math.floor((event.clientY - rect.top) * terminal.rows / rect.height)));
-  return { col, row: terminal.buffer.active.viewportY + visibleRow };
-}
-function updateTouchSelection(event) {
-  const end = terminalCell(event);
-  if (!end || !touchGesture?.start) return;
-  const startIndex = touchGesture.start.row * terminal.cols + touchGesture.start.col;
-  const endIndex = end.row * terminal.cols + end.col;
-  const first = Math.min(startIndex, endIndex), last = Math.max(startIndex, endIndex);
-  terminal.select(first % terminal.cols, Math.floor(first / terminal.cols), last - first + 1);
-}
-function finishTouch(event) {
-  if (!touchGesture || event.pointerId !== touchGesture.pointerId) return;
-  clearTimeout(touchGesture.timer);
-  if (touchGesture.selecting) {
-    updateTouchSelection(event);
-    showTerminalMenu(event.clientX, event.clientY);
-  } else if (!touchGesture.scrolling) {
-    terminal.focus();
-  }
-  touchGesture = undefined;
-}
-$('terminal').addEventListener('pointerdown', event => {
-  if (event.pointerType !== 'touch' || touchGesture) return;
-  hideTerminalMenu();
-  const start = terminalCell(event);
-  touchGesture = { pointerId: event.pointerId, start, x: event.clientX, y: event.clientY, lastY: event.clientY, scrolling: false, selecting: false };
-  $('terminal').setPointerCapture(event.pointerId);
-  touchGesture.timer = setTimeout(() => {
-    if (!touchGesture || touchGesture.scrolling || !start) return;
-    touchGesture.selecting = true;
-    terminal.select(start.col, start.row, 1);
-    navigator.vibrate?.(20);
-  }, 480);
-});
-$('terminal').addEventListener('pointermove', event => {
-  if (!touchGesture || event.pointerId !== touchGesture.pointerId) return;
-  event.preventDefault();
-  if (touchGesture.selecting) { updateTouchSelection(event); return; }
-  if (Math.hypot(event.clientX - touchGesture.x, event.clientY - touchGesture.y) > 8) {
-    touchGesture.scrolling = true;
-    clearTimeout(touchGesture.timer);
-  }
-  if (touchGesture.scrolling) {
-    const screen = $('terminal').querySelector('.xterm-screen');
-    const cellHeight = screen ? screen.getBoundingClientRect().height / terminal.rows : 16;
-    const lines = Math.trunc((touchGesture.lastY - event.clientY) / Math.max(1, cellHeight));
-    if (lines) { terminal.scrollLines(lines); touchGesture.lastY -= lines * cellHeight; }
-  }
-});
-for (const type of ['pointerup', 'pointercancel']) $('terminal').addEventListener(type, finishTouch);
 scheduleResize();
 
 function terminalOptions() {
@@ -574,8 +479,23 @@ function terminalOptions() {
     theme: themes[$('theme').value] || themes.dark, cursorBlink: $('cursor-blink').checked,
     cursorStyle: $('cursor-style').value, scrollOnUserInput: $('scroll-on-input').checked };
 }
+function openWebLink(value) {
+  let url; try { url = new URL(value); } catch { return; }
+  if (!['http:', 'https:'].includes(url.protocol)) return;
+  if ($('terminal-link-target').value === 'external') window.open(url.href, '_blank', 'noopener,noreferrer');
+  else workbench.create('web-browser', { initialUrl: url.href }).catch(cause => notify(cause.message));
+}
+for (const [id, delta] of [['terminal-zoom-in', 1], ['terminal-zoom-out', -1]]) $(id).onclick = () => { hideTerminalMenu(); workbench.activePanel?.api?.zoomFont?.(delta); };
+const serverSettings = createServerSettings({ request: fileRequest, capabilities: () => wireCapabilities });
+const serverSettingsDialog = document.createElement('dialog'); serverSettingsDialog.id = 'server-settings-dialog';
+const serverSettingsTitle = document.createElement('h2'); serverSettingsTitle.textContent = 'Server configuration';
+const closeServerSettings = document.createElement('button'); closeServerSettings.type = 'button'; closeServerSettings.textContent = 'Close'; closeServerSettings.onclick = () => closeDialog(serverSettingsDialog);
+serverSettingsDialog.append(serverSettingsTitle, serverSettings.element, closeServerSettings); pageBody.append(serverSettingsDialog);
+serverSettingsButton.onclick = () => { openDialog(serverSettingsDialog); serverSettings.refresh(); };
 function applyAppearance() {
   const root = document.documentElement;
+  workbench.focusMode = $('panel-focus-mode').value;
+  root.classList.toggle('panel-focus-border', $('panel-focus-border').checked);
   root.dataset.theme = $('theme').value;
   root.dataset.density = $('ui-density').value;
   root.dataset.uiStyle = $('ui-style').value;
@@ -583,6 +503,8 @@ function applyAppearance() {
   root.classList.toggle('reduce-motion', $('reduce-motion').checked);
   root.style.setProperty('--editor-font-size', `${Math.max(12, Math.min(28, Number($('editor-font-size').value) || 16))}px`);
   root.classList.toggle('hide-file-details', !$('file-details').checked);
+  let position; try { position = JSON.parse($('mobile-panel-button-position').value); } catch { position = {x:0.95,y:0.65}; }
+  mobileNavigator.update({ enabled:$('mobile-floating-panel-switcher').checked, position });
 }
 function applySettings(event) {
   const size = Number($('font-size').value);
@@ -592,12 +514,6 @@ function applySettings(event) {
     return false;
   }
   setDialogError('');
-  terminal.options.fontSize = size;
-  terminal.options.scrollback = lines;
-  terminal.options.theme = themes[$('theme').value] || themes.dark;
-  terminal.options.cursorBlink = $('cursor-blink').checked;
-  terminal.options.cursorStyle = $('cursor-style').value;
-  terminal.options.scrollOnUserInput = $('scroll-on-input').checked;
   const interval = Number($('refresh-interval').value);
   const measurementPointSize = validDecimal($('cad-measurement-point-size').value, 0.5, 3, 1.5);
   $('cad-measurement-point-size').value = measurementPointSize;
@@ -605,38 +521,52 @@ function applySettings(event) {
   const cadLookSpeed = validDecimal($('cad-look-speed').value, 0.25, 3, 1);
   $('cad-movement-speed').value = cadMovementSpeed; $('cad-look-speed').value = cadLookSpeed;
   applyAppearance();
-  for (const panel of workbench.panels.values()) if (panel.id !== 'terminal' && panel.kind === 'terminal') panel.api?.updateOptions?.(terminalOptions());
-  try {
-    localStorage.setItem('eya-settings', JSON.stringify({
+  setFileProgressUnit($('transfer-unit').value);
+  for (const panel of workbench.panels.values()) if (panel.kind === 'terminal') panel.api?.updateOptions?.(terminalOptions());
+  workspacePreferences = {
       fontSize: size, scrollback: lines, theme: $('theme').value,
       cursorBlink: $('cursor-blink').checked, cursorStyle: $('cursor-style').value,
       scrollOnUserInput: $('scroll-on-input').checked,
-      refreshInterval: interval, showHidden: $('show-hidden').checked,
+      transferUnit: $('transfer-unit').value, refreshInterval: interval, fileAutoreload: $('file-autoreload').checked, showHidden: $('show-hidden').checked,
       editorWrap: $('editor-wrap').checked, editorLineNumbers: $('editor-line-numbers').checked,
       confirmDelete: $('confirm-delete').checked, startingDirectory: $('starting-directory').value.trim(),
       uiDensity: $('ui-density').value, uiStyle: $('ui-style').value, accentColor: $('accent-color').value,
+      panelFocusMode: $('panel-focus-mode').value, panelFocusBorder: $('panel-focus-border').checked,
       reduceMotion: $('reduce-motion').checked, editorFontSize: Number($('editor-font-size').value),
       editorTabSize: Number($('editor-tab-size').value), fileDetails: $('file-details').checked,
-    }));
-  } catch { /* Storage is optional. */ }
+    };
+  workspacePreferences = readSettingsControls($('settings-dialog'), { base: workspacePreferences });
+  const changedGroups = new Set(SETTINGS_FIELDS.filter(field => JSON.stringify(getSetting(preferences, field)) !== JSON.stringify(getSetting(workspacePreferences, field))).map(field => field.group));
+  preferences = workspacePreferences;
+  workspaces.changed();
   cadPreferences = {
-    ...cadPreferences,
-    mode: validChoice($('cad-display-mode').value, ['shaded', 'edges', 'wireframe'], 'edges'),
+    ...workspacePreferences.cad,
+    mode: validChoice($('cad-display-mode').value, ['flat', 'zebra', 'shaded', 'edges', 'wireframe'], 'shaded'),
     gridPlanes: validChoice($('cad-grid-planes').value, ['off', 'xy', 'all'], 'all'),
     axisCoordinates: $('cad-axis-coordinates').checked,
     sectionGizmos: $('cad-section-gizmos').checked,
     rotationGizmo: $('cad-rotation-gizmo').checked,
-    navigationMode: validChoice($('cad-navigation-mode').value, ['orbit', 'firstPerson'], 'orbit'),
     orbitStyle: validChoice($('cad-orbit-style').value, ['turntable', 'free'], 'turntable'),
     movementSpeed: cadMovementSpeed, lookSpeed: cadLookSpeed, invertLook: $('cad-invert-look').checked,
     hoverHighlights: $('cad-hover-highlights').checked,
     measurementColor: validColor($('cad-measurement-color').value, '#ff4f9a'),
     measurementPointSize,
     selectionColor: validColor($('cad-selection-color').value, '#66ff99'),
-    selectionMode: validChoice($('cad-selection-mode').value, ['part', 'face', 'loop'], 'face'),
   };
-  try { localStorage.setItem('eya-cad-settings', JSON.stringify(cadPreferences)); } catch { /* Storage is optional. */ }
-  window.dispatchEvent(new CustomEvent('eya-cad-settings', { detail: { ...cadPreferences } }));
+
+  workspacePreferences.cad = { ...cadPreferences };
+  for (const panel of workbench.panels.values()) {
+    if (['web-browser', 'proxy-browser'].includes(panel.kind) && changedGroups.has('browser')) panel.api?.updateSettings?.(preferences.browser);
+    if (panel.kind === 'system' && changedGroups.has('taskManager')) panel.api?.updateSettings?.(preferences.taskManager);
+    if (panel.kind === 'docker' && changedGroups.has('docker')) panel.api?.updateSettings?.(preferences.docker);
+  }
+  for (const tab of fileTabs.values()) {
+    if (changedGroups.has('binary') && tab.binaryViewer) tab.binaryViewer.applyPreferences(preferences.binary);
+    if (changedGroups.has('image') && tab.imageControls) { tab.imageBackground = { ...preferences.image }; tab.imageControls.updateSettings(preferences.image); }
+    if (changedGroups.has('video')) { tab.player?.updateSettings?.(preferences.video); tab.videoStream?.updateSettings?.(preferences.video); }
+    if (changedGroups.has('audio') && tab.audio) { tab.audio.playbackRate = preferences.audio.speed; tab.audio.loop = preferences.audio.loop; }
+  }
+  if (changedGroups.has('cad')) window.dispatchEvent(new CustomEvent('eya-cad-settings', { detail: { ...cadPreferences, sidebar: { side:cadPreferences.sidebar?.side || 'right' } } }));
   restartFileRefresh();
   if (['editor-wrap', 'editor-line-numbers', 'editor-tab-size', 'theme'].includes(event?.target?.id)) updateEditorConfiguration();
   resize();
@@ -653,27 +583,25 @@ function validateConnection() {
     return null;
   }
   try {
-    const url = new URL($('url').value.trim());
-    if (!['ws:', 'wss:'].includes(url.protocol) || url.username || url.password) throw Error();
+    const url = normalizeConnectionUrl($('url').value.trim());
     return { url, command };
-  } catch {
-    setDialogError('Enter a valid ws:// or wss:// URL without credentials.');
+  } catch (cause) {
+    setDialogError(cause.message || 'Enter a valid server address.');
     return null;
   }
 }
-function openConnection() { setDialogError(''); openDialog($('connect-dialog')); }
+function openConnection() { setDialogError(''); openDialog($('connect-dialog')); queueCredentialCheck(); }
 function setConnectionAppearance(connected) {
-  pageBody.classList.toggle('connection-offline', !connected);
+  pageBody.classList.toggle('connection-offline', !connected); $('status').dataset.connected = String(connected);
   $('disconnect').disabled = !connected && !awaitingHandshake && !reconnectEnabled;
-  $('end-session').disabled = !connected;
+
   buttonIcon($('connect'), 'Plug', connected ? 'Session' : 'Connect');
   $('connect').classList.toggle('primary', !connected);
   $('connect').title = connected ? 'Connection details' : 'Connect to server';
-  connectionNotice.hidden = connected;
-  if (!connected && !connectionNotice.textContent) connectionNotice.textContent = $('status').textContent;
+
 }
 function announceDisconnect(message) {
-  connectionNotice.textContent = `Disconnected — ${message}`;
+  status(`Disconnected — ${message}`);
   setConnectionAppearance(false);
 }
 function disconnect() {
@@ -687,25 +615,17 @@ function disconnect() {
   socket = outbound = inbound = null;
   awaitingHandshake = false;
   transportReady = false;
-  rejectFileRequests('Disconnected.');
+  lifecycle.update({ ready: false, generation: connectionId, reason: 'Disconnected', mode: 'paused' });
+  workspaces.disconnected();
+  for (const panel of workbench.panels.values()) panel.api?.detach?.();
+  rejectFileRequests('Disconnected. Mutations may have completed; refresh before retrying.');
   clearInterval(fileRefreshTimer);
   $('file-status').textContent = 'Connect to browse files.';
   $('latency').textContent = '';
-  status('Disconnected — session retained; click Connect to resume');
+  status('Disconnected');
   if (hadConnection) announceDisconnect('Session retained on the server. Connect to resume.');
   else setConnectionAppearance(false);
 }
-const endSessionButton = document.createElement('button');
-endSessionButton.id = 'end-session'; endSessionButton.type = 'button'; endSessionButton.textContent = 'End session';
-endSessionButton.disabled = true;
-$('connect-dialog').querySelector('.actions').prepend(endSessionButton);
-endSessionButton.onclick = () => {
-  if (transportReady) {
-    if (resumableSession) { resumableSession.pending = []; resumableSession.ending = true; }
-    clearTimeout(inputFlushTimer);
-    send(Uint8Array.of(10));
-  }
-};
 setConnectionAppearance(false);
 
 let embeddedFontLoaded = false;
@@ -714,94 +634,139 @@ if (config.font) {
   face.load().then(loaded => {
     document.fonts.add(loaded);
     embeddedFontLoaded = true;
-    for (const panel of workbench.panels.values()) if (panel.id !== 'terminal' && panel.kind === 'terminal') panel.api?.updateOptions?.(terminalOptions());
-    terminal.options.fontFamily = 'EyaEmbeddedFont, monospace';
+    for (const panel of workbench.panels.values()) if (panel.kind === 'terminal') panel.api?.updateOptions?.(terminalOptions());
     resize();
   }).catch(() => error('The embedded font could not be loaded. Using the browser’s monospace font.'));
 }
 
 $('connect').onclick = openConnection;
-$('settings').onclick = () => { openDialog($('settings-dialog')); setDialogError(''); };
+function openSettingsGroup(group) { settingsPages.open(group); openDialog($('settings-dialog')); }
+const settingsPages = settingsNavigation($('settings-dialog'), { groups: SETTINGS_GROUPS, getPanels: () => workbench.panels.values(), activatePanel: panel => workbench.activate?.(panel.id) });
+$('settings').onclick = () => { settingsPages.open(); openDialog($('settings-dialog')); setDialogError(''); };
+const keybindSettings = createKeybindSettings({ onChange: value => {
+  workspacePreferences.keybinds = value; workspaces.changed();
+  for (const tab of fileTabs.values()) tab.videoStream?.updateSettings?.(preferences.video);
+  document.dispatchEvent(new CustomEvent('eya-keybinds-change'));
+} });
+const keybindButton = document.createElement('button'); keybindButton.textContent = 'Keyboard shortcuts';
+menuAction(workspaceMenu.panel, keybindButton, 'Command'); workspaceMenu.panel.insertBefore(keybindButton, workspaceMenu.panel.querySelectorAll('.ui-menu-heading')[1]); keybindButton.onclick = () => keybindSettings.open();
+function runGlobalShortcut(id) {
+  const actions = {
+    'global.settings': () => $('settings').click(), 'global.keybinds': () => keybindSettings.open(),
+    'global.workspaces': () => workspaces.manage(), 'global.launcher': () => workbench.openStart(),
+    'global.terminal': () => workbench.create('terminal').catch(cause => notify(cause.message)),
+    'global.files': () => setPanelVisible(true),
+    'global.closePanel': () => { if (workbench.activePanel) workbench.close(workbench.activePanel.id); },
+    'global.minimizePanel': () => { if (workbench.activePanel) workbench.minimize(workbench.activePanel.id); },
+  };
+  if (!actions[id]) return false; actions[id](); return true;
+}
 document.addEventListener('keydown', event => {
-  if ((event.ctrlKey || event.metaKey) && event.key === ',') {
-    event.preventDefault(); event.stopPropagation(); $('settings').click();
-  }
+  if (event.defaultPrevented || $('keybinds-dialog')?.open) return;
+  if (matchesKeybind('global.settings', event)) { event.preventDefault(); event.stopPropagation(); runGlobalShortcut('global.settings'); return; }
   if (document.querySelector('dialog[open]')) return;
-  const mod = event.ctrlKey || event.metaKey;
-  if (mod && event.shiftKey && event.key.toLowerCase() === 'p') {
-    event.preventDefault(); event.stopPropagation(); workbench.openStart();
-  } else if (mod && event.shiftKey && event.code === 'Backquote') {
-    event.preventDefault(); event.stopPropagation(); workbench.create('terminal').catch(cause => notify(cause.message));
-  } else if (mod && event.shiftKey && event.key.toLowerCase() === 'e') {
-    event.preventDefault(); event.stopPropagation(); setPanelVisible(true);
-  } else if (mod && event.key.toLowerCase() === 'f' && typeof workbench.activePanel?.api?.focusSearch === 'function') {
-    event.preventDefault(); event.stopPropagation(); workbench.activePanel.api.focusSearch();
-  } else if (workbench.activePanel?.kind === 'browser' && mod && event.key.toLowerCase() === 'l') {
-    event.preventDefault(); event.stopPropagation(); workbench.activePanel.api[event.key.toLowerCase() === 'l' ? 'focusPath' : 'focusSearch']?.();
+  for (const id of ['global.keybinds','global.workspaces','global.launcher','global.terminal','global.files','global.closePanel','global.minimizePanel']) {
+    if (matchesKeybind(id, event)) { event.preventDefault(); event.stopPropagation(); runGlobalShortcut(id); return; }
+  }
+  if (workbench.activePanel?.kind === 'browser') {
+    for (const [id, method] of [['files.search','focusSearch'],['files.path','focusPath']]) if (matchesKeybind(id,event)) { event.preventDefault(); event.stopPropagation(); workbench.activePanel.api[method](); return; }
   }
 }, { capture: true });
 $('disconnect').onclick = disconnect;
+let credentialTimer, credentialAbort, credentialGeneration = 0;
+const dataConnection = location.protocol === 'data:';
+function connectionError(message, unreachable = false) {
+  if (unreachable && dataConnection) {
+    $('connection-open-server-client').hidden = false;
+    return `${message} This browser may block server connections from data URLs.`;
+  }
+  return message;
+}
+function connectionFeedback(text, busy = false) {
+  $('connection-check-status').textContent = text;
+  $('connection-spinner').hidden = !busy;
+  $('start-connection').disabled = busy && text === 'Connecting…';
+}
+function cancelCredentialCheck() {
+  clearTimeout(credentialTimer); credentialAbort?.abort(); credentialAbort = null; credentialGeneration++;
+  connectionFeedback('');
+}
+function queueCredentialCheck() {
+  cancelCredentialCheck();
+  $('connection-open-server-client').hidden = true;
+  if (!transportReady && reconnectEnabled && resumableSession && (resumableSession.key !== $('key').value || resumableSession.url !== normalizeEnteredUrl())) {
+    const initial = !resumableSession.client && !workspaces.getState().workspace;
+    disconnect(); if (initial) resumableSession = null;
+  }
+  if (!$('connect-dialog').open || !$('url').value.trim() || !$('key').value) return;
+  if (transportReady && resumableSession?.key === $('key').value && resumableSession?.url === normalizeEnteredUrl()) return;
+  const generation = credentialGeneration;
+  connectionFeedback('Checking…', true); $('dialog-error').hidden = true;
+  credentialTimer = setTimeout(async () => {
+    const connection = validateConnection();
+    if (!connection) { connectionFeedback(''); return; }
+    const key = $('key').value;
+    credentialAbort = new AbortController();
+    try {
+      await checkCredentials({ url: connection.url.href, key, signal: credentialAbort.signal });
+      if (generation !== credentialGeneration || !$('connect-dialog').open) return;
+      connectionFeedback('Password verified');
+      // Switching a live server still needs an explicit user action and its existing confirmation.
+      if (resumableSession && (resumableSession.url !== connection.url.href || resumableSession.key !== key)) return;
+      $('start-connection').click();
+    } catch (cause) {
+      if (generation !== credentialGeneration || cause.name === 'AbortError') return;
+      connectionFeedback(''); setDialogError(connectionError(cause.message, cause.code === 'unreachable'));
+    }
+  }, 650);
+}
+function normalizeEnteredUrl() { try { return normalizeConnectionUrl($('url').value.trim()).href; } catch { return ''; } }
+for (const id of ['url', 'key']) $(id).addEventListener('input', queueCredentialCheck);
+$('toggle-password').onclick = () => {
+  const shown = $('key').type === 'password'; $('key').type = shown ? 'text' : 'password';
+  $('toggle-password').textContent = shown ? 'Hide' : 'Show';
+  $('toggle-password').ariaLabel = shown ? 'Hide password' : 'Show password';
+  $('toggle-password').setAttribute('aria-pressed', String(shown));
+};
+$('connect-dialog').addEventListener('close', cancelCredentialCheck);
+$('connect-dialog').addEventListener('keydown', event => { if (event.key === 'Enter' && !event.isComposing && event.target !== $('connection-open-server-client')) { event.preventDefault(); cancelCredentialCheck(); $('start-connection').click(); } });
+$('connection-open-server-client').onclick = () => {
+  try { window.open(hostedClientUrl($('url').value.trim()), '_blank', 'noopener'); }
+  catch (cause) { setDialogError(cause.message); }
+};
 $('close-connect').onclick = () => closeDialog($('connect-dialog'));
-$('close-settings').onclick = () => { closeDialog($('settings-dialog')); terminal.focus(); };
-for (const id of ['font-size', 'scrollback', 'theme', 'cursor-blink', 'cursor-style', 'scroll-on-input', 'refresh-interval', 'show-hidden', 'editor-wrap', 'editor-line-numbers', 'confirm-delete', 'starting-directory', 'ui-density', 'ui-style', 'accent-color', 'reduce-motion', 'editor-font-size', 'editor-tab-size', 'file-details', 'cad-display-mode', 'cad-grid-planes', 'cad-axis-coordinates', 'cad-section-gizmos', 'cad-rotation-gizmo', 'cad-navigation-mode', 'cad-orbit-style', 'cad-movement-speed', 'cad-look-speed', 'cad-invert-look', 'cad-hover-highlights', 'cad-measurement-color', 'cad-measurement-point-size', 'cad-selection-color', 'cad-selection-mode']) {
+buttonIcon($('close-connect'), 'X', 'Close', true);
+$('close-settings').onclick = () => { closeDialog($('settings-dialog')); workbench.activePanel?.api?.focus?.(); };
+for (const { id } of SETTINGS_FIELDS) {
   $(id).addEventListener('input', applySettings);
   $(id).addEventListener('change', applySettings);
 }
 
-$('settings-search').addEventListener('input', () => {
-  const query = $('settings-search').value.trim().toLowerCase();
-  for (const section of document.querySelectorAll('[data-settings]')) {
-    const headingMatch = !!query && section.querySelector('h3').textContent.toLowerCase().includes(query);
-    let matches = 0;
-    for (const setting of section.querySelectorAll('.setting')) {
-      const match = !query || headingMatch || setting.textContent.toLowerCase().includes(query);
-      setting.hidden = !match;
-      if (match) matches++;
-    }
-    section.hidden = !!query && !matches;
-  }
-});
 
-function setPanelVisible(visible, remember = true) {
-  pageBody.classList.toggle('panel-visible', visible);
-  $('files').setAttribute('aria-pressed', String(visible));
-  if (visible) {
-    if (!workbench.isOpen('browser')) {
-      const compact = matchMedia('(pointer: coarse), (max-width: 760px)').matches;
-      const groupId = compact
-        ? workbench.groupOf('terminal')
-        : workbench.split(null, 'vertical', 'terminal');
-      workbench.open('browser', { groupId });
-      if (!compact) workbench.setSize('browser', 46);
-    } else workbench.activate('browser');
-  } else {
-    workbench.close('browser');
-    workbench.activate('terminal');
-  }
-  if (remember) applySettings();
-  if (visible && outbound && !currentPath) navigateTo($('starting-directory').value.trim(), true);
-  scheduleResize();
+function setPanelVisible(visible) {
+  if (visible) workbench.create('files').catch(cause => notify(cause.message));
+  else if (workbench.isOpen('browser')) workbench.close('browser');
 }
-
-setPanelVisible(false, false);
 
 function restartFileRefresh() {
   clearInterval(fileRefreshTimer);
   const seconds = Number($('refresh-interval').value);
   let busy = false;
-  if (seconds > 0) fileRefreshTimer = setInterval(async () => {
+  fileRefreshTimer = setInterval(async () => {
     if (busy || document.hidden || !transportReady) return;
     busy = true;
     try {
-      if (workbench.isOpen('browser') && !fileMenuEntry && !fileNavigationPending) await refreshFiles(false);
+      if (seconds > 0 && workbench.isOpen('browser') && !fileMenuEntry && !fileNavigationPending) await refreshFiles(false);
       for (const tab of fileTabs.values()) {
-        if (tab.dirty || tab.cad || !tab.node?.getClientRects().length) continue;
+        if (tab.loading || tab.loadError || tab.saving || tab.renaming || tab.cad || !tab.node?.getClientRects().length) continue;
         const meta = await fileRequest('stat', { path: tab.path });
-        if (!tab.dirty && fileTabs.get(tab.path) === tab && meta.version !== tab.version) await openFile(tab.path, true);
+        if (fileTabs.get(tab.path) !== tab) continue;
+        setFileChanged(tab, meta.version !== tab.version);
+        if (tab.diskChanged && !tab.dirty && !tab.streaming && $('file-autoreload').checked) await openFile(tab.path, true);
       }
     } catch (cause) { fileFailure(cause); }
     finally { busy = false; }
-  }, seconds * 1000);
+  }, (seconds || 5) * 1000);
 }
 
 function nextFileRequestId() {
@@ -819,25 +784,61 @@ function sendFileControl(id, op, values = {}) {
   if (!send(message)) throw Error('Not connected.');
 }
 
-function fileRequest(op, values = {}) {
+function fileRequest(op, values = {}, onProgress) {
   if (filePending.size >= 64) return Promise.reject(Error('Too many pending operations. Wait for earlier requests to finish.'));
   const id = nextFileRequestId();
   return new Promise((resolve, reject) => {
-    filePending.set(id, { resolve, reject, onJson(response) { filePending.delete(id); resolve(response); } });
+    filePending.set(id, { resolve, reject, onProgress, onJson(response) { filePending.delete(id); resolve(response); } });
     try { sendFileControl(id, op, values); } catch (cause) { filePending.delete(id); reject(cause); }
   });
 }
 
-function readFile(path) {
+function readFile(path, onProgress) {
   if (filePending.size >= 64) return Promise.reject(Error('Too many pending operations. Wait for earlier requests to finish.'));
   const id = nextFileRequestId();
   return new Promise((resolve, reject) => {
-    filePending.set(id, { resolve, reject, chunks: [], meta: null, onJson(response) { this.meta = response; } });
+    filePending.set(id, { resolve, reject, chunks: [], meta: null, received: 0, onProgress, onJson(response) { this.meta = response; onProgress?.(0, response.size); } });
     try { sendFileControl(id, 'read', { path }); } catch (cause) { filePending.delete(id); reject(cause); }
   });
 }
 
-function uploadBytes(path, bytes, overwrite) {
+// Replay only idempotent, version-checked video reads across brief outages.
+async function readVideoRange(tab, offset, length) {
+  const identity = resumableSession, deadline = Date.now() + 20000;
+  let attempt = connectionId;
+  while (Date.now() < deadline) {
+    if (resumableSession !== identity || fileTabs.get(tab.path) !== tab) throw Error('Video session changed. Reopen the video.');
+    if (!transportReady) { await new Promise(resolve => setTimeout(resolve, 150)); continue; }
+    attempt = connectionId;
+    try {
+      const version = tab.version;
+      const result = await readFileRange(tab.path, offset, length, version);
+      if (tab.version !== version || fileTabs.get(tab.path) !== tab) return result;
+      const ranges = [...(tab.loadedRanges || []), [offset, offset + result.bytes.length]].sort((a, b) => a[0] - b[0]);
+      tab.loadedRanges = [];
+      for (const range of ranges) {
+        const last = tab.loadedRanges.at(-1);
+        if (last && range[0] <= last[1]) last[1] = Math.max(last[1], range[1]); else tab.loadedRanges.push(range);
+      }
+      const loaded = tab.loadedRanges.reduce((sum, [start, end]) => sum + end - start, 0);
+      tab.progressText = `Streamed · ${fileProgress(loaded, tab.size)}`; updateFileIndicators(tab);
+      return result;
+    }
+    catch (error) { if (transportReady && attempt === connectionId) throw error; }
+  }
+  throw Error('Video reconnection timed out. Reopen the video to retry.');
+}
+
+function readFileRange(path, offset, length, version) {
+  if (filePending.size >= 64) return Promise.reject(Error('Too many pending operations.'));
+  const id = nextFileRequestId();
+  return new Promise((resolve, reject) => {
+    filePending.set(id, { resolve, reject, chunks: [], meta: null, onJson(response) { this.meta = response; } });
+    try { sendFileControl(id, 'read_range', { path, offset, length, version }); } catch (cause) { filePending.delete(id); reject(cause); }
+  });
+}
+
+function uploadBytes(path, bytes, overwrite, version) {
   if (filePending.size >= 64) return Promise.reject(Error('Too many pending operations. Wait for earlier requests to finish.'));
   const id = nextFileRequestId();
   return new Promise((resolve, reject) => {
@@ -848,7 +849,7 @@ function uploadBytes(path, bytes, overwrite) {
         else if (response.done) { filePending.delete(id); resolve(response); }
       },
     });
-    try { sendFileControl(id, 'write', { path, size: bytes instanceof Blob ? bytes.size : bytes.byteLength, overwrite }); }
+    try { sendFileControl(id, 'write', { path, size: bytes instanceof Blob ? bytes.size : bytes.byteLength, overwrite, version }); }
     catch (cause) { filePending.delete(id); reject(cause); }
   });
 }
@@ -894,6 +895,8 @@ function handleFileChunk(message) {
   const pending = filePending.get(id);
   if (!pending?.chunks) return;
   pending.chunks.push(message.slice(6));
+  pending.received = (pending.received || 0) + message.length - 6;
+  pending.onProgress?.(pending.received, pending.meta?.size);
   if (!message[5]) return;
   filePending.delete(id);
   const length = pending.chunks.reduce((total, value) => total + value.length, 0);
@@ -908,6 +911,8 @@ function handleFileJsonChunk(message) {
   const pending = filePending.get(id);
   if (!pending) return;
   (pending.jsonChunks ||= []).push(message.slice(6));
+  pending.received = (pending.received || 0) + message.length - 6;
+  pending.onProgress?.(pending.received, message[5] ? pending.received : null);
   if (!message[5]) return;
   const length = pending.jsonChunks.reduce((total, value) => total + value.length, 0);
   const bytes = new Uint8Array(length);
@@ -928,18 +933,20 @@ function fileFailure(cause) {
 
 async function navigateTo(path, push = true) {
   if (!outbound) { $('file-status').textContent = 'Connect to browse files.'; return; }
+  legacyPathCombo?.close(); legacySearchCombo?.close(); legacySearchRoot = null; clearTimeout(fileSearchTimer);
   const generation = ++fileNavigationGeneration; fileNavigationPending++;
-  $('file-status').textContent = 'Loading…';
+  $('file-status').textContent = `Loading directory · ${fileProgress()}`;
   try {
-    const response = await fileRequest('list', { path: path || $('starting-directory').value.trim(), showHidden: $('show-hidden').checked });
+    const response = await fileRequest('list', { path: path || $('starting-directory').value.trim(), showHidden: $('show-hidden').checked }, (loaded, total) => { if (generation === fileNavigationGeneration) $('file-status').textContent = `Loading directory · ${fileProgress(loaded, total)}`; });
     if (generation !== fileNavigationGeneration) return;
     const directoryChanged = currentPath !== response.path;
     const focusedRow = document.activeElement?.closest?.('tr');
     const focusedPath = $('file-list').contains(focusedRow) ? focusedRow.dataset.path : '';
     currentPath = response.path;
     directoryEntries = response.entries;
+    if (directoryChanged) browserSelection.clear();
     selectedEntry = !directoryChanged && selectedEntry ? directoryEntries.find(entry => entry.path === selectedEntry.path) : undefined;
-    $('file-path').value = currentPath;
+    if (document.activeElement !== $('file-path')) $('file-path').value = currentPath;
     $('file-search').value = '';
     if (push && historyPaths[historyIndex] !== currentPath) {
       historyPaths = historyPaths.slice(0, historyIndex + 1);
@@ -955,25 +962,27 @@ async function navigateTo(path, push = true) {
   finally { fileNavigationPending--; }
 }
 
+bindFileSorting($('file-list').closest('table').tHead.rows[0], sort => { directorySort = sort; renderDirectory(); });
 function renderDirectory() {
   const menuEntry = fileMenuEntry && directoryEntries.find(item => item.path === fileMenuEntry.path);
   if (!menuEntry) hideFileEntryMenu();
   const body = $('file-list');
   body.replaceChildren();
   const parent = { name: '..', path: parentPath(currentPath), kind: 'parent', size: 0, modified: 0 };
-  const entries = currentPath !== '/' && !$('file-search').value ? [parent, ...directoryEntries] : directoryEntries;
+  const sorted = sortFiles(directoryEntries, directorySort);
+  const entries = currentPath !== '/' && !$('file-search').value ? [parent, ...sorted] : sorted;
   for (const item of entries) {
     const row = document.createElement('tr');
     row.tabIndex = 0;
     row.dataset.path = item.path;
-    row.classList.toggle('selected', selectedEntry?.path === item.path);
+    row.classList.toggle('selected', browserSelection.has(item.path));
     const name = document.createElement('td');
-    const entryIcon = item.kind === 'parent' ? 'CornerUpLeft' : item.kind === 'directory' ? 'Folder' : item.kind === 'symlink' ? 'Link' : isCadFile(item.path) ? 'Box' : imageExtensions.has(extension(item.path)) ? 'Image' : textExtensions.has(extension(item.path)) ? 'FileCode' : 'File';
     const entryName = document.createElement('span'); entryName.textContent = item.name;
-    name.append(icon(entryIcon), entryName); name.className = 'entry-name';
+    name.append(fileIcon(item), entryName); name.className = 'entry-name';
     name.title = item.path;
     const size = document.createElement('td'); size.className = 'size'; size.textContent = ['directory', 'parent'].includes(item.kind) ? '—' : formatSize(item.size);
-    const modified = document.createElement('td'); modified.className = 'modified'; modified.textContent = item.modified ? new Date(item.modified).toLocaleString() : '—';
+    const modified = document.createElement('td'); modified.className = 'modified'; modified.textContent = modifiedDate(item.modified); modified.title = item.modified ? new Date(item.modified).toLocaleString() : '';
+    const type = document.createElement('td'); type.className = 'file-type'; type.textContent = item.kind === 'directory' ? 'Folder' : item.kind === 'parent' ? '—' : extension(item.path).toUpperCase() || item.kind;
     const actions = document.createElement('td'); actions.className = 'entry-actions';
     if (item.kind !== 'parent') {
       const menu = document.createElement('button');
@@ -983,12 +992,13 @@ function renderDirectory() {
       menu.addEventListener('keydown', event => { if (event.key === 'ArrowDown') { event.preventDefault(); showFileEntryMenu(item, menu); $('file-entry-menu').querySelector('button:not([hidden])')?.focus(); } });
       actions.append(menu);
     }
-    row.append(name, size, modified, actions);
-    row.addEventListener('click', () => selectEntry(item));
-    row.addEventListener('dblclick', () => activateEntry(item));
+    row.append(name, size, modified, type, actions);
+    browserSelection.decorate(row, item);
+    bindFileEntryInteractions(row, event => selectEntry(item, event), () => activateEntry(item));
     row.addEventListener('keydown', event => { if (event.target === row && event.key === 'Enter') { event.preventDefault(); activateEntry(item); } });
     body.append(row);
   }
+  browserSelection.update();
   $('file-empty').hidden = !!directoryEntries.length;
   $('file-empty').textContent = $('file-search').value ? 'No matching files.' : 'This directory is empty.';
   if (menuEntry) {
@@ -998,9 +1008,8 @@ function renderDirectory() {
   }
 }
 
-function selectEntry(item) {
-  selectedEntry = item;
-  for (const row of $('file-list').rows) row.classList.toggle('selected', row.dataset.path === item.path);
+function selectEntry(item, event) {
+  selectedEntry = item; browserSelection.select(item, event);
 }
 function activateEntry(item) { if (['directory', 'parent'].includes(item.kind)) navigateTo(item.path, true); else openFile(item.path); }
 function updateNavigationButtons() {
@@ -1009,11 +1018,23 @@ function updateNavigationButtons() {
   $('file-up').disabled = !currentPath || currentPath === '/';
 }
 function showFileEntryMenu(item, button) {
+  legacyOpenWith?.destroy(); legacyOpenWith = null;
   closeMenus();
-  selectEntry(item);
+  if (!browserSelection.has(item.path)) selectEntry(item);
   fileMenuEntry = item;
   const menu = $('file-entry-menu');
+  const open = menu.querySelector('[data-file-action=open]');
+  const openers = item.kind === 'file' ? fileOpenerChoices(item.path) : [];
+  open.querySelector('.button-label').textContent = openers.length > 1 ? 'Open With…' : 'Open';
+  open.setAttribute('aria-label', openers.length > 1 ? 'Open With…' : 'Open'); open.title = open.getAttribute('aria-label');
+  if (openers.length > 1) {
+    legacyOpenWith = createSubmenu({ parent:menu, trigger:open, label:`Open ${item.name} with`,
+      items:openers.map(viewer => ({ ...viewer, action:() => openFile(item.path,false,viewer.id) })), onChoose:() => hideFileEntryMenu() });
+  }
+  const terminal = menu.querySelector('[data-directory-terminal]') || document.createElement('button'); terminal.dataset.directoryTerminal = ''; terminal.type = 'button'; terminal.textContent = 'Open in terminal'; terminal.hidden = item.kind !== 'directory';
+  terminal.setAttribute('role', 'menuitem'); terminal.onclick = () => { openDirectoryTerminal(item.path); hideFileEntryMenu(); }; menu.append(terminal);
   menu.querySelector('[data-file-action=download]').hidden = item.kind === 'directory';
+  menu.querySelector('[data-file-action=copy]').hidden = item.kind !== 'file';
   menu.hidden = false;
   button.setAttribute('aria-controls', 'file-entry-menu'); button.setAttribute('aria-expanded', 'true');
   const rect = button.getBoundingClientRect();
@@ -1023,6 +1044,7 @@ function showFileEntryMenu(item, button) {
   menu.style.top = `${Math.max(viewport.offsetTop + 6, Math.min(rect.bottom + 4, viewport.offsetTop + viewport.height - height - 6))}px`;
 }
 function hideFileEntryMenu() {
+  legacyOpenWith?.close();
   $('file-entry-menu').hidden = true; fileMenuEntry = undefined;
   for (const trigger of $('file-list').querySelectorAll('[aria-expanded=true]')) trigger.setAttribute('aria-expanded', 'false');
 }
@@ -1036,15 +1058,22 @@ function parentPath(path) { const parts = path.split('/').filter(Boolean); parts
 
 async function searchFiles() {
   const query = $('file-search').value.trim();
-  if (!query) { await navigateTo(currentPath, false); return; }
+  const root = legacySearchRoot || currentPath;
+  if (!query) { await navigateTo(root, root !== currentPath); return; }
   const generation = ++fileNavigationGeneration; fileNavigationPending++;
   try {
-    $('file-status').textContent = `Searching ${currentPath}…`;
-    const response = await fileRequest('search', { path: currentPath, query, showHidden: $('show-hidden').checked });
+    $('file-status').textContent = `Searching · ${fileProgress()}`;
+    const response = await fileRequest('search', { path: root, query, showHidden: $('show-hidden').checked }, (loaded, total) => { if (generation === fileNavigationGeneration) $('file-status').textContent = `Searching · ${fileProgress(loaded, total)}`; });
     if ($('file-search').value.trim() !== query || generation !== fileNavigationGeneration) return;
+    if (root !== currentPath) {
+      currentPath = response.path || root; if (document.activeElement !== $('file-path')) $('file-path').value = currentPath; browserSelection.clear();
+      if (historyPaths[historyIndex] !== currentPath) { historyPaths = historyPaths.slice(0, historyIndex + 1); historyPaths.push(currentPath); historyIndex = historyPaths.length - 1; }
+      updateNavigationButtons();
+    }
     directoryEntries = response.entries;
     selectedEntry = undefined;
     renderDirectory();
+    legacySearchCombo?.update(legacySearchSuggestions());
     $('file-status').textContent = `${directoryEntries.length} result${directoryEntries.length === 1 ? '' : 's'} for “${query}”`;
   } catch (cause) { if (generation === fileNavigationGeneration) fileFailure(cause); }
   finally { fileNavigationPending--; }
@@ -1054,7 +1083,7 @@ async function refreshFiles(automatic = false) {
   if (!currentPath || $('file-search').value) return;
   await navigateTo(currentPath, false);
   const tab = fileTabs.get(activeFileTab);
-  if (automatic && tab && !tab.dirty && !tab.cad) await openFile(tab.path, true);
+  if (automatic && $('file-autoreload').checked && tab && !tab.loading && !tab.dirty && !tab.cad && !tab.streaming) await openFile(tab.path, true);
 }
 
 const textExtensions = new Set(['txt','md','markdown','js','mjs','cjs','ts','tsx','jsx','json','html','htm','css','scss','xml','svg','yml','yaml','toml','ini','conf','cfg','sh','bash','zsh','fish','py','rb','rs','go','java','c','h','cpp','hpp','cs','php','sql','log','env','gitignore']);
@@ -1067,9 +1096,7 @@ function mediaType(path) {
   return ({ mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', ogv: 'video/ogg', mov: 'video/quicktime', '3gp': 'video/3gpp', '3g2': 'video/3gpp2', mkv: 'video/x-matroska', mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg; codecs=opus', m4a: 'audio/mp4', aac: 'audio/aac', flac: 'audio/flac', weba: 'audio/webm', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', bmp: 'image/bmp', ico: 'image/x-icon', svg: 'image/svg+xml' })[ext] || 'application/octet-stream';
 }
 function likelyText(path, bytes) {
-  if (bytes.length > TEXT_EDITOR_LIMIT || bytes.subarray(0, 8192).includes(0)) return false;
-  if (textExtensions.has(extension(path))) return true;
-  try { fatalDecoder.decode(bytes); return true; } catch { return false; }
+  return !isBinaryContent(bytes);
 }
 function languageFor(path) {
   const ext = extension(path);
@@ -1083,15 +1110,32 @@ function languageFor(path) {
 }
 
 const fileViewers = [
+  { name: 'markdown', supports: tab => ['md', 'markdown'].includes(extension(tab.path)), render: renderMarkdownViewer },
   { name: 'cad', supports: tab => isCadFile(tab.path), render: renderCadViewer },
   { name: 'html', supports: tab => ['html', 'htm'].includes(extension(tab.path)), render: renderHtmlViewer },
   { name: 'image', supports: tab => imageExtensions.has(extension(tab.path)), render: renderImageViewer },
   { name: 'video', supports: tab => videoExtensions.has(extension(tab.path)), render: renderVideoViewer },
   { name: 'audio', supports: tab => audioExtensions.has(extension(tab.path)), render: renderAudioViewer },
   { name: 'text', supports: tab => likelyText(tab.path, tab.bytes), render: renderTextEditor },
-  { name: 'generic', supports: () => true, render: renderGenericViewer },
+  { name: 'binary', supports: () => true, render: renderBinaryViewer },
+  { name: 'generic', supports: () => false, render: renderGenericViewer },
 ];
+function fileOpenerChoices(path) {
+  const tab = { path, bytes: new Uint8Array() };
+  const configured = preferences.fileOpeners?.[fileExtension(path)];
+  return fileViewers.filter(viewer => ['text', 'binary', configured].includes(viewer.name) || viewer.supports(tab)).map(viewer => ({ id: viewer.name, title: FILE_OPENER_TYPES.find(([id]) => id === viewer.name)?.[1] || viewer.name }));
+}
+function openDirectoryTerminal(path) {
+  if (!path) return;
+  const quoted = "'" + String(path).replaceAll("'", "'\\''") + "'";
+  const startup = $('default-command').value;
+  return workbench.create('terminal', { command: `cd -- ${quoted}${startup ? ` && ${startup}` : ''}` }).catch(cause => notify(cause.message));
+}
 
+function syncPanelPreferences(key, value) {
+  preferences[key] = structuredClone(value); workspacePreferences[key] = preferences[key];
+  writeSettingsControls($('settings-dialog'), workspacePreferences); workspaces.changed();
+}
 function browserPreferences() {
   return { startingDirectory: $('starting-directory').value.trim(), showHidden: $('show-hidden').checked,
     refreshInterval: Number($('refresh-interval').value), confirmDelete: $('confirm-delete').checked };
@@ -1104,37 +1148,104 @@ async function openMachinePath(path) {
   await workbench.requirePanel(id).api.navigate(directory.path);
 }
 workbench.registerType({ id: 'terminal', title: 'Terminal', icon: 'Terminal', category: 'Workspace', order: 10,
-  description: 'Start an interactive shell session.', keywords: ['shell', 'command line', 'console'], create: ({ id, command, title }) => {
-  if (command === undefined && !workbench.isOpen('terminal')) return 'terminal';
-  const connection = validateConnection();
+  description: 'Start an interactive shell session.', keywords: ['shell', 'command line', 'console'], create: ({ id, command, title, session, restoring, takeover }) => {
+  const connection = resumableSession && { url: new URL(resumableSession.url), key: resumableSession.key, command: $('default-command').value };
   if (!connection) { openConnection(); throw Error('Connect to a server first'); }
-  return createTerminalPanel({ id, title: title || 'Terminal', url: connection.url.href, key: $('key').value, command: command ?? connection.command, options: terminalOptions(), transformInput: applyCtrl });
+  if (!transportReady) throw Error('Connect before opening a terminal.');
+  const panel = createTerminalPanel({ id, title: title || 'Terminal', compression: $('terminal-compression').checked, sessionId: session, restoring, takeover, client: resumableSession?.client, onSession: () => workspaces.changed(), endRemote, onContextMenu: showTerminalMenu, openLink: openWebLink, onFontSize: size => { $('font-size').value = size; applySettings(); }, url: connection.url.href, key: connection.key, command: command ?? connection.command, options: terminalOptions(), transformInput: applyModifiers });
+  panel.api.openSettings = () => openSettingsGroup('terminal'); return panel;
 } });
 workbench.registerType({ id: 'files', title: 'File browser', icon: 'FolderOpen', category: 'Workspace', order: 20,
-  description: 'Browse, edit, upload, and manage server files.', keywords: ['explorer', 'folders', 'editor'], create: ({ id }) => createFileBrowser({
-  id, request: fileRequest, read: readFile, upload: uploadBytes, openFile, download: downloadBlob,
-  preferences: browserPreferences, onDelete: closeFileTab, rename: renameFile,
+  description: 'Browse, edit, upload, and manage server files.', keywords: ['explorer', 'folders', 'editor'], create: ({ id, cwd }) => createFileBrowser({
+  id, cwd, lifecycle, openSettings: () => openSettingsGroup('files'), onStateChange: () => workspaces.changed(), request: fileRequest, read: readFile, upload: uploadBytes, openFile, getOpeners: fileOpenerChoices, openTerminal: openDirectoryTerminal, download: downloadBlob,
+  preferences: browserPreferences, clipboard: fileClipboard, onDelete: closeDeletedFiles, beforeDelete: prepareFileDeletion, rename: renameFile,
 }) });
 workbench.registerType({ id: 'web-browser', title: 'Browser', icon: 'Globe', category: 'Workspace', order: 25,
-  description: 'Browse through isolated server Chromium, or use fast client proxy mode.', keywords: ['web', 'internet', 'proxy', 'devtools'], create: async ({ id }) => {
-  const connection = validateConnection();
-  if (!connection) { openConnection(); throw Error('Connect to Eya before opening the browser.'); }
-  const transport = await createBrowserTransport({ url: connection.url.href, key: $('key').value });
-  const openRemoteBrowser = handlers => createBrowserRenderTransport({ url: connection.url.href, key: $('key').value, ...handlers });
-  const panel = createBrowserPanel({ request: transport.request, openWebSocket: transport.openWebSocket, openRemoteBrowser, readLocalFile: readFile, openLocalFile: openFile });
-  return { ...panel, id, title: 'Browser', onClose() { panel.onClose?.(); transport.close(); } };
+  description: 'Browse sites through isolated server Chromium.', keywords: ['web', 'internet', 'chromium'], create: async ({ id, session, restoring, stream, initialUrl }) => {
+  const connection = resumableSession && { url: new URL(resumableSession.url), key: resumableSession.key, command: $('default-command').value };
+  if (!connection || !transportReady) { openConnection(); throw Error('Connect to Eya before opening the browser.'); }
+  const transport = createRecoveringBrowserTransport({ url: connection.url.href, key: connection.key });
+  let runtimeSession = session || null, disposed = false, paused = false, blocked = false, timer, attempts = 0, takeOver = false;
+  const recovery = document.createElement('div'); recovery.className = 'instance-terminal-bar'; recovery.hidden = true;
+  const detail = document.createElement('span'); detail.className = 'instance-terminal-status';
+  const takeover = document.createElement('button'); takeover.type = 'button'; takeover.textContent = 'Take over';
+  const retryBrowser = document.createElement('button'); retryBrowser.type = 'button'; retryBrowser.textContent = 'Reconnect browser';
+  const restart = document.createElement('button'); restart.type = 'button'; restart.textContent = 'Start new browser session';
+  recovery.append(detail, takeover, retryBrowser, restart);
+  const reconnect = () => {
+    if (!disposed && !paused && !blocked && runtimeSession) panel.api.restoreRemote().then(() => { attempts = 0; recovery.hidden = true; }).catch(showRecovery);
+  };
+  function showRecovery(error) {
+    if (disposed) return;
+    if (['in-use', 'expired', 'full', 'startup-failed'].includes(error.code)) blocked = true;
+    recovery.hidden = false; detail.textContent = error.message;
+    takeover.hidden = error.code !== 'in-use'; restart.hidden = !['expired', 'startup-failed'].includes(error.code);
+    retryBrowser.hidden = ['in-use', 'expired'].includes(error.code);
+  }
+  const openRemoteBrowser = async handlers => {
+    try {
+      const createSession = !runtimeSession;
+      if (!runtimeSession) { runtimeSession = [...crypto.getRandomValues(new Uint8Array(32))].map(byte => byte.toString(16).padStart(2, '0')).join(''); workspaces.changed(); }
+      const remote = await createBrowserRenderTransport({ url: connection.url.href, key: connection.key, persistent: true, client: resumableSession.client, sessionId: runtimeSession, createSession, takeover: takeOver, ...handlers,
+        onState: (state, error) => {
+          handlers.onState?.(state, error);
+          if (state === 'error') showRecovery(error);
+          if (state === 'closed' && !disposed && !paused && !blocked && runtimeSession) { clearTimeout(timer); timer = setTimeout(reconnect, Math.min(10000, 500 * 2 ** Math.min(attempts++, 5))); }
+        },
+      });
+      runtimeSession = remote.sessionId; takeOver = false; workspaces.changed();
+      if (paused || disposed) { remote.close({ detach: true }); throw Error('Browser detached while connecting.'); }
+      return remote;
+    } catch (error) { showRecovery(error); throw error; }
+  };
+  const panel = createBrowserPanel({ preferences: { ...preferences.browser, stream: stream || preferences.browser.stream }, onGlobalShortcut: runGlobalShortcut, onSettingsChange: value => syncPanelPreferences('browser', value), request: transport.request, openWebSocket: transport.openWebSocket, openRemoteBrowser, readLocalFile: readFile, openLocalFile: openFile, fileRequest, uploadServerFile: uploadBytes, onAuxModifiersConsumed: takeModifiers, onStateChange: () => { blocked = false; recovery.hidden = true; attempts = 0; workspaces.changed(); }, retainRemoteSession: true });
+  panel.element.prepend(recovery);
+  if (initialUrl) queueMicrotask(() => panel.api.navigate(initialUrl).catch(cause => notify(cause.message)));
+  takeover.onclick = () => { if (confirm('Take over this browser? The other client will be detached.')) { blocked = false; takeOver = true; reconnect(); } };
+  retryBrowser.onclick = () => { blocked = false; reconnect(); };
+  restart.onclick = () => { if (confirm('Start a new browser session? The previous session cannot be recovered.')) { if (runtimeSession) endRemote(runtimeSession); runtimeSession = null; blocked = false; panel.api.restoreRemote().then(() => { recovery.hidden = true; workspaces.changed(); }).catch(showRecovery); } };
+  if (restoring && runtimeSession) queueMicrotask(reconnect);
+  return { ...panel, id, title: 'Browser', serialize: () => ({ id, kind: 'web-browser', title: 'Browser', session: runtimeSession, config: { stream: panel.api.streamSettings } }),
+    api: { ...panel.api, detach() { paused = true; clearTimeout(timer); transport.pause(); panel.api.detach(); }, resume() { if (paused) { paused = false; transport.resume(); reconnect(); } } },
+    onClose(options = {}) { disposed = true; clearTimeout(timer); panel.onClose?.({ detach: true }); transport.close(); if (!options.detach && runtimeSession) endRemote(runtimeSession); } };
+} });
+workbench.registerType({ id: 'proxy-browser', title: 'Proxy browser', icon: 'Globe', category: 'Workspace', order: 26,
+  description: 'Experimental client rendering and local HTML. Some requests may use this device’s network.', keywords: ['web', 'internet', 'proxy', 'html', 'local', 'devtools'], create: async ({ id, initialUrl, proxyState }) => {
+  const connection = resumableSession && { url: new URL(resumableSession.url), key: resumableSession.key };
+  if (!connection || !transportReady) { openConnection(); throw Error('Connect to Eya before opening the proxy browser.'); }
+  let panel, connectionState = 'connecting', connectionError;
+  const transport = createRecoveringBrowserTransport({ url: connection.url.href, key: connection.key,
+    onState(state, error) { connectionState = state; connectionError = error; panel?.api.setProxyConnectionState(state, error); } });
+  panel = createBrowserPanel({ serverRenderedByDefault: false, preferences: preferences.browser,
+    request: transport.request, openWebSocket: transport.openWebSocket, readLocalFile: readFile, openLocalFile: openFile,
+    reconnectProxy: transport.reconnect,
+    onGlobalShortcut: runGlobalShortcut, onSettingsChange: value => syncPanelPreferences('browser', value),
+    onStateChange: () => workspaces.changed() });
+  panel.api.setProxyConnectionState(connectionState, connectionError);
+  // Restore only GET destinations. Other tabs load when explicitly selected;
+  // no request, upload, socket or page execution state is replayed on reconnect.
+  panel.api.restoreProxyState(sanitizeProxyState(proxyState, initialUrl));
+  return { ...panel, id, serialize: () => {
+    const proxyState = panel.api.proxyState;
+    let initialUrl = proxyState.tabs[proxyState.active].url;
+    // Preserve the deployed single-URL fallback for older clients when it fits.
+    if (encoder.encode(JSON.stringify({ initialUrl, proxyState })).byteLength > 8192) initialUrl = '';
+    return { id, kind: 'proxy-browser', title: 'Proxy browser', config: { initialUrl, proxyState } };
+  },
+    api: Object.assign(panel.api, { detach: transport.pause, resume: transport.resume }),
+    onClose() { panel.onClose(); transport.close(); } };
 } });
 workbench.registerType({ id: 'task-manager', title: 'Task Manager', icon: 'Activity', category: 'System', order: 30,
   description: 'Inspect processes and live machine resource usage.', keywords: ['processes', 'cpu', 'memory', 'system'], create: ({ id }) => ({
-  id, title: 'Task Manager', kind: 'system', ...createTaskManager({ request: fileRequest, openFile: openMachinePath, openTerminal: command => workbench.create('terminal', { command }) }),
+  id, title: 'Task Manager', kind: 'system', ...createTaskManager({ preferences: preferences.taskManager, onSettingsChange: value => syncPanelPreferences('taskManager', value), lifecycle, request: fileRequest, openFile: openMachinePath, openTerminal: command => workbench.create('terminal', { command }) }),
 }) });
 workbench.registerType({ id: 'docker', title: 'Docker', icon: 'Container', category: 'System', order: 40,
   description: 'Monitor containers, images, logs, and Docker resources.', keywords: ['containers', 'images', 'compose'], create: ({ id }) => ({
-  id, title: 'Docker', kind: 'docker', ...createDockerPanel({ request: fileRequest, openFile: openMachinePath, openTerminal: command => workbench.create('terminal', { command }) }),
+  id, title: 'Docker', kind: 'docker', ...createDockerPanel({ preferences: preferences.docker, onSettingsChange: value => syncPanelPreferences('docker', value), lifecycle, request: fileRequest, openFile: openMachinePath, openTerminal: command => workbench.create('terminal', { command }) }),
 }) });
 
 const panelApi = {
-  openFile: path => openFile(String(path)),
+  openFile: (path, viewer) => openFile(String(path), false, viewer),
   registerType: definition => workbench.registerType(definition),
   listTypes: () => workbench.listTypes(),
   create: (type, options) => workbench.create(type, options),
@@ -1142,6 +1253,7 @@ const panelApi = {
   register: definition => workbench.register(definition),
   open: (id, options) => workbench.open(id, options),
   close: id => workbench.close(id),
+  minimize: id => workbench.minimize(id),
   activate: id => workbench.activate(id),
   move: (id, groupId) => workbench.move(id, groupId),
   split: (id, direction, referenceId) => workbench.split(id, direction, referenceId),
@@ -1157,37 +1269,78 @@ const panelApi = {
     if (!provider || typeof provider.name !== 'string' || typeof provider.supports !== 'function' || typeof provider.render !== 'function') {
       throw Error('A viewer requires name, supports, and render fields.');
     }
-    fileViewers.splice(-1, 0, provider);
+    fileViewers.splice(fileViewers.findIndex(value => value.name === 'binary'), 0, provider);
   },
 };
 Object.defineProperty(globalThis, 'EyaPanels', { configurable: true, value: Object.freeze(panelApi) });
 
-function openFile(path, force = false) {
+function openFile(path, force = false, viewer) {
+  if (viewer && !fileViewers.some(provider => provider.name === viewer)) return Promise.reject(Error('Viewer unavailable.'));
+  if (viewer && fileOpenings.has(path)) return fileOpenings.get(path).then(() => openFile(path, force, viewer));
+  const existing = fileTabs.get(path);
+  if (viewer && existing && existing.viewer !== viewer) {
+    if (existing.saving || existing.renaming) { notify('Wait for the file save or rename to finish.'); return Promise.resolve(); }
+    if (existing.dirty && !confirm(`Discard unsaved changes to ${existing.name}?`)) return Promise.resolve();
+    setTabDirty(existing, false); existing.text = undefined; existing.lineSeparator = undefined;
+    existing.preferredViewer = viewer;
+    if (!existing.streaming) { renderTabContent(existing); activateFileTab(path); workspaces.changed(); return Promise.resolve(); }
+    force = true;
+  }
+  if (fileOpenings.has(path)) { if (!force) activateFileTab(path); return fileOpenings.get(path); }
   if (fileTabs.has(path) && !force) { activateFileTab(path); return Promise.resolve(); }
-  if (fileOpenings.has(path)) return fileOpenings.get(path);
-  const pending = loadFile(path, force).finally(() => { if (fileOpenings.get(path) === pending) fileOpenings.delete(path); });
+  const pending = loadFile(path, force, viewer ? { config: { viewer } } : null).finally(() => { if (fileOpenings.get(path) === pending) fileOpenings.delete(path); });
   fileOpenings.set(path, pending); return pending;
 }
-async function loadFile(path, force = false) {
+async function loadFile(path, force = false, restored = null) {
   const attempt = connectionId;
+  const workspaceAttempt = workspaceGeneration;
   const existing = fileTabs.get(path);
   if (existing && !force) { activateFileTab(path); return; }
+  const tab = existing || { path, preferredViewer: restored?.config.viewer, binaryPreferences: restored?.config.binary, resume: { time: restored?.config.time || 0, paused: restored?.config.paused !== false }, panelId: restored?.id || `file-${randomId()}`, name: baseName(path), imageBackground: restored?.config.imageBackground, bytes: new Uint8Array(), dirty: false, view: null, node: null, url: null, loading: true };
+  const initial = !existing || !!existing.loadError || !!existing.loading;
+  if (initial) {
+    tab.loading = true; tab.loadError = null;
+    fileTabs.set(path, tab);
+    renderTabContent(tab);
+    activateFileTab(path);
+  }
   try {
+    tab.transferring = true; tab.progressText = `Loading · ${fileProgress()}`; updateFileIndicators(tab);
     $('file-status').textContent = `Opening ${path}…`;
-    const result = await readFile(path);
-    if (attempt !== connectionId) return;
-    if (existing && fileTabs.get(path) !== existing) return;
-    if (existing && force) {
+    const serverUrl = new URL(resumableSession.url);
+    const trustedVideoOrigin = serverUrl.protocol === 'wss:' || serverUrl.hostname === 'localhost' || serverUrl.hostname.endsWith('.localhost') || serverUrl.hostname === '[::1]' || /^127\./.test(serverUrl.hostname);
+    const requestedViewer = tab.preferredViewer || preferences.fileOpeners?.[fileExtension(path)];
+    const streaming = videoExtensions.has(extension(path)) && (!requestedViewer || requestedViewer === 'video') && trustedVideoOrigin;
+    const result = streaming ? { meta: await fileRequest('stat', { path }), bytes: new Uint8Array() } : await readFile(path, (loaded, total) => {
+      if (fileTabs.get(path) !== tab) return;
+      tab.progressText = `${initial ? 'Loading' : 'Refreshing'} · ${fileProgress(loaded, total)}`; updateFileIndicators(tab);
+    });
+    if (restored?.config.version && restored.config.version !== result.meta.version) throw Error('File changed since this tab was saved. Reload the current file explicitly.');
+    if (restored?.config.viewer && !fileViewers.some(viewer => viewer.name === restored.config.viewer)) throw Error(`Viewer ${restored.config.viewer} is unavailable. Reload with a current viewer explicitly.`);
+    if (streaming && (!Number.isSafeInteger(result.meta.size) || result.meta.size < 0)) throw Error('Video size cannot be represented by this browser.');
+    if (attempt !== connectionId || workspaceAttempt !== workspaceGeneration) return;
+    if (fileTabs.get(path) !== tab || tab.path !== path) return;
+    tab.transferring = false; tab.progressText = streaming ? `Streaming · ${fileProgress(0, result.meta.size)}` : '';
+    const wasChanged = !!tab.diskChanged || (!initial && tab.version !== result.meta.version);
+    if (existing && force && !initial) {
       if (existing.dirty) return;
       if (existing.cad) {
         if (await existing.cad.load(result.bytes)) {
           existing.bytes = result.bytes; existing.modified = result.meta.modified; existing.version = result.meta.version;
+          setFileChanged(tab, false, wasChanged);
+          workspaces.changed();
         }
         return;
       }
+      setFileChanged(tab, false, wasChanged);
+      if (streaming) {
+        existing.loadedRanges = []; existing.version = result.meta.version; existing.size = result.meta.size; renderTabContent(existing);
+        return;
+      }
+      existing.streaming = false;
       const unchanged = existing.bytes.length === result.bytes.length && existing.bytes.every((byte, index) => byte === result.bytes[index]);
-      existing.modified = result.meta.modified; existing.version = result.meta.version;
-      if (unchanged) return;
+      existing.modified = result.meta.modified; existing.version = result.meta.version; existing.size = result.meta.size; workspaces.changed();
+      if (unchanged && existing.viewer !== 'html') return;
       existing.bytes = result.bytes;
       if (existing.viewer === 'text') {
         existing.text = decoder.decode(result.bytes);
@@ -1197,16 +1350,77 @@ async function loadFile(path, force = false) {
       $('file-status').textContent = `${baseName(path)} refreshed after an external change.`;
       return;
     }
-    const tab = { path, panelId: `file:${path}`, name: baseName(path), bytes: result.bytes, modified: result.meta.modified, version: result.meta.version, dirty: false, view: null, node: null, url: null };
+    Object.assign(tab, { bytes: result.bytes, size: result.meta.size, streaming, modified: result.meta.modified, version: result.meta.version, loading: false, loadError: null });
     fileTabs.set(path, tab);
     renderTabContent(tab);
-    activateFileTab(path);
-    $('file-status').textContent = `${tab.name} · ${formatSize(tab.bytes.length)}`;
-  } catch (cause) { fileFailure(cause); if (!force) notify(cause.message || 'Could not open file'); }
+    $('file-status').textContent = `${tab.name} · ${formatSize(tab.size ?? tab.bytes.length)}`;
+  } catch (cause) {
+    if (workspaceAttempt !== workspaceGeneration || fileTabs.get(path) !== tab) return;
+    if (initial) {
+      tab.loading = false; tab.loadError = cause.message || 'Could not open file';
+      if (restored) workbench.close(tab.panelId, true);
+      else renderTabContent(tab);
+    }
+    fileFailure(cause); if (restored) throw cause; notify(cause.message || 'Could not open file');
+  } finally {
+    tab.transferring = false; updateFileIndicators(tab);
+  }
+}
+
+async function readViewerResource(tab, path, maxBytes) {
+  const loads = tab.resourceLoads ||= new Set();
+  const item = { loaded: 0, total: null, done: false }; loads.add(item);
+  const update = () => {
+    const items = [...loads];
+    const total = items.every(value => Number.isSafeInteger(value.total)) ? items.reduce((sum, value) => sum + value.total, 0) : null;
+    tab.resourceProgress = `Loading resources · ${fileProgress(items.reduce((sum, value) => sum + value.loaded, 0), total)}`;
+    updateFileIndicators(tab);
+  };
+  update();
+  try {
+    const progress = (loaded, total) => { item.loaded = loaded; item.total = total; update(); };
+    if (maxBytes === undefined) return await readFile(path, progress);
+    const meta = await fileRequest('stat', { path });
+    if (!Number.isSafeInteger(meta.size) || meta.size < 0 || meta.size > maxBytes) throw Error('Image exceeds preview budget.');
+    const bytes = new Uint8Array(meta.size); progress(0, meta.size);
+    for (let offset = 0; offset < meta.size;) {
+      if (fileTabs.get(tab.path) !== tab) throw Error('Viewer closed.');
+      const length = Math.min(1024 * 1024, meta.size - offset);
+      const chunk = await readFileRange(path, offset, length, meta.version);
+      if (chunk.bytes.length !== length || chunk.meta?.size !== meta.size || chunk.meta?.version !== meta.version) throw Error('Image changed during preview.');
+      bytes.set(chunk.bytes, offset); offset += length; progress(offset, meta.size);
+    }
+    return { meta, bytes };
+  }
+  finally {
+    item.done = true;
+    if ([...loads].every(value => value.done)) { loads.clear(); tab.resourceProgress = ''; }
+    updateFileIndicators(tab);
+  }
+}
+
+function setFileChanged(tab, changed, updated = false) {
+  tab.diskChanged = changed;
+  if (changed) tab.updatedFromDisk = false;
+  else if (updated) tab.updatedFromDisk = true;
+  updateFileIndicators(tab);
+}
+function updateFileIndicators(tab) {
+  tab.node?.querySelector('.viewer-body')?.setAttribute('aria-busy', String(!!tab.loading || !!tab.transferring || !!tab.resourceProgress));
+  if (tab.refreshButton) tab.refreshButton.disabled = !!tab.dirty || !!tab.loading || !!tab.transferring;
+  if (tab.progressLabel) {
+    tab.progressLabel.textContent = tab.transferring || tab.loading ? (tab.progressText || `Loading · ${fileProgress()}`) : tab.resourceProgress || (tab.streaming ? tab.progressText : '') || '';
+    tab.progressLabel.hidden = !tab.progressLabel.textContent;
+  }
+  if (tab.changeLabel) {
+    tab.changeLabel.textContent = tab.diskChanged ? 'Changed on disk' : tab.updatedFromDisk ? 'Updated from disk' : '';
+    tab.changeLabel.hidden = !tab.changeLabel.textContent;
+  }
 }
 
 function createViewerShell(tab, save = false) {
   tab.shellMenu?.destroy();
+  tab.saveButton = null;
   const root = document.createElement('div'); root.className = 'viewer';
   const actions = document.createElement('div'); actions.className = 'viewer-actions';
   const path = document.createElement('span'); path.className = 'viewer-path'; path.textContent = parentPath(tab.path); path.title = tab.path;
@@ -1214,27 +1428,46 @@ function createViewerShell(tab, save = false) {
   if (save) {
     const button = document.createElement('button'); button.type = 'button'; buttonIcon(button, 'Save', 'Save'); button.className = 'save-button'; button.disabled = !tab.dirty; button.addEventListener('click', () => saveTab(tab)); actions.append(button); tab.saveButton = button;
   }
+  const refresh = document.createElement('button'); refresh.type = 'button'; buttonIcon(refresh, 'RefreshCw', 'Refresh', true);
+  refresh.disabled = !!tab.loading || !!tab.transferring || !!tab.dirty;
+  refresh.addEventListener('click', () => { if (!tab.dirty) openFile(tab.path, true); });
+  tab.refreshButton = refresh; actions.append(refresh);
+  tab.progressLabel = document.createElement('span'); tab.progressLabel.className = 'file-load-progress'; tab.progressLabel.setAttribute('role', 'status');
+  tab.changeLabel = document.createElement('span'); tab.changeLabel.className = 'file-change-indicator'; tab.changeLabel.setAttribute('role', 'status');
+  actions.append(tab.progressLabel, tab.changeLabel); updateFileIndicators(tab);
   const menu = createMenu('File actions'); tab.shellMenu = menu;
-  const download = document.createElement('button'); download.type = 'button'; download.textContent = 'Download'; download.addEventListener('click', () => downloadTab(tab)); menuAction(menu.panel, download, 'Download');
+  const download = document.createElement('button'); download.type = 'button'; download.disabled = !!tab.loading || !!tab.loadError; download.textContent = 'Download'; download.addEventListener('click', () => downloadTab(tab)); menuAction(menu.panel, download, 'Download');
   const copy = document.createElement('button'); copy.type = 'button'; copy.textContent = 'Copy path'; copy.addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(tab.path); notify('Path copied'); }
     catch { notify(fallbackCopy(tab.path) ? 'Path copied' : 'Could not copy path'); }
   }); menuAction(menu.panel, copy, 'Copy');
-  actions.append(menu.element);
+  actions.append(menu.element, tab.progressLabel, tab.changeLabel);
   const body = document.createElement('div'); body.className = 'viewer-body';
   root.append(actions, body);
   return { root, body, actions, menu };
 }
 
 function renderTabContent(tab) {
+  if (tab.binaryViewer) tab.binaryPreferences = tab.binaryViewer.snapshot();
+  tab.binaryViewer?.dispose(); tab.binaryViewer = null;
+  tab.imageDispose?.(); tab.imageControls = null; tab.imageDispose = null;
+  tab.videoDispose?.(); tab.player = null; tab.videoStream = null; tab.audio = null; tab.videoDispose = null;
   tab.htmlViewer?.dispose(); tab.htmlViewer = null;
   tab.cad?.dispose(); tab.cad = null;
   tab.view?.destroy(); tab.view = null;
   if (tab.url) URL.revokeObjectURL(tab.url);
-  const provider = fileViewers.find(value => value.supports(tab));
+  const preferred = tab.preferredViewer || preferences.fileOpeners?.[fileExtension(tab.path)];
+  const provider = fileViewers.find(value => value.name === preferred) || fileViewers.find(value => value.supports(tab));
   tab.viewer = provider.name;
-  const node = provider.render(tab);
-  tab.node = node;
+  let node;
+  if (tab.loading || tab.loadError) {
+    const shell = createViewerShell(tab);
+    shell.body.setAttribute('aria-busy', String(!!tab.loading));
+    const message = document.createElement('div'); message.className = 'viewer-message'; message.setAttribute('role', 'status');
+    message.textContent = tab.loading ? `Loading ${tab.name}…` : tab.loadError;
+    shell.body.append(message); node = shell.root;
+  } else node = provider.render(tab);
+  tab.node = node; updateFileIndicators(tab);
   tab.node.dataset.path = tab.path;
   if (workbench.panels.has(tab.panelId)) {
     workbench.update(tab.panelId, { title: tab.name, dirty: tab.dirty, element: node, kind: tab.viewer });
@@ -1244,28 +1477,38 @@ function renderTabContent(tab) {
       title: tab.name,
       kind: tab.viewer,
       legacyTab: tab.path,
+
+      serialize: () => ({ id: tab.panelId, kind: 'file', title: tab.name, config: { path: tab.path, viewer: tab.viewer, version: tab.version, imageBackground: tab.imageBackground, binary: tab.binaryViewer?.snapshot() || tab.binaryPreferences, ...tab.resume } }),
       element: node,
       beforeClose: () => !tab.dirty || confirm(`Discard unsaved changes to ${tab.name}?`),
       onActivate: () => {
         activeFileTab = tab.path;
         if (!matchMedia('(pointer: coarse), (max-width: 760px)').matches) tab.view?.focus();
       },
-      onLayout: () => { tab.view?.requestMeasure(); tab.cad?.resize(); },
+      onLayout: () => { tab.view?.requestMeasure(); tab.cad?.resize(); tab.binaryViewer?.resize(); },
       api: {
-        save: () => tab.viewer === 'text' ? saveTab(tab) : false,
-        download: () => downloadTab(tab),
+        openSettings: () => { if (tab.player?.openSettings) tab.player.openSettings(); else if (tab.videoStream?.openSettings) tab.videoStream.openSettings(); else openSettingsGroup(({ text: 'editor', binary:'binary', image: 'image', audio: 'audio', cad: 'cad', html: 'files' })[tab.viewer] || 'files'); },
+        save: () => ['text', 'binary'].includes(tab.viewer) ? saveTab(tab) : false,
+        download: () => !tab.loading && !tab.loadError ? downloadTab(tab) : false,
         refresh: () => !tab.dirty ? openFile(tab.path, true) : false,
-        focus: () => tab.view?.focus(),
+        focus: () => {
+          if (tab.view) tab.view.focus();
+          else tab.node?.querySelector('.image-viewer-body,.cad-stage,.binary-viewport,iframe,video,audio')?.focus({ preventScroll: true });
+        },
         fit: () => tab.cad?.fit(),
         cadState: () => tab.cad?.snapshot(),
       },
       onClose: () => {
+        tab.binaryViewer?.dispose(); tab.binaryViewer = null;
         tab.shellMenu?.destroy();
+        tab.imageDispose?.(); tab.imageControls = null; tab.imageDispose = null;
+        tab.videoDispose?.(); tab.player = null; tab.videoStream = null; tab.audio = null; tab.videoDispose = null;
         tab.htmlViewer?.dispose(); tab.htmlViewer = null;
         tab.cad?.dispose(); tab.cad = null;
         tab.view?.destroy();
         if (tab.url) URL.revokeObjectURL(tab.url);
         fileTabs.delete(tab.path);
+        fileOpenings.delete(tab.path);
         if (activeFileTab === tab.path) activeFileTab = '';
       },
     });
@@ -1274,18 +1517,18 @@ function renderTabContent(tab) {
 
 function renderCadViewer(tab) {
   const shell = createViewerShell(tab);
-  let preferences = {};
-  try { preferences = JSON.parse(localStorage.getItem('eya-cad-settings') || '{}') || {}; } catch { /* Storage is optional. */ }
+  const preferences = { ...cadPreferences };
   const cad = createCadViewer({
     path: tab.path, preferences,
     savePreferences: value => {
-      const changed = CAD_SHARED_KEYS.some(key => JSON.stringify(cadPreferences[key]) !== JSON.stringify(value[key]));
-      cadPreferences = { ...cadPreferences, ...value };
-      try { localStorage.setItem('eya-cad-settings', JSON.stringify(cadPreferences)); } catch { /* Storage is optional. */ }
-      if (changed) { syncCadSettingsForm(cadPreferences); window.dispatchEvent(new CustomEvent('eya-cad-settings', { detail: { ...cadPreferences } })); }
+      const changed = CAD_SHARED_KEYS.filter(key => key !== 'sidebar').some(key => JSON.stringify(cadPreferences[key]) !== JSON.stringify(value[key])) || cadPreferences.sidebar?.side !== value.sidebar?.side;
+      const savedChanged = JSON.stringify(cadPreferences) !== JSON.stringify({ ...cadPreferences, ...value });
+      cadPreferences = structuredClone({ ...cadPreferences, ...value });
+      if (savedChanged) syncPanelPreferences('cad', cadPreferences);
+      if (changed) { syncCadSettingsForm(cadPreferences); window.dispatchEvent(new CustomEvent('eya-cad-settings', { detail: { ...cadPreferences, sidebar: { side:cadPreferences.sidebar?.side || 'right' } } })); }
     },
     reload: () => openFile(tab.path, true),
-    loadResource: path => readFile(path),
+    loadResource: path => readViewerResource(tab, path),
   });
   tab.cad = cad;
   const cadOptions = cad.element.querySelector('.ui-menu[aria-label="CAD options"]');
@@ -1293,6 +1536,8 @@ function renderCadViewer(tab) {
   for (const action of shell.menu.panel.children) action.removeAttribute('role');
   cadOptions.append(...shell.menu.panel.children);
   shell.menu.destroy(); tab.shellMenu = null;
+  cad.element.querySelector('.cad-toolbar')?.prepend(tab.refreshButton);
+  cad.element.append(tab.progressLabel, tab.changeLabel);
   shell.actions.remove();
   shell.body.classList.add('cad-body'); shell.body.append(cad.element);
   tab.cadBusy = true;
@@ -1302,9 +1547,9 @@ function renderCadViewer(tab) {
 
 // CAD polling is independent of Files visibility and skips unchanged model transfers.
 setInterval(async () => {
-  if (document.hidden || !outbound) return;
+  if (document.hidden || !transportReady) return;
   for (const tab of fileTabs.values()) {
-    if (!tab.cad || !tab.cad.state.live || tab.cadBusy || !tab.node?.getClientRects().length || Date.now() - (tab.cadChecked || 0) < tab.cad.state.interval) continue;
+    if (!tab.cad || tab.cadBusy || !tab.node?.getClientRects().length || Date.now() - (tab.cadChecked || 0) < tab.cad.state.interval) continue;
     tab.cadBusy = true; tab.cadChecked = Date.now();
     const cad = tab.cad, attempt = connectionId;
     try {
@@ -1317,20 +1562,28 @@ setInterval(async () => {
           if (!version || version !== dependency.version) { changed = true; break; }
         }
       }
-      if (!changed) continue;
+      setFileChanged(tab, changed);
+      if (!changed || !$('file-autoreload').checked || !cad.state.live) continue;
       if (fileTabs.get(tab.path) !== tab || attempt !== connectionId || tab.cad !== cad) continue;
-      const result = await readFile(tab.path);
+      tab.transferring = true;
+      const result = await readFile(tab.path, (loaded, total) => { tab.progressText = `Refreshing · ${fileProgress(loaded, total)}`; updateFileIndicators(tab); });
       if (fileTabs.get(tab.path) !== tab || attempt !== connectionId || tab.cad !== cad) continue;
       if (await cad.load(result.bytes)) {
         tab.bytes = result.bytes; tab.version = result.meta.version; tab.modified = result.meta.modified;
+        setFileChanged(tab, false, true);
+        workspaces.changed();
       }
     } catch (cause) { cad.setStatus(`Keeping previous model. ${cause.message || cause}`); }
-    finally { tab.cadBusy = false; }
+    finally { tab.cadBusy = false; tab.transferring = false; updateFileIndicators(tab); }
   }
 }, 500);
 
 function renderTextEditor(tab) {
-  const shell = createViewerShell(tab, true);
+  const shell = createViewerShell(tab, tab.bytes.length <= TEXT_EDITOR_LIMIT);
+  if (tab.bytes.length > TEXT_EDITOR_LIMIT) {
+    const note = document.createElement('p'); note.textContent = 'Large text file · read-only preview of first 5 MiB';
+    const preview = document.createElement('pre'); preview.className = 'text-preview-large'; preview.textContent = decoder.decode(tab.bytes.subarray(0, TEXT_EDITOR_LIMIT)); shell.body.append(note, preview); return shell.root;
+  }
   const host = document.createElement('div'); host.className = 'editor-host'; shell.body.append(host);
   const text = tab.text ?? decoder.decode(tab.bytes); tab.text = text;
   tab.lineSeparator ??= text.includes('\r\n') ? '\r\n' : '\n';
@@ -1338,7 +1591,12 @@ function renderTextEditor(tab) {
   const extensions = [
     EditorState.tabSize.of(Number($('editor-tab-size').value)),
     history(), drawSelection(), highlightActiveLine(), syntaxHighlighting(defaultHighlightStyle, { fallback: true }), languageFor(tab.path),
-    keymap.of([{ key: 'Mod-s', preventDefault: true, run: () => { saveTab(tab); return true; } }, indentWithTab, ...defaultKeymap, ...historyKeymap]),
+    EditorView.domEventHandlers({ keydown(event, view) {
+      if (matchesKeybind('editor.save', event)) { event.preventDefault(); saveTab(tab); return true; }
+      for (const [id, run] of [['editor.undo', undo], ['editor.redo', redo], ['editor.find', openSearchPanel]]) if (matchesKeybind(id, event)) { event.preventDefault(); run(view); return true; }
+      return false;
+    } }),
+    keymap.of([indentWithTab, ...defaultKeymap.filter(binding => !['Mod-z','Mod-Shift-z','Mod-y','Mod-f'].includes(binding.key)), ...historyKeymap.filter(binding => !['Mod-z','Mod-Shift-z','Mod-y'].includes(binding.key))]),
     EditorView.updateListener.of(update => { if (update.docChanged) { tab.text = update.state.doc.sliceString(0, update.state.doc.length, tab.lineSeparator); setTabDirty(tab, true); } }),
     EditorView.theme({ '&': { backgroundColor: 'var(--ui-bg)', color: 'var(--ui-fg)' }, '.cm-content': { caretColor: 'var(--ui-accent)' }, '.cm-gutters': { backgroundColor: 'var(--ui-surface)', color: 'var(--ui-muted)', border: 'none' }, '&.cm-focused .cm-cursor': { borderLeftColor: 'var(--ui-accent)' }, '.cm-activeLine,.cm-activeLineGutter': { backgroundColor: 'var(--ui-control)' } }, { dark: !light }),
   ];
@@ -1351,24 +1609,85 @@ function renderTextEditor(tab) {
 function renderImageViewer(tab) {
   const shell = createViewerShell(tab);
   tab.url = URL.createObjectURL(new Blob([tab.bytes], { type: mediaType(tab.path) }));
-  const image = document.createElement('img'); image.src = tab.url; image.alt = tab.name; shell.body.append(image); return shell.root;
+  const image = document.createElement('img'); image.src = tab.url; image.alt = tab.name;
+  const controls = createImageViewer(shell.body, image, { background: tab.imageBackground || preferences.image, download: () => downloadBlob(tab.path, tab.bytes), onBackgroundChange: value => { tab.imageBackground = value; workspaces.changed(); } });
+  tab.imageControls = controls; tab.imageDispose = controls.dispose; shell.actions.insertBefore(controls.backgroundControl, shell.menu.element);
+  for (const [label, name, action] of [['Zoom out', 'ZoomOut', controls.zoomOut], ['Zoom in', 'ZoomIn', controls.zoomIn], ['Reset image view', 'RotateCcw', controls.reset]]) {
+    const button = document.createElement('button'); button.type = 'button'; buttonIcon(button, name, label, true); button.addEventListener('click', action); shell.actions.insertBefore(button, shell.menu.element);
+  }
+  const copy = document.createElement('button'); copy.type = 'button'; buttonIcon(copy, 'Copy', 'Copy image', true);
+  copy.onclick = async () => {
+    copy.disabled = true;
+    try { await controls.copyImage(); notify('Image copied'); }
+    catch (cause) { notify(cause.message || 'Could not copy image'); }
+    finally { copy.disabled = false; }
+  };
+  shell.actions.insertBefore(copy, shell.menu.element);
+  return shell.root;
 }
 function renderVideoViewer(tab) {
   const shell = createViewerShell(tab);
-  tab.url = URL.createObjectURL(new Blob([tab.bytes], { type: mediaType(tab.path) }));
-  const video = document.createElement('video'); video.src = tab.url; video.controls = true; video.playsInline = true; video.preload = 'metadata'; shell.body.append(video); return shell.root;
+  shell.body.classList.add('video-viewer-body');
+  const subtitleSession = resumableSession;
+  let closed = false, setSubtitles;
+  const scanSubtitles = () => discoverSubtitles(tab.path, fileRequest, readFileRange, () => !closed && resumableSession === subtitleSession).then(tracks => { if (!closed) setSubtitles?.(tracks); }).catch(error => { if (!closed) notify(`Subtitles: ${error.message}`); });
+  if (tab.streaming) {
+    const frame = document.createElement('iframe'); frame.className = 'native-video-frame'; frame.title = `Video: ${tab.name}`; frame.allowFullscreen = true; frame.allow = 'fullscreen';
+    const stream = nativeVideoStream(frame, { url: resumableSession.url, size: tab.size, mime: mediaType(tab.path), preferences: preferences.video, onSettingsChange: value => syncPanelPreferences('video', value), onGlobalShortcut: runGlobalShortcut, resume: tab.resume, onState: value => { tab.resume = value; workspaces.changed(); }, read: (offset, length) => readVideoRange(tab, offset, length), onError: error => notify(error.message || 'Video streaming failed') });
+    tab.videoStream = stream;
+    const unsubscribe = lifecycle.subscribe(state => { if (state.ready) stream.recover(); });
+    setSubtitles = tracks => stream.setSubtitles(tracks);
+    tab.videoDispose = () => { closed = true; unsubscribe(); stream.dispose(); }; shell.body.append(frame);
+  } else {
+    const video = document.createElement('video');
+    tab.url = URL.createObjectURL(new Blob([tab.bytes], { type: mediaType(tab.path) })); video.src = tab.url;
+    const player = createVideoControls(video, { preferences: preferences.video, onSettingsChange: value => syncPanelPreferences('video', value) }); tab.player = player;
+    video.addEventListener('loadedmetadata', () => { video.currentTime = Math.min(tab.resume.time || 0, Number.isFinite(video.duration) ? video.duration : 0); if (tab.resume.paused === false) video.play().catch(() => {}); }, { once: true });
+    let lastState = 0;
+    const savePosition = () => { if (Date.now() - lastState < 2000 || !Number.isFinite(video.currentTime)) return; lastState = Date.now(); tab.resume = { time: video.currentTime, paused: video.paused }; workspaces.changed(); };
+    video.addEventListener('timeupdate', savePosition); video.addEventListener('pause', savePosition);
+    setSubtitles = tracks => player.addSubtitles(tracks);
+    tab.videoDispose = () => { closed = true; player.dispose(); }; shell.body.append(player.element);
+  }
+  scanSubtitles();
+  return shell.root;
 }
 function renderAudioViewer(tab) {
   const shell = createViewerShell(tab);
   tab.url = URL.createObjectURL(new Blob([tab.bytes], { type: mediaType(tab.path) }));
-  const audio = document.createElement('audio'); audio.src = tab.url; audio.controls = true; audio.preload = 'metadata'; shell.body.append(audio); return shell.root;
+  const audio = document.createElement('audio'); audio.src = tab.url; audio.controls = true; audio.preload = 'metadata'; audio.playbackRate = preferences.audio.speed; audio.loop = preferences.audio.loop; tab.audio = audio;
+  audio.addEventListener('ratechange', () => syncPanelPreferences('audio', { speed: audio.playbackRate, loop: audio.loop })); shell.body.append(audio); return shell.root;
 }
 function renderHtmlViewer(tab) {
   const shell = createViewerShell(tab);
-  const viewer = createHtmlViewer(tab, { readResource: path => readFile(path), openFile: path => openFile(path) });
+  const viewer = createHtmlViewer(tab, { readResource: path => readViewerResource(tab, path), openFile: path => openFile(path) });
   tab.htmlViewer = viewer;
   shell.body.append(viewer.element);
   return shell.root;
+}
+function renderMarkdownViewer(tab) {
+  const shell = createViewerShell(tab);
+  tab.htmlViewer = createMarkdownViewer(tab, { readResource: (path, maxBytes) => readViewerResource(tab, path, maxBytes), openFile: path => openFile(path), openLink: openWebLink });
+  shell.body.append(tab.htmlViewer.element); return shell.root;
+}
+function renderBinaryViewer(tab) {
+  const shell = createViewerShell(tab, true);
+  tab.binaryViewer = createBinaryViewer({ bytes: tab.bytes, preferences:{ ...preferences.binary, ...tab.binaryPreferences }, openSettings:() => openSettingsGroup('binary'), onPreferencesChange: value => {
+    const binary = normalizeSettings({binary:value}).binary;
+    syncPanelPreferences('binary', binary);
+    for (const other of fileTabs.values()) if (other !== tab && other.binaryViewer) other.binaryViewer.applyPreferences(binary);
+    workspaces.changed();
+  }, onChange:value => setTabDirty(tab,value.dirty) });
+  shell.body.addEventListener('keydown', event => {
+    if (matchesKeybind('editor.save', event)) { event.preventDefault(); event.stopPropagation(); saveTab(tab); }
+  }, { capture: true });
+  const binary = tab.binaryViewer;
+  menuHeading(binary.menuPanel, 'File');
+  menuAction(binary.menuPanel, tab.saveButton, 'Save', 'Save');
+  menuAction(binary.menuPanel, tab.refreshButton, 'RefreshCw', 'Refresh');
+  binary.menuPanel.append(...shell.menu.panel.children); shell.menu.destroy(); tab.shellMenu = null;
+  binary.fileStatusElement.append(tab.progressLabel, tab.changeLabel); shell.actions.remove();
+  shell.body.append(tab.binaryViewer.element); return shell.root;
 }
 function renderGenericViewer(tab) {
   const shell = createViewerShell(tab);
@@ -1393,23 +1712,29 @@ function closeFileTab(path) {
 function setTabDirty(tab, dirty) {
   if (tab.dirty === dirty) return;
   tab.dirty = dirty;
+  updateFileIndicators(tab);
   if (tab.saveButton) tab.saveButton.disabled = !dirty || !!tab.saving || !!tab.renaming;
   workbench.update(tab.panelId, { dirty });
 }
 async function saveTab(tab) {
-  if (tab.saving || tab.renaming) return;
+  if (tab.saving || tab.renaming || !tab.saveButton || !['text','binary'].includes(tab.viewer)) return;
   tab.saving = true;
   const savedText = tab.text ?? '';
+  const binary = tab.binaryViewer, revision = binary?.revision;
   try {
     tab.saveButton.disabled = true; $('file-status').textContent = `Saving ${tab.path}…`;
-    const bytes = encoder.encode(savedText);
-    await uploadBytes(tab.path, bytes, true);
+    const bytes = binary ? binary.getBytes() : encoder.encode(savedText);
+    await uploadBytes(tab.path, bytes, true, tab.version);
     if (fileTabs.get(tab.path) !== tab) return;
-    tab.bytes = bytes; setTabDirty(tab, (tab.text ?? '') !== savedText); $('file-status').textContent = `${tab.name} saved.`;
+    const verified = await readFile(tab.path);
+    if (fileTabs.get(tab.path) !== tab) return;
+    if (verified.bytes.length !== bytes.length || !verified.bytes.every((byte, index) => byte === bytes[index])) throw Error('File changed immediately after saving. Refresh and resolve the conflict before another save.');
+    tab.version = verified.meta.version; setFileChanged(tab, false); workspaces.changed();
+    tab.bytes = bytes; tab.size = bytes.length; binary?.markSaved(revision); setTabDirty(tab, binary ? binary.dirty : (tab.text ?? '') !== savedText); $('file-status').textContent = `${tab.name} saved.`;
     notify(tab.dirty ? `${tab.name}: saved; newer edits remain unsaved` : `${tab.name} saved`);
-    await navigateTo(currentPath, false);
+    for (const panel of workbench.panels.values()) if (panel.kind === 'browser') panel.api?.refresh?.();
   } catch (cause) {
-    if (fileTabs.get(tab.path) === tab) { setTabDirty(tab, true); fileFailure(cause); notify(`Could not save ${tab.name}. Your edits are retained.`); }
+    if (fileTabs.get(tab.path) === tab) { setTabDirty(tab, true); fileFailure(cause); notify(`Could not save ${tab.name}: ${cause.message || cause}. Your edits are retained.`); }
   } finally {
     tab.saving = false;
     if (tab.saveButton) tab.saveButton.disabled = !tab.dirty;
@@ -1418,18 +1743,35 @@ async function saveTab(tab) {
 function downloadBlob(path, bytes) {
   const url = URL.createObjectURL(new Blob([bytes])); const link = document.createElement('a'); link.href = url; link.download = baseName(path); link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-function downloadTab(tab) { downloadBlob(tab.path, tab.viewer === 'text' ? encoder.encode(tab.text) : tab.bytes); }
+function downloadTab(tab) { if (tab.streaming) { downloadEntry({ path: tab.path, name: tab.name }); return; } downloadBlob(tab.path, tab.binaryViewer ? tab.binaryViewer.getBytes() : tab.viewer === 'text' && tab.text !== undefined ? encoder.encode(tab.text) : tab.bytes); }
 function updateEditorConfiguration() { for (const tab of fileTabs.values()) if (tab.viewer === 'text') renderTabContent(tab); }
 
-$('files').onclick = () => setPanelVisible(!workbench.isOpen('browser'));
 $('file-close').onclick = () => setPanelVisible(false);
-$('file-go').onclick = () => navigateTo($('file-path').value.trim(), true);
-$('file-path').addEventListener('keydown', event => { if (event.key === 'Enter') navigateTo($('file-path').value.trim(), true); });
+const legacyPathValue = () => $('file-path').value.startsWith('/') ? $('file-path').value : `${currentPath}/${$('file-path').value}`;
+const legacySearchSuggestions = () => $('file-search').value.trim() ? directoryEntries.filter(item => item.name.toLocaleLowerCase().includes($('file-search').value.trim().toLocaleLowerCase())) : [];
+$('file-path').addEventListener('input', () => { if ($('file-path').value.endsWith('../')) { const path = normalizeFilePath(legacyPathValue()); $('file-path').value = path + (path === '/' ? '' : '/'); } });
+legacyPathCombo = createFileCombobox($('file-path'), { label: 'Directory suggestions', async suggestions() {
+  const value = legacyPathValue(), end = value.lastIndexOf('/'), prefix = value.slice(end + 1).toLocaleLowerCase();
+  const response = await fileRequest('list', { path: normalizeFilePath(value.slice(0, end) || '/'), showHidden: $('show-hidden').checked });
+  return response.entries.filter(item => item.name.toLocaleLowerCase().startsWith(prefix));
+}, choose: activateEntry, complete: item => { $('file-path').value = item.path + (item.kind === 'directory' ? '/' : ''); } });
+legacySearchCombo = createFileCombobox($('file-search'), { label: 'File search suggestions', suggestions: legacySearchSuggestions, choose: activateEntry,
+  complete: item => { $('file-search').value = item.name; clearTimeout(fileSearchTimer); fileNavigationGeneration++; fileSearchTimer = setTimeout(searchFiles, 0); } });
+$('file-go').onclick = () => navigateTo(normalizeFilePath(legacyPathValue()), true);
+$('file-path').addEventListener('keydown', event => { if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); navigateTo(normalizeFilePath(legacyPathValue()), true); } });
 $('file-refresh').onclick = () => refreshFiles(false);
 $('file-up').onclick = () => navigateTo(parentPath(currentPath), true);
 $('file-back').onclick = () => { if (historyIndex > 0) { historyIndex--; navigateTo(historyPaths[historyIndex], false); } };
 $('file-forward').onclick = () => { if (historyIndex < historyPaths.length - 1) { historyIndex++; navigateTo(historyPaths[historyIndex], false); } };
-$('file-search').addEventListener('input', () => { clearTimeout(fileSearchTimer); fileSearchTimer = setTimeout(searchFiles, 350); });
+$('file-search').addEventListener('input', event => {
+  clearTimeout(fileSearchTimer); fileNavigationGeneration++;
+  if (event.isComposing) return;
+  let value = $('file-search').value, root = legacySearchRoot || currentPath;
+  while (value.startsWith('../')) { root = parentPath(root); value = value.slice(3); }
+  if (value !== $('file-search').value) { $('file-search').value = value; legacySearchRoot = root; }
+  fileSearchTimer = setTimeout(searchFiles, 350);
+});
+$('file-search').addEventListener('keydown', event => { if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); clearTimeout(fileSearchTimer); legacySearchCombo.close(); searchFiles(); } });
 $('show-hidden').addEventListener('change', () => { if (currentPath && outbound) navigateTo(currentPath, false); });
 $('file-new-folder').onclick = async () => {
   const name = prompt('New folder name:'); if (!name) return;
@@ -1490,23 +1832,37 @@ async function renameFile(path, newPath) {
   }
   } finally { for (const tab of affected) { tab.renaming = false; if (tab.saveButton) tab.saveButton.disabled = !tab.dirty || !!tab.saving; } }
 }
-async function deleteEntry(item) {
-  if ($('confirm-delete').checked && !confirm(`Delete ${item.name}${item.kind === 'directory' ? ' and everything inside it' : ''}? This cannot be undone.`)) return;
-  try { await fileRequest('delete', { path: item.path, recursive: item.kind === 'directory' }); closeFileTab(item.path); await navigateTo(currentPath, false); } catch (cause) { fileFailure(cause); }
+function prepareFileDeletion(items) {
+  const affected = [...fileTabs.values()].filter(tab => items.some(item => tab.path === item.path || (item.kind === 'directory' && tab.path.startsWith(item.path + '/'))));
+  if (affected.some(tab => tab.saving || tab.renaming)) { notify('Wait for file saves and renames to finish before deleting.'); return false; }
+  const dirty = affected.filter(tab => tab.dirty);
+  return !dirty.length || confirm(`Delete these files and discard unsaved edits in ${dirty.map(tab => tab.name).join(', ')}?`);
+}
+function closeDeletedFiles(path) {
+  for (const tab of [...fileTabs.values()]) if (tab.path === path || tab.path.startsWith(path + '/')) workbench.close(tab.panelId, true);
+}
+function deleteEntry(item) {
+  if (!browserSelection.has(item.path)) selectEntry(item);
+  return browserSelection.remove();
 }
 for (const button of $('file-entry-menu').querySelectorAll('[data-file-action]')) button.addEventListener('click', () => {
   const item = fileMenuEntry;
   const action = button.dataset.fileAction;
+  if (action === 'open' && item?.kind === 'file' && fileOpenerChoices(item.path).length > 1) {
+    return; // The shared submenu owns this trigger and its dismissal boundary.
+  }
   hideFileEntryMenu();
   if (!item) return;
   if (action === 'open') activateEntry(item);
   else if (action === 'download') downloadEntry(item);
+  else if (action === 'copy') browserSelection.copy();
   else if (action === 'rename') renameEntry(item);
   else if (action === 'delete') deleteEntry(item);
 });
 $('file-entry-menu').addEventListener('pointerdown', event => event.stopPropagation());
 $('file-entry-menu').addEventListener('keydown', event => {
-  const items = [...$('file-entry-menu').querySelectorAll('button:not([hidden]):not(:disabled)')];
+  const menu = $('file-entry-menu');
+  const items = [...menu.querySelectorAll('button:not([hidden]):not(:disabled)')].filter(button => button.closest('[role=menu]') === menu && !button.closest('[hidden]'));
   const index = items.indexOf(document.activeElement);
   if (event.key === 'Escape') {
     event.preventDefault(); const path = fileMenuEntry?.path; hideFileEntryMenu();
@@ -1517,7 +1873,7 @@ $('file-entry-menu').addEventListener('keydown', event => {
     items[next]?.focus();
   }
 });
-document.addEventListener('pointerdown', event => { if (!$('file-entry-menu').contains(event.target) && !event.target.closest?.('.file-entry-button')) hideFileEntryMenu(); });
+document.addEventListener('pointerdown', event => { if (!$('file-entry-menu').contains(event.target) && !legacyOpenWith?.contains(event.target) && !event.target.closest?.('.file-entry-button')) hideFileEntryMenu(); });
 $('browser-view').addEventListener('scroll', () => {
   if (!fileMenuEntry) return;
   const button = [...$('file-list').rows].find(row => row.dataset.path === fileMenuEntry.path)?.querySelector('.file-entry-button');
@@ -1526,49 +1882,43 @@ $('browser-view').addEventListener('scroll', () => {
   else showFileEntryMenu(fileMenuEntry, button);
 }, { passive: true });
 browserPanelElement.addEventListener('keydown', event => {
+  if (browserSelection.keydown(event)) return;
   if (event.target.closest('input,textarea,select,button,.ui-menu,[role=combobox]')) return;
   const rows = [...$('file-list').rows], index = rows.findIndex(row => row.dataset.path === selectedEntry?.path);
   if (['ArrowDown','ArrowUp','Home','End'].includes(event.key) && !event.altKey) {
     event.preventDefault();
     const next = event.key === 'Home' ? 0 : event.key === 'End' ? rows.length - 1 : Math.max(0, Math.min(rows.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
     const row = rows[next], item = row && directoryEntries.find(entry => entry.path === row.dataset.path);
-    if (row) { selectEntry(item || { path: row.dataset.path, kind: 'parent' }); row.focus(); }
-  } else if (selectedEntry && selectedEntry.kind !== 'parent' && ['Delete','Backspace','F2'].includes(event.key)) {
+    if (row) { selectEntry(item || { path: row.dataset.path, kind: 'parent' }, event); row.focus(); }
+  } else if (selectedEntry && selectedEntry.kind !== 'parent' && (matchesKeybind('files.delete', event) || matchesKeybind('files.rename', event))) {
     event.preventDefault(); hideFileEntryMenu();
-    if (event.key === 'F2') renameEntry(selectedEntry); else deleteEntry(selectedEntry);
-  } else if (event.altKey && event.key === 'ArrowUp') { event.preventDefault(); navigateTo(parentPath(currentPath), true); }
-  else if (event.key === 'F5') { event.preventDefault(); refreshFiles(false); }
+    if (matchesKeybind('files.rename', event)) renameEntry(selectedEntry); else deleteEntry(selectedEntry);
+  } else if (matchesKeybind('files.parent', event)) { event.preventDefault(); navigateTo(parentPath(currentPath), true); }
+  else if (matchesKeybind('files.refresh', event)) { event.preventDefault(); refreshFiles(false); }
 });
 
 $('start-connection').onclick = async () => {
+  cancelCredentialCheck();
   if (!applySettings()) return;
-  const connection = validateConnection();
-  if (!connection) return;
+  const connection = validateConnection(); if (!connection) return;
   const key = $('key').value;
-  if (!resumableSession || resumableSession.ended || resumableSession.url !== connection.url.href || resumableSession.key !== key) {
-    const tokenBytes = crypto.getRandomValues(new Uint8Array(32));
-    resumableSession = {
-      token: [...tokenBytes].map(value => value.toString(16).padStart(2, '0')).join(''),
-      url: connection.url.href, key, command: connection.command, commandQueued: false,
-      create: true, input: 0, inputAck: 0, output: 0, rendered: 0, pending: [], ended: false,
-    };
-    terminal.reset(); terminal.clear();
-    if (connection.command) {
-      resumableSession.commandQueued = true;
-      sendInput(connection.command.replace(/\r?\n/g, '\r') + (/[\r\n]$/.test(connection.command) ? '' : '\r'));
-    }
+  if (!workspaces.getState().workspace) workspaceSettingDefaults = { ...readSettingsControls($('settings-dialog')), keybinds: getKeybinds() };
+  if (resumableSession && (resumableSession.url !== connection.url.href || resumableSession.key !== key)) {
+    if (workspaces.getState().workspace && !confirm('Switch server? Unsaved workspace changes and editor buffers in this page will be lost.')) return;
+    disconnect(); workspaces.reset(); pendingSessionEnds.clear(); resumableSession = null;
   }
+  resumableSession ||= { url: connection.url.href, key, client: null, ended: false };
+  resumableSession.ended = false; resumableSession.negotiationFailures = 0;
   reconnectEnabled = true; reconnectAttempts = 0;
-  closeDialog($('connect-dialog'));
-  await connectSession();
-  terminal.focus();
+  connectionFeedback('Connecting…', true); await connectSession();
+  clientUpdates.connected();
 };
 
 function scheduleReconnect() {
   clearTimeout(reconnectTimer);
   if (!reconnectEnabled || !resumableSession || resumableSession.ended) return;
   const delay = Math.min(10000, 500 * 2 ** Math.min(reconnectAttempts++, 5));
-  status(`Reconnecting in ${(delay / 1000).toFixed(1)} s — session retained; input buffered`);
+  status(`Reconnecting · ${(delay / 1000).toFixed(1)} s`);
   setConnectionAppearance(false);
   reconnectTimer = setTimeout(connectSession, delay);
 }
@@ -1584,7 +1934,6 @@ async function connectSession() {
   const session = resumableSession;
   const attempt = ++connectionId;
   clearTimeout(reconnectTimer); clearTimeout(handshakeTimer); clearTimeout(inputFlushTimer);
-  try { localStorage.setItem('eya-url', session.url); } catch { /* Storage is optional for local files. */ }
   rejectFileRequests('Reconnecting.');
   socket?.close();
   clearInterval(pingTimer);
@@ -1595,7 +1944,7 @@ async function connectSession() {
   $('latency').textContent = '';
   let handshake, current;
   try {
-    const psk = await deriveKey(session.key);
+    const psk = deriveKey(session.key);
     if (attempt !== connectionId) return;
     handshake = new Noise('NNpsk0', true, null, { psk });
     handshake.initialise(encoder.encode('eya-terminal-v1'));
@@ -1612,17 +1961,18 @@ async function connectSession() {
   socket = current;
   current.binaryType = 'arraybuffer';
   awaitingHandshake = true;
-  let lastResponse = Date.now();
+  let lastResponse = Date.now(), opened = false;
   setConnectionAppearance(false);
-  status(session.create ? 'Connecting…' : 'Reconnecting — terminal session retained');
-  handshakeTimer = setTimeout(() => { if (socket === current && !transportReady) current.close(); }, 12000);
-  closeDialog($('connect-dialog'));
+  status(session.client ? 'Reconnecting…' : 'Connecting…');
+  lifecycle.update({ ready: false, generation: attempt, mode: 'automatic', reason: 'Connecting' });
+  handshakeTimer = setTimeout(() => { if (socket === current && !transportReady) { if ($('connect-dialog').open) error(connectionError('Connection timed out. Check the server address and password.', !opened)); current.close(); transportClosed(); } }, 12000);
   current.onopen = () => {
     if (socket === current) {
+      opened = true;
       try { current.send(handshake.send()); } catch {
         failed = true;
         error('Could not start authentication.');
-        current.close();
+        current.close(); transportClosed();
       }
     }
   };
@@ -1636,8 +1986,8 @@ async function connectSession() {
         outbound = new Cipher(handshake.tx);
         inbound = new Cipher(handshake.rx);
         awaitingHandshake = false;
-        const ready = { token: session.token, output: session.output, create: session.create };
-        if (!send(encoder.encode('eya-ready-v4:' + JSON.stringify(ready)))) throw Error('Could not confirm the encrypted connection');
+        const ready = { client: session.client, capabilities: WIRE_CAPABILITIES };
+        if (!send(encoder.encode('eya-workspace-v1:' + JSON.stringify(ready)))) throw Error('Could not confirm the encrypted connection');
       } else {
         if (inbound.nonce >= 0xffffffff) throw Error('Session message limit reached');
         const message = inbound.decrypt(data);
@@ -1650,43 +2000,37 @@ async function connectSession() {
             status(state.message || 'Session ended — start a new session');
             if (state.state !== 'ended') error(state.message || 'The session could not be resumed.');
             $('start-connection').textContent = 'Start new session';
-            current.close(); return;
+            current.close(); transportClosed(); return;
           }
-          if (state.output !== session.output) throw Error('Replay offsets differ');
-          acknowledgeInput(state.input);
-          session.create = false; transportReady = true; reconnectAttempts = 0;
+          wireCapabilities = selectedCapabilities(state);
+          session.client = state.client; transportReady = true; reconnectAttempts = 0;
+          session.negotiationFailures = 0;
           clearTimeout(handshakeTimer); error('');
-          setConnectionAppearance(true); status(state.resumed ? 'Connected — session resumed' : 'Connected');
-          $('start-connection').textContent = 'Connect';
-          resize();
-          if (session.ending) { send(Uint8Array.of(10)); return; }
-          if (!state.resumed) terminal.focus();
-          if (workbench.isOpen('browser')) navigateTo(currentPath || $('starting-directory').value.trim(), !state.resumed);
+          setConnectionAppearance(true); status(''); $('status').title = 'Encrypted connection'; $('start-connection').textContent = 'Connect';
+          connectionFeedback('', false); closeDialog($('connect-dialog'));
+          const initialPing = new Uint8Array(9); initialPing[0] = 3; new DataView(initialPing.buffer).setFloat64(1, performance.now()); send(initialPing);
+          clientUpdates.connected();
+          lifecycle.update({ ready: true, generation: attempt, mode: 'automatic', reason: '' });
+          for (const session of pendingSessionEnds) endRemote(session);
+          for (const panel of workbench.panels.values()) panel.api?.resume?.();
+          workspaces.authenticated(state).then(result => {
+            if (!result?.openedInitial || session.startupAttempted || session !== resumableSession || attempt !== connectionId || !transportReady || workspaces.getState().workspace?.id !== result.workspace.id) return;
+            // Startup is one action per client/server connection identity. A
+            // later reconnect must never create another shell or repeat work.
+            session.startupAttempted = true;
+            if (startupPanel === 'none') return;
+            if (startupPanel === 'start') { workbench.openStart(); return; }
+            return workbench.create(startupPanel);
+          }).catch(cause => error(cause.message));
           restartFileRefresh();
-          if (!session.commandQueued) {
-            session.commandQueued = true;
-            if (session.command) sendInput(session.command.replace(/\r?\n/g, '\r') + (/[\r\n]$/.test(session.command) ? '' : '\r'));
-          }
-          flushInput();
           clearInterval(pingTimer);
           pingTimer = setInterval(() => {
-            if (Date.now() - lastResponse > 15000) { current.close(); return; }
+            if (Date.now() - lastResponse > 15000) { current.close(); transportClosed(); return; }
             const ping = new Uint8Array(9); ping[0] = 3;
             new DataView(ping.buffer).setFloat64(1, performance.now()); send(ping);
           }, 5000);
-        } else if (message[0] === 8 && message.length >= 9 && transportReady) {
-          const offset = readOffset(message);
-          if (offset > session.output) throw Error('Missing terminal output');
-          const bytes = message.subarray(9);
-          const received = bytes.subarray(Math.min(bytes.length, session.output - offset));
-          session.output += received.length;
-          const accepted = session.output;
-          terminal.write(received, () => {
-            session.rendered = Math.max(session.rendered, accepted);
-            if (socket === current && transportReady) send(offsetMessage(2, session.rendered));
-          });
-        } else if (message[0] === 9 && message.length === 9) {
-          acknowledgeInput(readOffset(message)); flushInput();
+        } else if (message[0] === 12 && transportReady) {
+          receiveExtension(message, wireCapabilities);
         } else if (message[0] === 3 && message.length === 9) {
           const sent = new DataView(message.buffer, message.byteOffset, message.byteLength).getFloat64(1);
           const sample = Math.max(0, performance.now() - sent);
@@ -1703,30 +2047,72 @@ async function connectSession() {
       failed = true;
       reconnectEnabled = false;
       error(awaitingHandshake ? 'Authentication failed. Check that the shared passwords match.' : 'The encrypted session could not be resumed safely. Reconnect to retry.');
-      current.close();
+      current.close(); transportClosed();
     }
   };
   current.onerror = () => {
     if (socket === current) {
       failed = true;
-      status('Connection interrupted — terminal retained, input buffered');
+      if ($('connect-dialog').open) error(connectionError('Cannot reach the server. Check the address, TLS certificate, and network.', !opened));
+      status('Connection interrupted');
     }
   };
-  current.onclose = () => {
+  function transportClosed() {
     if (socket === current) {
+      socket = null;
+      const incompleteNegotiation = opened && !transportReady;
+      if (incompleteNegotiation && reconnectEnabled && ++session.negotiationFailures >= 3) {
+        reconnectEnabled = false;
+        error('Authentication or protocol negotiation could not complete. Check the shared password and server version, then Connect to retry.');
+        for (const panel of workbench.panels.values()) panel.api?.detach?.();
+      }
       clearInterval(pingTimer);
       clearTimeout(handshakeTimer); clearTimeout(inputFlushTimer);
-      rejectFileRequests('The connection closed.');
+      rejectFileRequests('Connection interrupted. Mutations may have completed; refresh before retrying.');
       clearInterval(fileRefreshTimer);
       $('latency').textContent = '';
       outbound = inbound = null;
       awaitingHandshake = false; transportReady = false;
+      lifecycle.update({ ready: false, generation: connectionId, reason: 'Connection closed', mode: reconnectEnabled ? 'automatic' : 'failed' });
+      workspaces.disconnected();
       setConnectionAppearance(false);
       if (reconnectEnabled && !session.ended) scheduleReconnect();
-      else if (!session.ended) status('Disconnected — session retained; click Connect to resume');
+      else if (incompleteNegotiation && !reconnectEnabled) status('Authentication or protocol negotiation failed — Connect to retry');
+      else if (!session.ended) status('Disconnected');
     }
-  };
+  }
+  current.onclose = transportClosed;
 }
+
+let workspaceSettingDefaults = { ...normalizeSettings(config), keybinds: config.keybinds || {} };
+const workspaces = createWorkspaces({
+  workbench, request: fileRequest, isReady: () => transportReady,
+  getPreferences: () => ({ ...workspacePreferences, keybinds: getKeybinds() }),
+  onWorkspaceChange: () => { workspaceGeneration++; fileNavigationGeneration++; fileOpenings.clear(); browserSelection.clear(); currentPath = ''; historyPaths = []; historyIndex = -1; hideFileEntryMenu(); },
+  applyPreferences: value => {
+    setKeybinds(value.keybinds ?? workspaceSettingDefaults.keybinds ?? {});
+    const selected = structuredClone(workspaceSettingDefaults);
+    for (const field of SETTINGS_FIELDS) { const found = getSetting(value, field); if (found !== undefined) setSetting(selected, field, found); }
+    writeSettingsControls($('settings-dialog'), normalizeSettings(selected));
+    workspacePreferences = structuredClone(value);
+    applySettings();
+    workspacePreferences = { ...value, ...workspacePreferences };
+  },
+  restoreTab: async descriptor => {
+    if (descriptor.kind === 'file') { await loadFile(descriptor.config.path, false, descriptor); return; }
+    if (descriptor.kind === 'start') {
+      workbench.openStart(undefined, descriptor.id);
+      return;
+    }
+    if (descriptor.id === 'browser' && descriptor.kind === 'files') {
+      workbench.open('browser'); await navigateTo(descriptor.config.cwd || '', true); return;
+    }
+    await workbench.create(descriptor.kind, { id: descriptor.id, ...descriptor.config, session: descriptor.session, restoring: true });
+  },
+});
+$('connect').before(workspaces.label, workspaces.sync);
+workbench.beforeCreate = () => { if (!workspaces.getState().workspace) throw Error('Connect and select or create a workspace first.'); };
+window.EyaWorkspaces = { getState: workspaces.getState, open: workspaces.open, save: () => { workspaces.changed(); return workspaces.save(); } };
 
 startControlEnhancement();
 openConnection();

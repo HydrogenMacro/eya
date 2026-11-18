@@ -1,8 +1,17 @@
 import { build, transform } from 'esbuild';
 import { readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { buildMaterialIcons } from './material-icons.mjs';
+import { compareVersions } from './semver.mjs';
 
 export async function buildClient({ optimize = true, output = 'client.html', analyze = false } = {}) {
+  const version = (await readFile('VERSION', 'utf8')).trim();
+  compareVersions(version, version);
+  const clientVersion = await readFile('client/version.js', 'utf8');
+  const cargo = await readFile('eya-server/Cargo.toml', 'utf8');
+  const cargoVersion = cargo.match(/^version = "([^"]+)"/m)?.[1];
+  if (!clientVersion.includes(`export const CLIENT_VERSION = '${version}';`) || cargoVersion !== version) throw Error('VERSION, client/version.js and Cargo package version must agree.');
+  await buildMaterialIcons();
   const result = await build({
     entryPoints: ['client/app.js'], bundle: true, platform: 'browser', format: 'iife', write: false,
     minify: true, legalComments: 'none', charset: 'utf8', supported: { 'template-literal': false },
@@ -13,8 +22,8 @@ export async function buildClient({ optimize = true, output = 'client.html', ana
   const js = program.replaceAll('</script', '<\\/script');
   const css = await readFile('client/node_modules/@xterm/xterm/css/xterm.css', 'utf8');
   const template = await readFile('client/template.html', 'utf8');
-  const extraCss = await Promise.all(['components', 'themes', 'charts', 'mobile'].map(name => readFile(`client/${name}.css`, 'utf8')));
-  const notices = await Promise.all(['three', '@codemirror/lang-python', '@lezer/python', 'lucide'].map(async name => `${name}\n${await readFile(`client/node_modules/${name}/LICENSE`, 'utf8')}`));
+  const extraCss = await Promise.all(['components', 'themes', 'charts', 'docking', 'radio-tabs', 'mobile-workspace', 'file-viewers', 'binary-viewer', 'server-settings', 'mobile'].map(name => readFile(`client/${name}.css`, 'utf8')));
+  const notices = await Promise.all(['three', 'fflate', '@codemirror/lang-python', '@codemirror/search', '@lezer/python', '@lezer/markdown', 'lucide', 'material-icon-theme'].map(async name => `${name}\n${await readFile(`client/node_modules/${name}/LICENSE`, 'utf8')}`));
   notices.push(`Bundled terminal fonts\n${await readFile('client/fonts/ATTRIBUTION.md', 'utf8')}\n${await readFile('client/fonts/licenses/OFL.txt', 'utf8')}\n${await readFile('client/fonts/licenses/nerd-fonts-MIT.txt', 'utf8')}`);
   let html = template.replace('/* XTERM_CSS */', () => css).replace('</style>', () => `${extraCss.join('\n')}\n</style>`);
   const style = html.match(/<style>([\s\S]*?)<\/style>/);
@@ -24,12 +33,16 @@ export async function buildClient({ optimize = true, output = 'client.html', ana
   // XML comments cannot contain "--" when this document becomes a standalone SVG.
   const noticeText = notices.join('\n').replace(/\r\n?/g, '\n').replace(/[ \t]+$/gm, '').replace(/-{2,}/g, separator => [...separator].join(' '));
   html = html.replace('</head>', () => `<!-- Bundled dependency notices\n${noticeText}\n-->\n</head>`);
+  const marker = '<script id="eya-config" type="application/json">{}</script>';
+  if (Buffer.byteLength(html) > 32 * 1024 * 1024 || html.split(marker).length !== 2) throw Error('Client violates the permanent update-v1 size/config contract.');
   if (output) await writeFile(output, html);
   if (output === 'client.html') {
     const generator = await build({ entryPoints: ['client/generator.js'], bundle: true, platform: 'browser', format: 'iife', write: false, minify: true, legalComments: 'none', charset: 'utf8' });
     const generatorTemplate = await readFile('client/generator.template.html', 'utf8');
-    const generatorNotice = (await readFile('client/node_modules/fflate/LICENSE', 'utf8')).replace(/-{2,}/g, separator => [...separator].join(' '));
-    await writeFile('client/generator.html', generatorTemplate.replace('</head>', `<!-- fflate\n${generatorNotice}\n-->\n</head>`).replace('/* GENERATOR_JS */', () => generator.outputFiles[0].text.replaceAll('</script', '<\\/script')));
+    const generatorNotices = await Promise.all(['fflate', 'lucide'].map(async name => `${name}\n${await readFile(`client/node_modules/${name}/LICENSE`, 'utf8')}`));
+    const generatorNotice = generatorNotices.join('\n').replace(/-{2,}/g, separator => [...separator].join(' '));
+    const openerCss = await readFile('client/file-viewers.css', 'utf8');
+    await writeFile('client/generator.html', generatorTemplate.replace('</style>', `${openerCss}\n</style>`).replace('</head>', `<!-- Bundled dependency notices\n${generatorNotice}\n-->\n</head>`).replace('/* GENERATOR_JS */', () => generator.outputFiles[0].text.replaceAll('</script', '<\\/script')));
   }
   return { html, metafile: result.metafile };
 }

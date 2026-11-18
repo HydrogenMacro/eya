@@ -1,0 +1,27 @@
+{
+  "format": "deflate-raw",
+  "declaredDecoderLimit": 8192,
+  "candidateOutputBytes": 1048576,
+  "clients": [
+    {
+      "type": "html",
+      "supported": true,
+      "smallBlockCorrect": true,
+      "firstExpansionChunkBytes": 65536
+    },
+    {
+      "type": "svg",
+      "supported": true,
+      "smallBlockCorrect": true,
+      "firstExpansionChunkBytes": 65536
+    }
+  ],
+  "notes": [
+    "Native compatibility was evaluated on actual local HTML and SVG clients.",
+    "Native decompression can return a chunk larger than the terminal decoded-byte budget before application code can inspect it; the chosen bundled decoder enforces the budget before every write/allocation."
+  ],
+  "corpora": {
+    "valid": "6000 bytes: native test repeated 500 times",
+    "expansion": "1 MiB of ASCII x, raw-DEFLATE encoded"
+  }
+}

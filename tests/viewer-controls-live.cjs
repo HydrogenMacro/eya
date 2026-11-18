@@ -1,0 +1,48 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs/promises');
+const path=require('node:path');
+const {fixture}=require('./continuity-fixture.cjs');
+(async()=>{
+ const f=await fixture();
+ try{
+  const files=['one.bin','two.bin'].map(name=>path.join(f.files,name));for(const filename of files)await fs.writeFile(filename,Buffer.from([0,65,66,255,1,2,3,4,5,6,7,8]));
+  const page=await f.client();for(const filename of files)await page.evaluate(file=>EyaPanels.openFile(file),filename);
+  await page.locator('.binary-viewer').first().waitFor({state:'attached'});
+  const first=await page.evaluate(()=>EyaPanels.layout().flatMap(group=>group.panels).find(id=>id.startsWith('file-')));
+  const browserId=await page.evaluate(()=>EyaPanels.create('files'));await page.evaluate(({browserId,first})=>EyaPanels.split(browserId,'vertical',first),{browserId,first});
+  await f.named(page,'Mobile viewer controls');
+  await page.evaluate(()=>document.getElementById('settings').click());
+  await page.locator('#settings-dialog .settings-categories > .settings-category').filter({hasText:/^Binary viewer$/}).click();
+  await page.locator('#binary-show-text').uncheck();await page.locator('#binary-row-height').fill('32');await page.locator('#binary-row-height').press('Tab');
+  await page.locator('#binary-bytes-per-row').selectOption('8');await page.locator('#binary-font-size').fill('16');await page.locator('#binary-font-size').press('Tab');await page.locator('#binary-text-encoding').selectOption('utf-8');
+  assert.equal(await page.locator('.binary-text').count(),0);
+  assert((await page.locator('.binary-row').evaluateAll(rows=>rows.map(row=>getComputedStyle(row).height))).every(height=>height==='32px'));
+  await page.locator('#close-settings').click();await page.evaluate(file=>EyaPanels.openFile(file),files[1]);
+  await page.setViewportSize({width:320,height:640});
+  const visible=page.locator('.binary-viewer:visible');const bar=visible.locator('.binary-toolbar');
+  assert.equal(await bar.evaluate(bar=>bar.scrollWidth<=bar.clientWidth+1),true,'toolbar fits320px without scrolling');
+  const vertical=await bar.locator(':scope > *').evaluateAll(children=>children.filter(child=>child.getBoundingClientRect().height>1).map(child=>{const r=child.getBoundingClientRect();return r.top+r.height/2;}));assert(Math.max(...vertical)-Math.min(...vertical)<2,'toolbar controls align on one centerline');
+  const controlHeights=await visible.locator('.binary-format-controls > .ui-select > .ui-select-trigger,.binary-format-controls > .radio-tabs,.binary-toolbar-actions button,.binary-edit > input,.binary-edit > .radio-tabs,.binary-edit > button,.binary-edit > .ui-menu-anchor > button').evaluateAll(children=>children.filter(child=>child.getBoundingClientRect().height>1).map(child=>child.getBoundingClientRect().height));assert(Math.max(...controlHeights)-Math.min(...controlHeights)<1,'enhanced controls and edit input have equal heights');
+  assert.equal(await visible.locator('.binary-toolbar input[type=checkbox]').count(),0);
+  assert.equal(await page.locator('.viewer:visible .viewer-actions').count(),0,'one compact toolbar replaces duplicate file-actions row');
+  await visible.getByRole('button',{name:'Find',exact:true}).click();await page.getByRole('searchbox',{name:'Search bytes'}).fill('AB');await page.getByRole('button',{name:'Next match',exact:true}).click();
+  await visible.getByRole('button',{name:'Find',exact:true}).click();await visible.getByRole('button',{name:'Go to offset',exact:true}).click();await page.getByRole('textbox',{name:'Go to offset',exact:true}).fill('0x2');await page.getByRole('textbox',{name:'Go to offset',exact:true}).press('Enter');
+  await visible.getByRole('radio',{name:'Text',exact:true}).check();assert.equal(await visible.getByRole('radio',{name:'Text',exact:true}).isChecked(),true);
+  const inputBox=await visible.getByRole('textbox',{name:'Edit selected value'}).boundingBox();const applyBox=await visible.getByRole('button',{name:'Apply',exact:true}).boundingBox();assert(Math.abs(inputBox.y+inputBox.height/2-applyBox.y-applyBox.height/2)<2,'edit row controls align');
+  await page.screenshot({path:'/tmp/eya-binary-compact-mobile.png'});
+  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.getElementById('settings').click());
+  await page.locator('#settings-dialog .settings-categories > .settings-category').filter({hasText:/^Appearance$/}).click();await page.locator('#mobile-floating-panel-switcher').check();await page.locator('#close-settings').click();
+  const button=page.getByRole('button',{name:'Switch panel groups',exact:true});await button.waitFor();
+  assert.equal(await page.locator('.panel-switcher').evaluate(select=>getComputedStyle(select.closest('.ui-select')||select).display),'none');
+  await button.click();assert.equal(await page.locator('.mobile-workspace-map > button').count(),2);await page.locator('.mobile-workspace-map > button').first().click();
+  const box=await button.boundingBox();await page.mouse.move(box.x+24,box.y+24);await page.mouse.down();await page.mouse.move(40,380,{steps:10});await page.mouse.up();
+  await f.saved(page);const workspace=await page.evaluate(()=>EyaWorkspaces.getState().workspace.id),record=(await f.snapshot()).workspaces.find(record=>record.id===workspace);
+  assert.equal(record.preferences.mobileFloatingPanelSwitcher,true);assert(record.preferences.mobilePanelButtonPosition.x<0.2);assert.equal(record.preferences.binary.showText,false);assert.equal(record.preferences.binary.rowHeight,32);assert.equal(record.preferences.binary.textEncoding,'utf-8');
+  await page.mouse.move(1,1);await page.waitForTimeout(2000);assert(Number(await button.evaluate(button=>getComputedStyle(button).opacity))<0.3);
+  await page.screenshot({path:'/tmp/eya-floating-panel-button.png'});
+  await page.context().close();const restored=await f.client({type:'svg',viewport:{width:390,height:844}});await restored.evaluate(id=>EyaWorkspaces.open(id),workspace);
+  await restored.getByRole('button',{name:'Switch panel groups',exact:true}).waitFor();assert.deepEqual(JSON.parse(await restored.locator('#mobile-panel-button-position').evaluate(input=>input.value)),record.preferences.mobilePanelButtonPosition);
+  await restored.evaluate(file=>EyaPanels.openFile(file),files[1]);assert.equal(await restored.locator('.binary-text').count(),0);assert.equal(await restored.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);
+  assert.deepEqual(f.errors,[]);console.log('Built viewer controls: compact320px toolbar/edit alignment, floatingFind/Goto, settings live sync, mobile split-map/button position and HTML-to-SVG persistence passed');
+ }finally{await f.close();}
+})().catch(error=>{console.error(error);process.exitCode=1;});

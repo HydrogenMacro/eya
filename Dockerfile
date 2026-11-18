@@ -3,6 +3,8 @@ WORKDIR /app
 COPY client/package*.json ./client/
 RUN npm ci --prefix client --ignore-scripts
 COPY client/ ./client/
+COPY VERSION ./VERSION
+COPY eya-server/Cargo.toml ./eya-server/Cargo.toml
 RUN node client/build.mjs
 
 FROM rust:1.90-alpine3.22 AS server-build
@@ -10,8 +12,9 @@ RUN apk add --no-cache build-base
 WORKDIR /app
 COPY eya-server/Cargo.toml eya-server/Cargo.lock ./eya-server/
 COPY eya-server/src ./eya-server/src
-COPY client/generator.html ./client/generator.html
-COPY client/hosted.svg ./client/hosted.svg
+COPY VERSION ./VERSION
+COPY client/ ./client/
+COPY --from=client-build /app/client/generator.html ./client/generator.html
 COPY --from=client-build /app/client.html ./client.html
 RUN cargo build --manifest-path eya-server/Cargo.toml --release --locked
 

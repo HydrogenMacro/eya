@@ -138,7 +138,7 @@ async function main() {
               (window.__storageUpdates ||= []).push(data);
               return;
             }
-            if (data.type === 'find-open') { window.__resolveFindOpen(true); return; }
+            if (data.type === 'browser-shortcut' && data.action === 'browser.find') { window.__findOpenObserved = true; window.__resolveFindOpen(true); return; }
             if (data.type === 'find-result') { window.__resolveFindResult?.(data); return; }
             if (data.type === 'navigation-unhandled') { window.__resolveUnhandledNavigation(data); return; }
             if (data.type === 'history' || data.type === 'history-go') { (window.__historyMessages ||= []).push(data); return; }
@@ -149,6 +149,7 @@ async function main() {
             if (data.type === 'open-tab') { window.__resolveNewTabRequest(data); return; }
             if (data.type === 'download') { window.__resolveDownloadRequest(data); return; }
             if (data.type === 'dom') {
+              window.__domSnapshots = (window.__domSnapshots || 0) + 1;
               const find = nodes => {
                 for (const node of nodes || []) {
                   if (node.attrs?.some(([name, value]) => name === 'id' && value === 'highlight-target')) return node;
@@ -336,6 +337,9 @@ async function main() {
     const forgedMeta = await page.waitForFunction(() => window.__forgedUserscriptMeta || null, { timeout: 8000 }).then(handle => handle.jsonValue());
     assert.equal(forgedMeta.userscriptId, '', 'page fetch options cannot forge a userscript identity');
     assert.equal(forgedMeta.followRedirects, true, 'page fetch options cannot disable redirect handling');
+    assert.equal(await page.evaluate(() => !!window.__findOpenObserved), false, 'Synthetic page keys cannot trigger host shortcuts');
+    await page.frames()[1].evaluate(() => { document.body.tabIndex = -1; document.body.focus(); });
+    await page.keyboard.press('Control+f');
     assert.equal(await pageValue('__findOpenResult'), true, 'Ctrl+F inside the sandbox did not open the parent Find UI');
     assert.equal(await page.frames()[1].evaluate(() => window.__capturedBridgePort), false,
       'the page realm captured the transferred parent bridge port');
@@ -374,6 +378,8 @@ async function main() {
     const download = await pageValue('__downloadRequest');
     assert.equal(download?.url, 'https://example.test/report.zip', 'download link did not request a proxied download');
     assert.equal(download?.filename, 'report.zip', 'download attribute filename was not relayed');
+    assert.equal(await page.evaluate(() => window.__domSnapshots || 0), 0, 'Closed DevTools must not collect DOM snapshots');
+    await page.evaluate(() => window.__testPort.postMessage({ type: 'inspect-dom', active: true }));
     const element = await pageValue('__elementBridge');
     assert.equal(element?.tag, 'div', 'Elements snapshot did not include the test node');
     await page.evaluate(id => window.__testPort.postMessage({ type: 'inspect-node', id }), element.id);
@@ -456,6 +462,24 @@ async function main() {
     const sandboxFrame = page.frames().find(frame => frame !== page.mainFrame());
     assert.ok(sandboxFrame, 'sandbox frame was not created');
     await sandboxFrame.waitForFunction(() => window.__eyaResourceLoaded === true, { timeout: 8000 });
+    await sandboxFrame.evaluate(() => {
+      const field = document.createElement('textarea'); field.id = 'aux-test'; field.value = 'abcd';
+      document.body.append(field); field.focus(); field.setSelectionRange(1, 1);
+    });
+    await page.evaluate(() => __testPort.postMessage({ type: 'aux-key', key: { key: 'Delete' } }));
+    await sandboxFrame.waitForFunction(() => document.getElementById('aux-test').value === 'acd');
+    await page.evaluate(() => __testPort.postMessage({ type: 'aux-paste', text: 'PASTE' }));
+    await sandboxFrame.waitForFunction(() => document.getElementById('aux-test').value === 'aPASTEcd');
+    await page.evaluate(() => __testPort.postMessage({ type: 'aux-key', key: { key: 'Home', shiftKey: true } }));
+    await sandboxFrame.waitForFunction(() => document.getElementById('aux-test').selectionStart === 0 && document.getElementById('aux-test').selectionEnd === 6);
+    await page.evaluate(() => __testPort.postMessage({ type: 'aux-modifiers', modifiers: { shiftKey: true } }));
+    await page.keyboard.type('z');
+    await sandboxFrame.waitForFunction(() => document.getElementById('aux-test').value === 'Zcd');
+    await page.keyboard.type('z');
+    await sandboxFrame.waitForFunction(() => document.getElementById('aux-test').value === 'Zzcd');
+    await sandboxFrame.evaluate(() => document.getElementById('aux-test').remove());
+
+    assert.equal(await sandboxFrame.evaluate(() => { try { const xhr = new XMLHttpRequest(); xhr.open('GET', '/mime'); xhr.overrideMimeType('text/plain'); return 'accepted'; } catch (error) { return error.name; } }), 'NotSupportedError');
     const routeState = await sandboxFrame.evaluate(() => {
       history.pushState({ route: 'one' }, '', '/route-one?tab=1');
       const first = { base: document.baseURI, state: history.state, length: history.length };
@@ -487,6 +511,49 @@ async function main() {
       { base: 'https://example.test/route-one-edited', state: { route: 'one-edited' }, length: beforeReplaceLength },
       'replaceState must update the current virtual entry without growing history');
     await page.waitForFunction(() => window.__historyMessages.filter(item => item.type === 'history' && item.action === 'replace').length >= 1);
+    await sandboxFrame.evaluate(() => {
+      const link = document.createElement('a');
+      link.id = 'fragment-link';
+      link.href = '#section%20two';
+      link.textContent = 'Section two';
+      const spacer = document.createElement('div');
+      spacer.style.height = '1800px';
+      const section = document.createElement('h2');
+      section.id = 'section two';
+      section.textContent = 'Section two';
+      document.body.prepend(link, spacer, section, spacer.cloneNode());
+      window.scrollTo(0, 0);
+      window.__fragmentEvents = [];
+      addEventListener('hashchange', event => __fragmentEvents.push([event.oldURL, event.newURL]));
+    });
+    await sandboxFrame.locator('#fragment-link').click();
+    await sandboxFrame.waitForFunction(() => scrollY > 1000 && __fragmentEvents.length === 1);
+    const fragmentUrl = 'https://example.test/route-one-edited#section%20two';
+    await page.waitForFunction(url => __historyMessages.some(item => item.action === 'push' && item.url === url && item.index === 2), fragmentUrl);
+    assert.deepEqual(await sandboxFrame.evaluate(() => __fragmentEvents[0]), ['https://example.test/route-one-edited', fragmentUrl]);
+    await page.evaluate(() => __testPort.postMessage({ type: 'history-traverse', index: 1 }));
+    await sandboxFrame.waitForFunction(() => scrollY < 100 && __fragmentEvents.length === 2);
+    await page.evaluate(() => __testPort.postMessage({ type: 'history-traverse', index: 2 }));
+    await sandboxFrame.waitForFunction(() => scrollY > 1000 && __fragmentEvents.length === 3);
+    assert.deepEqual(directUpstreamRequests, [], 'Fragment clicks and traversal must stay inside the current frame');
+
+    await page.evaluate(() => {
+      window.__shadowNavigations=[];
+      window.__testPort.addEventListener('message',event=>{if(event.data?.type==='navigate'&&event.data.url.includes('/shadow-'))window.__shadowNavigations.push(event.data);});
+    });
+    await sandboxFrame.evaluate(async()=>{
+      const host=document.createElement('div');document.body.append(host);
+      const root=host.attachShadow({mode:'open'});
+      root.innerHTML='<form action="/shadow-submit"><input name="q" value="shadow"></form><a href="/shadow-linked"><span>Chapter</span></a>';
+      await new Promise(resolve=>setTimeout(resolve,0));
+      root.querySelector('form').requestSubmit();
+      root.querySelector('a span').click();
+    });
+    await page.waitForFunction(()=>window.__shadowNavigations.length===2);
+    const shadowNavigations=await page.evaluate(()=>window.__shadowNavigations);
+    assert.equal(shadowNavigations[0].url,'https://example.test/shadow-submit?q=shadow','Non-composed shadow form submission must use the proxy');
+    assert.equal(shadowNavigations[0].method,'GET');
+    assert.equal(shadowNavigations[1].url,'https://example.test/shadow-linked','Shadow link clicks must use their composed path');
     await sandboxFrame.evaluate(() => {
       const event = new Event('navigate', { cancelable: false });
       Object.defineProperty(event, 'destination', { value: { url: 'https://direct-navigation.example/escape', sameDocument: false } });

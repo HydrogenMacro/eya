@@ -1,17 +1,14 @@
+import { deriveKey } from './noise-key.js';
+import { reconnectDelay } from './terminal-network.js';
 import Noise from 'noise-handshake';
 import Cipher from 'noise-handshake/cipher';
+import { browserTilesSupported, validateBrowserTileMetadata } from './browser-tiles.js';
 
 const encoder = new TextEncoder(), decoder = new TextDecoder();
 const MAX_PENDING = 8, MAX_QUEUED = 64, MAX_RESPONSE_BYTES = 8 * 1024 * 1024, MAX_INLINE_REQUEST_BODY = 40 * 1024, MAX_REQUEST_BODY = 4 * 1024 * 1024, MAX_RETAINED_REQUEST_BYTES = 8 * 1024 * 1024, STREAM_CHUNK_BYTES = 48 * 1024, UPLOAD_WINDOW_CHUNKS = 4, MAX_WEBSOCKET_MESSAGE = 1024 * 1024, MAX_WEBSOCKET_SEND_WINDOW = 8;
 const MAX_REMOTE_USERSCRIPT_BYTES = 512 * 1024, MAX_REMOTE_USERSCRIPT_COUNT = 16;
-const MAX_REMOTE_FRAME_BYTES = 2 * 1024 * 1024;
+const MAX_REMOTE_FRAME_BYTES = 16 * 1024 * 1024;
 const MAX_TAB_ACTIVATIONS = 16;
-
-async function deriveKey(secret) {
-  if (/^[0-9a-f]{64}$/i.test(secret)) return Uint8Array.from(secret.match(/../g), hex => parseInt(hex, 16));
-  if (!globalThis.crypto?.subtle) throw Error('Password authentication requires a secure browser context.');
-  return new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(secret)));
-}
 
 function browserEndpoint(value, route = 'browser-ws') {
   const endpoint = new URL(value);
@@ -28,12 +25,15 @@ function validRemoteTabId(tabId) {
 
 // Full-browser sessions render remotely, but retain the standalone client's
 // existing Noise WebSocket as the only page-data connection.
-export async function createBrowserRenderTransport({ url, key, onState, onEvent, onFrame, onDownload } = {}) {
+export async function createBrowserRenderTransport({ url, key, onState, onEvent, onFrame, onDownload, persistent = false, sessionId, client, takeover = false, createSession = true } = {}) {
   if (!url || !key) throw Error('Connect to Eya before opening the remote browser.');
   const socket = new WebSocket(browserEndpoint(url, 'browser-render-ws'));
   socket.binaryType = 'arraybuffer';
   let outbound = null, inbound = null, ready = false, closed = false, frame = null, nextEvaluationId = 0, nextUserscriptUploadId = 0, nextFilterUploadId = 0;
-  let browserStarted = false, startPending = null;
+  let browserStarted = false, startPending = null, capabilities = [], offered = [];
+  const offeredCapabilities = ['stream-settings-v1', 'image-download-v1', 'cursor-v1', ...(browserTilesSupported() ? ['tiles-rgba-v1'] : [])];
+  let sessionState = null;
+  if (persistent && !sessionId) sessionId = [...crypto.getRandomValues(new Uint8Array(32))].map(byte => byte.toString(16).padStart(2, '0')).join('');
   function finishStart(error) {
     const pending = startPending;
     if (!pending) return;
@@ -59,7 +59,7 @@ export async function createBrowserRenderTransport({ url, key, onState, onEvent,
     handshakeTimer = setTimeout(() => { socket.close(); reject(Error('Remote browser handshake timed out.')); }, 12000);
     socket.onopen = async () => {
       try {
-        handshake = new Noise('NNpsk0', true, null, { psk: await deriveKey(key) });
+        handshake = new Noise('NNpsk0', true, null, { psk: deriveKey(key) });
         handshake.initialise(encoder.encode('eya-browser-render-v1'));
         socket.send(handshake.send());
       } catch (error) { clearTimeout(handshakeTimer); reject(error); socket.close(); }
@@ -71,12 +71,15 @@ export async function createBrowserRenderTransport({ url, key, onState, onEvent,
           handshake.recv(data);
           if (!handshake.complete) throw Error('Incomplete remote browser handshake.');
           outbound = new Cipher(handshake.tx); inbound = new Cipher(handshake.rx);
-          socket.send(outbound.encrypt(encoder.encode('eya-browser-render-ready-v1')));
+          socket.send(outbound.encrypt(encoder.encode(persistent ? 'eya-browser-session-v1:' + JSON.stringify({ session: sessionId, client, create: createSession, takeover }) : 'eya-browser-render-ready-v1')));
           return;
         }
         const message = inbound.decrypt(data);
         if (!ready) {
-          if (decoder.decode(message) !== 'eya-browser-render-ready-v1') throw Error('The remote browser rejected the connection.');
+          if (persistent) {
+            sessionState = JSON.parse(decoder.decode(message));
+            if (sessionState.state !== 'ready') { const error = Error(sessionState.message || 'Browser session unavailable'); error.code = sessionState.state; throw error; }
+          } else if (decoder.decode(message) !== 'eya-browser-render-ready-v1') throw Error('The remote browser rejected the connection.');
           ready = true; clearTimeout(handshakeTimer); onState?.('ready'); resolve(); return;
         }
         receive(message);
@@ -143,7 +146,9 @@ export async function createBrowserRenderTransport({ url, key, onState, onEvent,
         onState?.('error', error);
       }
       else {
+        if (message[0] === 129 && ['taken-over', 'ended'].includes(value.type)) { const error = Error(value.message || 'Browser session ended'); error.code = value.type === 'taken-over' ? 'in-use' : 'expired'; fail(error); return; }
         if (message[0] === 129 && value.type === 'ready') finishStart();
+        if (message[0] === 129 && value.type === 'stream-settings') capabilities = (Array.isArray(value.capabilities) ? value.capabilities : []).filter(name => offered.includes(name));
         if (message[0] === 129 && value.type === 'error') finishStart(Error(String(value.message || 'Remote browser failed to start.').slice(0, 512)));
         if (message[0] === 129 && ['download-failed', 'download-cancelled'].includes(value.type)) remoteDownloadTransfers.delete(value.id);
         if (message[0] === 129 && ['tab-activated', 'tab-error'].includes(value.type) && typeof value.tabId === 'string') {
@@ -360,18 +365,23 @@ export async function createBrowserRenderTransport({ url, key, onState, onEvent,
       }
       return;
     }
-    if (message[0] === 130) {
+    if (message[0] === 130 || message[0] === 147) {
       if (frame) throw Error('Remote browser sent overlapping frames.');
       let meta;
       try { meta = JSON.parse(decoder.decode(message.subarray(1))); }
       catch { throw Error('Invalid remote browser frame metadata.'); }
+      const tiled = message[0] === 147;
+      if (tiled) {
+        if (!capabilities.includes('tiles-rgba-v1')) throw Error('Unnegotiated remote tile encoding');
+        validateBrowserTileMetadata(meta);
+      } else if (meta.format && meta.format !== 'jpeg' && !(meta.format === 'png' && capabilities.includes('stream-settings-v1'))) throw Error('Unnegotiated remote frame encoding');
       const bytes = Number(meta.bytes), chunks = Number(meta.chunks), seq = Number(meta.seq);
-      if (!Number.isSafeInteger(seq) || seq < 0 || !Number.isSafeInteger(bytes) || bytes < 1 || bytes > MAX_REMOTE_FRAME_BYTES || !Number.isSafeInteger(chunks) || chunks < 1 || chunks > 256 || chunks !== Math.ceil(bytes / STREAM_CHUNK_BYTES)) throw Error('Remote browser frame exceeds its limits.');
-      frame = { seq, meta, bytes: new Uint8Array(bytes), chunks, seen: 0, nextChunk: 0 };
+      if (!Number.isSafeInteger(seq) || seq < 0 || !Number.isSafeInteger(bytes) || bytes < 1 || bytes > MAX_REMOTE_FRAME_BYTES || !Number.isSafeInteger(chunks) || chunks < 1 || chunks > 512 || chunks !== Math.ceil(bytes / STREAM_CHUNK_BYTES)) throw Error('Remote browser frame exceeds its limits.');
+      frame = { seq, meta, bytes: new Uint8Array(bytes), chunks, seen: 0, nextChunk: 0, chunkOpcode: tiled ? 148 : 131 };
       return;
     }
-    if (message[0] === 131) {
-      if (!frame || message.byteLength < 8) throw Error('Unexpected remote browser frame chunk.');
+    if (message[0] === 131 || message[0] === 148) {
+      if (!frame || message[0] !== frame.chunkOpcode || message.byteLength < 8) throw Error('Unexpected remote browser frame chunk.');
       const view = new DataView(message.buffer, message.byteOffset, message.byteLength);
       const seq = view.getUint32(1), index = view.getUint16(5), part = message.subarray(7);
       if (seq !== frame.seq || index !== frame.nextChunk || index >= frame.chunks || part.byteLength === 0 || part.byteLength > STREAM_CHUNK_BYTES) throw Error('Invalid remote browser frame sequence.');
@@ -394,6 +404,8 @@ export async function createBrowserRenderTransport({ url, key, onState, onEvent,
 
   await openPromise;
   return {
+    get sessionId() { return sessionId; },
+    get sessionState() { return sessionState; },
     start() {
       if (browserStarted) return Promise.resolve();
       if (startPending) return startPending.promise;
@@ -432,10 +444,17 @@ export async function createBrowserRenderTransport({ url, key, onState, onEvent,
       return promise;
     },
     closeTab(tabId) { jsonMessage(28, { tabId: String(tabId || '').slice(0, 64) }, 1024); },
-    resize(width, height, tabId) {
+    resize(width, height, tabId, stream) {
       if (!validRemoteTabId(tabId)) throw Error('Remote tab id is invalid.');
-      jsonMessage(3, { tabId, width: Math.max(320, Math.min(1920, Math.round(width))), height: Math.max(240, Math.min(1200, Math.round(height))) });
+      offered = offeredCapabilities;
+      jsonMessage(3, { tabId, width: Math.max(320, Math.min(8192, Math.round(width))), height: Math.max(240, Math.min(8192, Math.round(height))), capabilities: offeredCapabilities, ...(stream ? { stream } : {}) });
     },
+    downloadImage(tabId, x, y) {
+      if (!capabilities.includes('image-download-v1')) throw Error('Image downloads require a server with image-download-v1 support.');
+      if (!validRemoteTabId(tabId) || !Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x > 8192 || y > 8192) throw Error('Invalid image coordinates');
+      jsonMessage(38, { tabId, x, y }, 1024);
+    },
+    get capabilities() { return [...capabilities]; },
     input(event, tabId) {
       if (!validRemoteTabId(tabId)) throw Error('Remote tab id is invalid.');
       jsonMessage(4, { ...event, tabId }, 2048);
@@ -444,7 +463,7 @@ export async function createBrowserRenderTransport({ url, key, onState, onEvent,
       if (!validRemoteTabId(tabId) || typeof text !== 'string' || !text.length || encoder.encode(text).byteLength > 8 * 1024) throw Error('Remote text input exceeds its limit.');
       jsonMessage(4, { type: 'text', action: 'insertText', text, tabId }, 60 * 1024);
     },
-    async uploadPageFiles(tabId, chooserId, fileList) {
+    async uploadPageFiles(tabId, chooserId, fileList, onProgress) {
       if (!validRemoteTabId(tabId) || !Number.isSafeInteger(chooserId) || chooserId < 1 || chooserId > 0xffffffff) throw Error('Remote page file chooser is invalid.');
       if (!fileList || typeof fileList[Symbol.iterator] !== 'function') throw Error('Choose files for the remote page.');
       const files = Array.from(fileList);
@@ -464,13 +483,14 @@ export async function createBrowserRenderTransport({ url, key, onState, onEvent,
       const readyPromise = new Promise((resolve, reject) => { readyResolve = resolve; readyReject = reject; });
       const donePromise = new Promise((resolve, reject) => { doneResolve = resolve; doneReject = reject; });
       readyPromise.catch(() => {}); donePromise.catch(() => {});
-      const pending = { readyResolve, readyReject, doneResolve, doneReject, timer: setTimeout(() => {
+      const pending = { tabId, chooserId, readyResolve, readyReject, doneResolve, doneReject, timer: setTimeout(() => {
         pageFileUploads.delete(id); const error = Error('Remote page upload timed out.'); pending.readyReject(error); pending.doneReject(error);
       }, 180_000) };
       pageFileUploads.set(id, pending);
       try {
         jsonMessage(29, { id, tabId, chooserId, files: manifest.map(({ name, size }) => ({ name, size })) }, 16 * 1024);
         await readyPromise;
+        let sentBytes = 0; onProgress?.(0, totalBytes);
         for (let fileIndex = 0; fileIndex < manifest.length; fileIndex++) {
           const { file, size } = manifest[fileIndex];
           for (let offset = 0; offset < size; offset += STREAM_CHUNK_BYTES) {
@@ -480,6 +500,7 @@ export async function createBrowserRenderTransport({ url, key, onState, onEvent,
             if (pageFileUploads.get(id) !== pending) throw Error('Remote page upload was cancelled.');
             const message = new Uint8Array(11 + part.byteLength); message[0] = 30;
             const view = new DataView(message.buffer); view.setUint32(1, id); view.setUint16(5, fileIndex); view.setUint32(7, offset); message.set(part, 11); send(message);
+            sentBytes += part.byteLength; onProgress?.(sentBytes, totalBytes);
           }
         }
         const commit = new Uint8Array(5); commit[0] = 31; new DataView(commit.buffer).setUint32(1, id); send(commit);
@@ -494,7 +515,22 @@ export async function createBrowserRenderTransport({ url, key, onState, onEvent,
     },
     cancelPageFileChooser(tabId, chooserId) {
       if (!validRemoteTabId(tabId) || !Number.isSafeInteger(chooserId) || chooserId < 1 || chooserId > 0xffffffff) return;
-      jsonMessage(32, { id: 0, tabId, chooserId }, 1024);
+      let uploadId = 0;
+      for (const [id, pending] of pageFileUploads) {
+        if (pending.tabId !== tabId || pending.chooserId !== chooserId) continue;
+        uploadId = id; pageFileUploads.delete(id); clearTimeout(pending.timer);
+        const error = new DOMException('File selection cancelled.', 'AbortError');
+        pending.readyReject(error); pending.doneReject(error);
+      }
+      jsonMessage(32, { id: uploadId, tabId, chooserId }, 1024);
+    },
+    respondToNativeAction(tabId, id, value = '', error = '') {
+      if (!validRemoteTabId(tabId) || !Number.isSafeInteger(id) || id < 1 || id > 0xffffffff || typeof value !== 'string' || encoder.encode(JSON.stringify(value)).byteLength > 12 * 1024 || !['', 'AbortError', 'NotAllowedError', 'InvalidStateError', 'NotSupportedError', 'DataError'].includes(error)) throw Error('Native action reply is invalid.');
+      jsonMessage(37, { tabId, id, value, error }, 16 * 1024);
+    },
+    printPage(tabId) {
+      if (!validRemoteTabId(tabId)) throw Error('Remote tab id is invalid.');
+      jsonMessage(36, { tabId }, 1024);
     },
     respondToJavaScriptDialog(tabId, id, accept, promptText = '') {
       if (!validRemoteTabId(tabId) || !Number.isSafeInteger(id) || id < 1 || id > 0xffffffff || typeof accept !== 'boolean' || typeof promptText !== 'string' || encoder.encode(promptText).byteLength > 4096) throw Error('Remote page dialog response is invalid.');
@@ -637,7 +673,12 @@ export async function createBrowserRenderTransport({ url, key, onState, onEvent,
       });
     },
     ack(sequence) { const message = new Uint8Array(5); message[0] = 5; new DataView(message.buffer).setUint32(1, sequence); send(message); },
-    close() { if (ready && !closed) { try { send(Uint8Array.of(6)); } catch { /* closing */ } } closed = true; socket.close(); },
+    ackTiles(sequence, presented) {
+      if (!capabilities.includes('tiles-rgba-v1')) throw Error('Remote tile acknowledgment was not negotiated.');
+      if (!Number.isInteger(sequence) || sequence < 1 || sequence > 0xffffffff || typeof presented !== 'boolean') throw Error('Invalid remote tile acknowledgment.');
+      const message = new Uint8Array(6); message[0] = 39; new DataView(message.buffer).setUint32(1, sequence); message[5] = presented ? 1 : 0; send(message);
+    },
+    close({ detach = false } = {}) { if (!persistent && !detach && ready && !closed) { try { send(Uint8Array.of(6)); } catch { /* closing */ } } closed = true; socket.close(); },
     get ready() { return ready && !closed; },
   };
 
@@ -741,26 +782,30 @@ function encodeBase64(bytes) {
 
 // A panel-local Noise session keeps browser resource traffic independent from
 // the resumable terminal's nonce sequence and request mailbox.
-export async function createBrowserTransport({ url, key, onState } = {}) {
+export async function createBrowserTransport({ url, key, onState, signal } = {}) {
   if (!url || !key) throw Error('Connect to Eya before opening the browser.');
+  if (signal?.aborted) throw signal.reason || new DOMException('Connection cancelled.', 'AbortError');
   const socket = new WebSocket(browserEndpoint(url));
   socket.binaryType = 'arraybuffer';
   let outbound = null, inbound = null, ready = false, closed = false, nextId = 0;
+  let handshakeTimer, rejectHandshake;
   const pending = new Map();
   const pageSockets = new Map();
   let active = 0, retainedRequestBytes = 0;
   const queue = [];
   const openPromise = new Promise((resolve, reject) => {
     let handshake;
-    const timeout = setTimeout(() => { socket.close(); reject(Error('Browser proxy handshake timed out.')); }, 12000);
-    socket.onopen = async () => {
+    rejectHandshake = reject;
+    handshakeTimer = setTimeout(() => disconnect(Error('Browser proxy handshake timed out.')), 12000);
+    socket.onopen = () => {
       try {
-        handshake = new Noise('NNpsk0', true, null, { psk: await deriveKey(key) });
+        handshake = new Noise('NNpsk0', true, null, { psk: deriveKey(key) });
         handshake.initialise(encoder.encode('eya-browser-v1'));
         socket.send(handshake.send());
-      } catch (cause) { clearTimeout(timeout); reject(cause); socket.close(); }
+      } catch (cause) { disconnect(cause); }
     };
     socket.onmessage = event => {
+      if (closed) return;
       try {
         const data = new Uint8Array(event.data);
         if (!outbound) {
@@ -773,33 +818,27 @@ export async function createBrowserTransport({ url, key, onState } = {}) {
         const message = inbound.decrypt(data);
         if (!ready) {
           if (decoder.decode(message) !== 'eya-browser-ready-v1') throw Error('The browser proxy rejected the connection.');
-          ready = true; clearTimeout(timeout); onState?.('ready'); resolve(); return;
+          ready = true; clearTimeout(handshakeTimer); onState?.('ready'); resolve(); return;
         }
         receive(message);
-      } catch (cause) { fail(cause); }
+      } catch (cause) { disconnect(cause); }
     };
-    socket.onerror = () => { if (!ready) { clearTimeout(timeout); reject(Error('Could not connect to the browser proxy.')); } };
-    socket.onclose = () => {
-      closed = true; ready = false; clearTimeout(timeout); onState?.('closed');
-      for (const entry of pending.values()) {
-        entry.cleanup?.(); releaseEntry(entry);
-        const error = Error('Browser proxy connection closed.');
-        if (entry.streamController) entry.streamController.error(error); else entry.reject(error);
-      }
-      pending.clear();
-      for (const entry of pageSockets.values()) {
-        entry.closed = true;
-        entry.reject?.(Error('Browser proxy connection closed.'));
-        entry.onClose?.({ code: 1006, reason: 'Browser proxy connection closed.', wasClean: false });
-      }
-      pageSockets.clear();
-      for (const waiter of queue.splice(0)) { waiter.signal?.removeEventListener('abort', waiter.abort); waiter.reject(Error('Browser proxy connection closed.')); }
-      if (!outbound) reject(Error('Browser proxy connection closed.'));
-    };
+    socket.onerror = () => disconnect(Error('Could not connect to the browser proxy.'));
+    socket.onclose = () => disconnect();
   });
 
+  function disconnectedRequestError(entry) {
+    const mutation = !['GET', 'HEAD'].includes(entry.method);
+    const error = Error(entry.sent && mutation
+      ? 'Browser proxy disconnected. The request may have completed; it was not retried.'
+      : entry.sent ? 'Browser proxy disconnected during the request; it was not retried.'
+        : 'Browser proxy disconnected before the request was sent.');
+    error.code = 'proxy_disconnected'; error.completion = entry.sent ? 'unknown' : 'not-sent';
+    return error;
+  }
+
   function send(bytes) {
-    if (!ready || socket.readyState !== WebSocket.OPEN) throw Error('Browser proxy is disconnected.');
+    if (closed || !ready || socket.readyState !== WebSocket.OPEN) throw Error('Browser proxy is disconnected.');
     if (outbound.nonce >= 0xffffffff || socket.bufferedAmount > 768 * 1024) throw Error('Browser proxy transport is busy.');
     socket.send(outbound.encrypt(bytes));
   }
@@ -999,16 +1038,28 @@ export async function createBrowserTransport({ url, key, onState } = {}) {
     };
     step();
   }
-  function fail(cause) {
+  function disconnect(cause) {
+    if (closed) return;
+    closed = true; ready = false;
+    clearTimeout(handshakeTimer);
+    const connectionError = cause || Error('Browser proxy connection closed.');
+    rejectHandshake(connectionError);
     socket.close();
+    // Reject queued work before releasing active slots.
+    for (const waiter of queue.splice(0)) { waiter.signal?.removeEventListener('abort', waiter.abort); waiter.reject(disconnectedRequestError({ sent: false })); }
     for (const entry of pending.values()) {
       entry.cleanup?.(); releaseEntry(entry);
-      const error = cause instanceof Error ? cause : Error('Browser proxy protocol failed.');
+      const error = disconnectedRequestError(entry);
       if (entry.streamController) entry.streamController.error(error); else entry.reject(error);
     }
     pending.clear();
-    for (const entry of pageSockets.values()) { entry.reject?.(cause); entry.onClose?.({ code: 1006, reason: 'Browser proxy connection closed.', wasClean: false }); }
+    for (const entry of pageSockets.values()) {
+      entry.closed = true;
+      entry.reject?.(connectionError);
+      entry.onClose?.({ code: 1006, reason: 'Browser proxy connection closed.', wasClean: false });
+    }
     pageSockets.clear();
+    onState?.('closed', connectionError);
   }
 
   function makePageSocket(id, entry, protocol, cookies) {
@@ -1074,10 +1125,14 @@ export async function createBrowserTransport({ url, key, onState } = {}) {
     setTimeout(() => { if (pageSockets.get(id) === entry) pageSockets.delete(id); }, 5000);
   }
 
-  await openPromise;
+  const abortConnection = () => disconnect(signal.reason);
+  signal?.addEventListener('abort', abortConnection, { once: true });
+  if (signal?.aborted) abortConnection();
+  try { await openPromise; }
+  finally { signal?.removeEventListener('abort', abortConnection); }
   return {
     async request(url, { method = 'GET', headers = {}, body, signal, stream = false, bypassCache = false, followRedirects = true } = {}) {
-      if (closed) throw Error('Browser proxy connection is closed.');
+      if (closed) throw disconnectedRequestError({ sent: false });
       const bytes = asBytes(body);
       if (bytes.length > MAX_REQUEST_BODY) throw Error('Browser proxy request bodies are limited to 4 MiB.');
       const absolute = new URL(url).href;
@@ -1104,7 +1159,9 @@ export async function createBrowserTransport({ url, key, onState } = {}) {
           const payload = encoder.encode(JSON.stringify(request));
           if (payload.length > 60000) throw Error('Browser proxy request headers are too large.');
           const message = new Uint8Array(payload.length + 1); message[0] = 1; message.set(payload, 1);
+          if (closed || socket.readyState !== WebSocket.OPEN) throw disconnectedRequestError(entry);
           send(message);
+          entry.sent = true;
         } catch (cause) {
           pending.delete(id); entry.cleanup?.(); releaseEntry(entry); reject(cause);
         }
@@ -1122,7 +1179,120 @@ export async function createBrowserTransport({ url, key, onState } = {}) {
         try { send(frame); } catch (cause) { pageSockets.delete(id); reject(cause); }
       });
     },
-    close() { closed = true; socket.close(); },
-    get ready() { return ready; },
+    close() { disconnect(); },
+    get ready() { return ready && !closed; },
   };
+}
+
+// Reconnection restores only the authenticated channel. Never reissue an
+// interrupted request or reopen a page socket: their completion is uncertain.
+export function createRecoveringBrowserTransport({ url, key, onState } = {}) {
+  if (!url || !key) throw Error('Connect to Eya before opening the browser.');
+  browserEndpoint(url);
+  let transport = null, attempt = null, disposed = false, paused = false, failures = 0, waiters = 0;
+  function disconnectedMutation() {
+    const error = Error('Browser proxy is disconnected. The request was not sent. Try again once connected.');
+    error.code = 'proxy_disconnected'; error.completion = 'not-sent'; return error;
+  }
+  function retry(error) {
+    if (!disposed && !paused) connect(reconnectDelay(failures++), error);
+  }
+  function connect(delay = 0, previousError) {
+    const controller = new AbortController();
+    let timer, open, rejectAttempt;
+    const promise = new Promise((resolve, reject) => { open = resolve; rejectAttempt = reject; });
+    const current = {
+      promise,
+      start() {
+        if (attempt !== current || controller.signal.aborted || current.started) return;
+        current.started = true;
+        clearTimeout(timer);
+        onState?.(failures ? 'reconnecting' : 'connecting');
+        createBrowserTransport({ url, key, signal: controller.signal, onState(state, error) {
+          if (state !== 'closed' || !transport || transport !== current.channel) return;
+          transport = null;
+          retry(error);
+        } }).then(channel => {
+          if (attempt !== current || !channel.ready) { channel.close(); rejectAttempt(Error('Browser proxy connection closed.')); return; }
+          current.channel = transport = channel;
+          attempt = null; failures = 0;
+          open(channel);
+          onState?.('ready');
+        }, rejectAttempt);
+      },
+      cancel() {
+        clearTimeout(timer);
+        const error = Error('Browser proxy connection closed.');
+        controller.abort(error);
+        rejectAttempt(error);
+      },
+    };
+    attempt = current;
+    promise.catch(error => {
+      if (attempt !== current) return;
+      attempt = null;
+      retry(error);
+    });
+    if (delay) {
+      timer = setTimeout(current.start, delay);
+      onState?.('retrying', previousError);
+    } else current.start();
+    return promise;
+  }
+  function stop(state) {
+    const previous = attempt;
+    const channel = transport;
+    attempt = transport = null;
+    previous?.cancel();
+    channel?.close();
+    onState?.(state);
+  }
+  connect();
+  return {
+    async request(target, options = {}) {
+      if (options.signal?.aborted) throw options.signal.reason || new DOMException('Request cancelled.', 'AbortError');
+      if (disposed) throw Error('Browser proxy is closed.');
+      const method = String(options.method || 'GET').toUpperCase();
+      let channel = transport;
+      if (!channel?.ready) {
+        if (!['GET', 'HEAD'].includes(method) || options.body != null) throw disconnectedMutation();
+        if (paused) throw disconnectedMutation();
+        if (waiters >= MAX_QUEUED) throw Error('Browser reconnect queue is full.');
+        waiters++;
+        try { channel = await waitForConnection(attempt?.promise || connect(), options.signal); }
+        finally { waiters--; }
+      }
+      if (options.signal?.aborted) throw options.signal.reason || new DOMException('Request cancelled.', 'AbortError');
+      if (disposed) throw Error('Browser proxy is closed.');
+      // Deliberately no catch/retry around the operation itself.
+      return channel.request(target, options);
+    },
+    openWebSocket(target, options) {
+      if (disposed || !transport?.ready) return Promise.reject(disconnectedMutation());
+      return transport.openWebSocket(target, options);
+    },
+    async reconnect() {
+      if (disposed) throw Error('Browser proxy is closed.');
+      if (paused) throw Error('Connect to Eya to resume the browser proxy.');
+      if (transport?.ready) return transport;
+      const current = attempt;
+      current?.start();
+      return current?.promise || connect();
+    },
+    pause() { if (!paused && !disposed) { paused = true; stop('paused'); } },
+    resume() { if (paused && !disposed) { paused = false; failures = 0; connect(); } },
+    close() { if (!disposed) { disposed = true; stop('closed'); } },
+    get ready() { return !disposed && transport?.ready === true; },
+  };
+}
+
+function waitForConnection(promise, signal) {
+  if (!signal) return promise;
+  return new Promise((resolve, reject) => {
+    const abort = () => { cleanup(); reject(signal.reason || new DOMException('Request cancelled.', 'AbortError')); };
+    const cleanup = () => signal.removeEventListener('abort', abort);
+    signal.addEventListener('abort', abort, { once: true });
+    if (signal.aborted) abort();
+    promise.then(value => { cleanup(); resolve(value); }, error => { cleanup(); reject(error); });
+  });
 }

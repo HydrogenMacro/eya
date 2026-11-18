@@ -1,0 +1,17 @@
+const assert = require('node:assert/strict');
+const { buildSync } = require('../client/node_modules/esbuild');
+const vm = require('node:vm');
+const script = buildSync({ entryPoints: ['client/connection-form.js'], bundle: true, platform: 'browser', format: 'iife', globalName: 'API', write: false, alias: { 'sodium-universal': './client/sodium-browser.js' } }).outputFiles[0].text;
+const context = vm.createContext({ URL, TextEncoder, Uint8Array }); vm.runInContext(script, context);
+const normalize = value => context.API.normalizeConnectionUrl(value, 'file:').href;
+assert.equal(normalize('http://host'), 'ws://host/ws');
+assert.equal(normalize('https://host/eya/'), 'wss://host/eya/ws');
+assert.equal(normalize('wss://host/eya/ws/'), 'wss://host/eya/ws');
+assert.equal(normalize('ws://host/ws'), 'ws://host/ws');
+for (const value of ['file:///tmp/client', 'https://u:p@host', 'https://host/?key=secret', 'https://host/#x']) assert.throws(() => normalize(value));
+assert.throws(() => context.API.normalizeConnectionUrl('ws://host/ws', 'https:'), /wss/);
+const hosted = url => context.API.hostedClientUrl(url, 'data:');
+assert.equal(hosted('wss://host/eya/ws'), 'https://host/eya/client.html');
+assert.equal(hosted('http://127.0.0.1:1234/eya'), 'http://127.0.0.1:1234/eya/client.html');
+for (const value of ['wss://u:p@host/ws', 'ws://host/?key=secret', 'ws://host/#secret']) assert.throws(() => hosted(value));
+console.log('Connection URL normalization: HTTP(S), prefix paths, endpoint slash, credentials and mixed-content validation passed');

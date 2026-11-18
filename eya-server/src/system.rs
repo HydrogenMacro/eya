@@ -2,11 +2,174 @@
 use crate::files::FileManager;
 use serde_json::{Value, json};
 use std::{
+    collections::VecDeque,
     env, io,
     os::fd::{AsRawFd, FromRawFd, OwnedFd},
     path::PathBuf,
     process::Stdio,
+    sync::{Mutex, OnceLock},
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
+
+// Aggregate counters only: collecting chart history never scans process tables.
+// Keep one bounded history for this server's configured host identity.
+const HISTORY_LIMIT: usize = 601;
+static HISTORY: OnceLock<Mutex<ResourceHistory>> = OnceLock::new();
+struct ResourceHistory {
+    root: PathBuf,
+    samples: VecDeque<Value>,
+}
+struct ResourceCounters {
+    at: Instant,
+    total: u64,
+    idle: u64,
+    received: u64,
+    sent: u64,
+    memory: u64,
+    swap: u64,
+}
+async fn aggregate_text(path: PathBuf, limit: u64) -> io::Result<String> {
+    let mut bytes = Vec::new();
+    tokio::fs::File::open(path)
+        .await?
+        .take(limit + 1)
+        .read_to_end(&mut bytes)
+        .await?;
+    if bytes.len() as u64 > limit {
+        return Err(io::Error::other("aggregate counters exceed limit"));
+    }
+    String::from_utf8(bytes).map_err(|_| invalid("invalid aggregate counters"))
+}
+async fn resource_counters(root: &std::path::Path) -> io::Result<ResourceCounters> {
+    let (cpu, memory, network) = tokio::try_join!(
+        aggregate_text(root.join("stat"), 512 * 1024),
+        aggregate_text(root.join("meminfo"), 64 * 1024),
+        aggregate_text(root.join("net/dev"), 512 * 1024)
+    )?;
+    let counters: Vec<u64> = cpu
+        .lines()
+        .next()
+        .unwrap_or("")
+        .split_whitespace()
+        .skip(1)
+        .take(8)
+        .map(|value| value.parse().unwrap_or(0))
+        .collect();
+    let mem = |key: &str| {
+        memory
+            .lines()
+            .find(|line| line.starts_with(key))
+            .map(|line| number(line.split_whitespace().nth(1)).saturating_mul(1024))
+            .unwrap_or(0)
+    };
+    let (received, sent) = network
+        .lines()
+        .filter_map(|line| line.split_once(':'))
+        .filter(|(name, _)| name.trim() != "lo")
+        .fold((0u64, 0u64), |(rx, tx), (_, line)| {
+            let values: Vec<_> = line.split_whitespace().collect();
+            (
+                rx.saturating_add(number(values.first().copied())),
+                tx.saturating_add(number(values.get(8).copied())),
+            )
+        });
+    Ok(ResourceCounters {
+        at: Instant::now(),
+        total: counters.iter().sum(),
+        idle: counters.get(3).unwrap_or(&0) + counters.get(4).unwrap_or(&0),
+        received,
+        sent,
+        memory: mem("MemTotal:").saturating_sub(mem("MemAvailable:")),
+        swap: mem("SwapTotal:").saturating_sub(mem("SwapFree:")),
+    })
+}
+fn resource_sample(
+    next: &ResourceCounters,
+    previous: Option<&ResourceCounters>,
+    time: u64,
+) -> Value {
+    let total = previous
+        .map(|before| next.total.saturating_sub(before.total))
+        .unwrap_or(0);
+    let cpu = previous.filter(|_| total > 0).map(|before| {
+        (100.0 * (1.0 - next.idle.saturating_sub(before.idle) as f64 / total as f64))
+            .clamp(0.0, 100.0)
+    });
+    let elapsed = previous
+        .map(|before| next.at.duration_since(before.at).as_secs_f64())
+        .unwrap_or(0.0);
+    let rate = |value: u64, prior: u64| {
+        (elapsed > 0.0).then(|| value.saturating_sub(prior) as f64 / elapsed)
+    };
+    json!({"time":time,"cpu":cpu,"memory":next.memory,"swap":next.swap,
+        "rx":previous.and_then(|before| rate(next.received,before.received)),
+        "tx":previous.and_then(|before| rate(next.sent,before.sent))})
+}
+fn retain_sample(history: &mut ResourceHistory, sample: Value) {
+    let cutoff = sample["time"].as_u64().unwrap_or(0).saturating_sub(300_000);
+    while history
+        .samples
+        .front()
+        .is_some_and(|entry| entry["time"].as_u64().unwrap_or(0) < cutoff)
+        || history.samples.len() >= HISTORY_LIMIT
+    {
+        history.samples.pop_front();
+    }
+    history.samples.push_back(sample);
+}
+pub fn start_history(files: &FileManager) {
+    let root = proc_root(files);
+    if HISTORY
+        .set(Mutex::new(ResourceHistory {
+            root: root.clone(),
+            samples: VecDeque::new(),
+        }))
+        .is_err()
+    {
+        return;
+    }
+    tokio::spawn(async move {
+        let mut timer = tokio::time::interval(Duration::from_millis(500));
+        timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        let mut previous = None;
+        loop {
+            timer.tick().await;
+            if let Ok(Ok(next)) = timeout(Duration::from_secs(2), resource_counters(&root)).await {
+                let time = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
+                let sample = resource_sample(&next, previous.as_ref(), time);
+                if let Some(history) = HISTORY.get()
+                    && let Ok(mut history) = history.lock()
+                {
+                    retain_sample(&mut history, sample);
+                }
+                previous = Some(next);
+            } else {
+                previous = None;
+            }
+        }
+    });
+}
+fn history_response(request: &Value, files: &FileManager) -> Option<Value> {
+    let offer = request.get("history")?;
+    if offer["v"].as_u64() != Some(1) {
+        return None;
+    }
+    let after = offer["after"].as_u64().unwrap_or(0);
+    let history = HISTORY.get()?.lock().ok()?;
+    if history.root != proc_root(files) {
+        return None;
+    }
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
+    Some(
+        json!({"v":1,"now":now,"samples":history.samples.iter().filter(|sample| sample["time"].as_u64().unwrap_or(0) > after).collect::<Vec<_>>()}),
+    )
+}
 use tokio::{
     io::AsyncReadExt,
     process::Command,
@@ -318,7 +481,13 @@ async fn process_details(request: &Value, files: &FileManager) -> io::Result<Val
 
 pub async fn handle(op: &str, request: &Value, files: &FileManager) -> io::Result<Value> {
     match op {
-        "system.stats" => stats(files).await,
+        "system.stats" => {
+            let mut response = stats(files).await?;
+            if let Some(history) = history_response(request, files) {
+                response["history"] = history;
+            }
+            Ok(response)
+        }
         "system.process" => process_details(request, files).await,
         "system.signal" => {
             let pid = request["pid"]
@@ -590,6 +759,67 @@ pub async fn handle(op: &str, request: &Value, files: &FileManager) -> io::Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn resource_history_is_bounded_and_counter_resets_do_not_spike() {
+        let now = Instant::now();
+        let before = ResourceCounters {
+            at: now,
+            total: 100,
+            idle: 40,
+            received: 1000,
+            sent: 2000,
+            memory: 10,
+            swap: 0,
+        };
+        let next = ResourceCounters {
+            at: now + Duration::from_secs(1),
+            total: 200,
+            idle: 60,
+            received: 1500,
+            sent: 100,
+            memory: 20,
+            swap: 5,
+        };
+        let point = resource_sample(&next, Some(&before), 1234);
+        assert_eq!(point["cpu"], 80.0);
+        assert_eq!(point["rx"], 500.0);
+        assert_eq!(point["tx"], 0.0);
+        assert!(resource_sample(&before, None, 1)["cpu"].is_null());
+        let mut history = ResourceHistory {
+            root: PathBuf::from("/proc"),
+            samples: VecDeque::new(),
+        };
+        for index in 0..1000 {
+            retain_sample(&mut history, json!({"time":index * 500}));
+        }
+        assert_eq!(history.samples.len(), HISTORY_LIMIT);
+        assert_eq!(history.samples.front().unwrap()["time"], 199500);
+        retain_sample(&mut history, json!({"time":1_000_000}));
+        assert_eq!(history.samples.len(), 1);
+    }
+    #[tokio::test]
+    async fn statistics_history_is_opt_in_and_available_before_a_panel_opens() {
+        let files = FileManager::from_env().unwrap();
+        assert!(
+            aggregate_text(proc_root(&files).join("meminfo"), 1)
+                .await
+                .is_err()
+        );
+        start_history(&files);
+        tokio::time::sleep(Duration::from_millis(650)).await;
+        let plain = handle("system.stats", &json!({}), &files).await.unwrap();
+        assert!(plain.get("history").is_none());
+        assert!(history_response(&json!({"history":{"v":999}}), &files).is_none());
+        let history = history_response(&json!({"history":{"v":1,"unknown":true}}), &files).unwrap();
+        assert_eq!(history["v"], 1);
+        let points = history["samples"].as_array().unwrap();
+        assert!(points.len() >= 2);
+        assert!(points.last().unwrap()["cpu"].as_f64().is_some());
+        let last = points.last().unwrap()["time"].as_u64().unwrap();
+        let delta = history_response(&json!({"history":{"v":1,"after":last}}), &files).unwrap();
+        assert!(delta["samples"].as_array().unwrap().is_empty());
+        assert!(history["now"].as_u64().unwrap() >= last);
+    }
     #[test]
     fn validates_identifiers_and_shell_quoting() {
         for value in ["", "--all", "a;touch /tmp/a", "$(id)", "a\nb"] {

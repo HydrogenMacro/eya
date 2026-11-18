@@ -24,7 +24,7 @@ use std::{
     time::Duration,
 };
 use tokio::{
-    io::AsyncReadExt,
+    io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
     process::{Child, Command},
     sync::{Mutex, mpsc, oneshot},
@@ -40,7 +40,7 @@ const PROLOGUE: &[u8] = b"eya-browser-render-v1";
 const READY: &[u8] = b"eya-browser-render-ready-v1";
 const MAX_WS_MESSAGE: usize = 65_535;
 const MAX_CHUNK_BYTES: usize = 48 * 1024;
-const MAX_FRAME_BYTES: usize = 2 * 1024 * 1024;
+const MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
 const MAX_INPUT_BYTES: usize = 60 * 1024;
 const MAX_REMOTE_TEXT_BYTES: usize = 8 * 1024;
 const MAX_CONSOLE_EXPRESSION_BYTES: usize = 16 * 1024;
@@ -62,8 +62,8 @@ const MAX_REMOTE_STAGED_UPLOAD_BYTES: usize = 64 * 1024 * 1024;
 const MAX_REMOTE_UPLOAD_FILENAME_BYTES: usize = 255;
 const DEFAULT_WIDTH: u32 = 1280;
 const DEFAULT_HEIGHT: u32 = 720;
-const MAX_WIDTH: u32 = 1920;
-const MAX_HEIGHT: u32 = 1200;
+const MAX_WIDTH: u32 = 8192;
+const MAX_HEIGHT: u32 = 8192;
 const CGROUP_EXEC_FLAG: &str = "--eya-browser-cgroup-exec";
 
 // Client -> server opcodes.
@@ -102,6 +102,12 @@ const FILE_UPLOAD_CANCEL: u8 = 32;
 const JAVASCRIPT_DIALOG_REPLY: u8 = 33;
 const HISTORY_GO: u8 = 34;
 const EXTENSION_ACTION: u8 = 35;
+const PRINT_PDF: u8 = 36;
+const IMAGE_DOWNLOAD: u8 = 38;
+const TILE_ACK: u8 = 39;
+const NATIVE_ACTION_REPLY: u8 = 37;
+const NATIVE_ACTION_SCRIPT: &str = include_str!("browser_native.js");
+const NATIVE_PRINT_SCRIPT: &str = "(()=>{document.addEventListener('contextmenu',e=>queueMicrotask(()=>{globalThis.__eyaContextMenu={x:e.clientX,y:e.clientY,allowed:!e.defaultPrevented,time:Date.now()};}),true);const request=globalThis.__eyaRequestPrint;let last=0;window.print=()=>{const now=Date.now();if(now-last<2000)return;last=now;request('print');};})()";
 
 // Server -> client opcodes.
 const STATUS: u8 = 129;
@@ -122,6 +128,8 @@ const DOWNLOAD_FILE_START: u8 = 143;
 const DOWNLOAD_FILE_CHUNK: u8 = 144;
 const FILTERS_ACK: u8 = 145;
 const FILE_UPLOAD_RESULT: u8 = 146;
+const TILE_START: u8 = 147;
+const TILE_CHUNK: u8 = 148;
 const MAX_REMOTE_FILTER_BYTES: usize = 8 * 1024 * 1024;
 const MAX_REMOTE_FILTER_RULES: usize = 30_000;
 const MAX_REMOTE_SOURCES: usize = 100;
@@ -136,6 +144,266 @@ const MAX_REMOTE_DIALOG_MESSAGE_BYTES: usize = 4096;
 
 type CdpSocket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 type CdpSink = futures_util::stream::SplitSink<CdpSocket, CdpMessage>;
+
+// One writer owns socket ordering. A tiny encrypted queue lets the session
+// continue accepting input while a display chunk waits for the network.
+const DISPLAY_WRITE_QUEUE: usize = 2;
+type ClientMessage = axum::extract::ws::Message;
+enum WriteItem {
+    Message(ClientMessage),
+    Flush(oneshot::Sender<()>),
+}
+struct RenderSocket {
+    reader: futures_util::stream::SplitStream<axum::extract::ws::WebSocket>,
+    sender: mpsc::Sender<WriteItem>,
+    writer: JoinHandle<()>,
+}
+impl RenderSocket {
+    fn new(socket: axum::extract::ws::WebSocket) -> Self {
+        let (mut sink, reader) = socket.split();
+        let (sender, mut receiver) = mpsc::channel(DISPLAY_WRITE_QUEUE);
+        let writer = tokio::spawn(async move {
+            while let Some(item) = receiver.recv().await {
+                match item {
+                    WriteItem::Message(message) => {
+                        if !matches!(
+                            timeout(Duration::from_secs(5), sink.send(message)).await,
+                            Ok(Ok(()))
+                        ) {
+                            break;
+                        }
+                    }
+                    WriteItem::Flush(done) => {
+                        if !matches!(
+                            timeout(Duration::from_secs(5), sink.flush()).await,
+                            Ok(Ok(()))
+                        ) {
+                            break;
+                        }
+                        let _ = done.send(());
+                    }
+                }
+            }
+            let _ = timeout(Duration::from_secs(1), sink.close()).await;
+        });
+        Self {
+            reader,
+            sender,
+            writer,
+        }
+    }
+    async fn flush(&self) {
+        let (done, wait) = oneshot::channel();
+        let _ = timeout(Duration::from_secs(5), async {
+            self.sender
+                .send(WriteItem::Flush(done))
+                .await
+                .map_err(|_| ())?;
+            wait.await.map_err(|_| ())
+        })
+        .await;
+    }
+    async fn recv(&mut self) -> Option<Result<ClientMessage, axum::Error>> {
+        self.reader.next().await
+    }
+    async fn send(&mut self, message: ClientMessage) -> Result<(), ()> {
+        self.sender
+            .send(WriteItem::Message(message))
+            .await
+            .map_err(|_| ())
+    }
+}
+impl Drop for RenderSocket {
+    fn drop(&mut self) {
+        self.writer.abort();
+    }
+}
+struct DisplayFrame {
+    bytes: Vec<u8>,
+    sequence: u32,
+    opcode: u8,
+    next_chunk: usize,
+    started: tokio::time::Instant,
+}
+
+pub type Registry =
+    Arc<std::sync::Mutex<std::collections::HashMap<String, mpsc::Sender<SessionCommand>>>>;
+pub struct BrowserAttachment {
+    socket: axum::extract::ws::WebSocket,
+    noise: snow::TransportState,
+    client: String,
+    takeover: bool,
+}
+pub enum SessionCommand {
+    Attach(BrowserAttachment),
+    Inspect(oneshot::Sender<Value>),
+    End,
+}
+async fn hello(
+    socket: &mut axum::extract::ws::WebSocket,
+    noise: &mut snow::TransportState,
+    value: Value,
+) -> bool {
+    let mut cipher = vec![0; MAX_WS_MESSAGE];
+    let Ok(size) = noise.write_message(value.to_string().as_bytes(), &mut cipher) else {
+        return false;
+    };
+    matches!(
+        timeout(
+            Duration::from_secs(5),
+            socket.send(axum::extract::ws::Message::Binary(
+                cipher[..size].to_vec().into()
+            ))
+        )
+        .await,
+        Ok(Ok(()))
+    )
+}
+pub async fn manage(app: &App, op: &str, request: &Value) -> io::Result<Value> {
+    if op == "session.list" {
+        let entries: Vec<_> = app
+            .browser_sessions
+            .lock()
+            .map_err(|_| io::Error::other("Browser sessions unavailable"))?
+            .iter()
+            .map(|(id, tx)| (id.clone(), tx.clone()))
+            .collect();
+        let mut sessions = Vec::new();
+        for (id, tx) in entries {
+            let (reply, response) = oneshot::channel();
+            let requested = matches!(
+                timeout(
+                    Duration::from_secs(1),
+                    tx.send(SessionCommand::Inspect(reply))
+                )
+                .await,
+                Ok(Ok(()))
+            );
+            let mut status = if requested {
+                timeout(Duration::from_secs(1), response)
+                    .await
+                    .ok()
+                    .and_then(Result::ok)
+            } else {
+                None
+            }
+            .unwrap_or_else(|| json!({"status":if tx.is_closed(){"closing"}else{"busy"}}));
+            status["id"] = id.clone().into();
+            status["kind"] = "browser".into();
+            status["workspace"] = app
+                .workspaces
+                .lock()
+                .map_err(|_| io::Error::other("Workspace store unavailable"))?
+                .owner(&id)
+                .map(str::to_owned)
+                .into();
+            sessions.push(status);
+        }
+        return Ok(json!({"sessions":sessions}));
+    }
+    let id = request["session"]
+        .as_str()
+        .ok_or_else(|| io::Error::other("Browser session ID required"))?;
+    if op != "session.end" {
+        return Err(io::Error::other("Unknown session operation"));
+    }
+    app.session_ends.end(id)?;
+    let tx = app
+        .browser_sessions
+        .lock()
+        .map_err(|_| io::Error::other("Browser sessions unavailable"))?
+        .get(id)
+        .cloned();
+    if let Some(tx) = tx {
+        let _ = timeout(Duration::from_secs(2), tx.send(SessionCommand::End))
+            .await
+            .map_err(io::Error::other)?;
+    }
+    Ok(json!({"ended":id}))
+}
+async fn attach(mut attachment: BrowserAttachment, id: String, create: bool, app: App) {
+    let existing = app
+        .browser_sessions
+        .lock()
+        .ok()
+        .and_then(|sessions| sessions.get(&id).cloned());
+    if let Some(tx) = existing {
+        let _ = timeout(
+            Duration::from_secs(2),
+            tx.send(SessionCommand::Attach(attachment)),
+        )
+        .await;
+        return;
+    }
+    if !create {
+        hello(&mut attachment.socket, &mut attachment.noise, json!({"state":"expired","message":"Browser session is unavailable. Start a new session explicitly."})).await;
+        return;
+    }
+    let (tx, rx) = mpsc::channel(4);
+    let existing = app.session_ends.claim(&id, || {
+        let Ok(mut sessions) = app.browser_sessions.lock() else {
+            return None;
+        };
+        if let Some(existing) = sessions.get(&id) {
+            Some(Ok(existing.clone()))
+        } else if sessions.len() >= app.server_config.slots("fullBrowserSessions").limit() {
+            None
+        } else {
+            sessions.insert(id.clone(), tx);
+            Some(Err(rx))
+        }
+    });
+    let existing = match existing {
+        Ok(existing) => existing,
+        Err(error) => {
+            hello(
+                &mut attachment.socket,
+                &mut attachment.noise,
+                json!({"state":"expired","message":error.to_string()}),
+            )
+            .await;
+            return;
+        }
+    };
+    match existing {
+        Some(Ok(tx)) => {
+            let _ = timeout(
+                Duration::from_secs(2),
+                tx.send(SessionCommand::Attach(attachment)),
+            )
+            .await;
+        }
+        Some(Err(rx)) => {
+            if hello(
+                &mut attachment.socket,
+                &mut attachment.noise,
+                json!({"state":"ready","id":id,"resumed":false,"tabs":[]}),
+            )
+            .await
+            {
+                run(
+                    attachment.socket,
+                    attachment.noise,
+                    app.clone(),
+                    rx,
+                    Some((id.clone(), attachment.client)),
+                )
+                .await;
+            }
+            if let Ok(mut sessions) = app.browser_sessions.lock() {
+                sessions.remove(&id);
+            }
+        }
+        None => {
+            hello(
+                &mut attachment.socket,
+                &mut attachment.noise,
+                json!({"state":"full","message":"Browser session limit reached"}),
+            )
+            .await;
+        }
+    }
+}
 
 pub async fn upgrade(State(app): State<App>, ws: WebSocketUpgrade) -> impl IntoResponse {
     ws.max_message_size(MAX_WS_MESSAGE)
@@ -183,6 +451,36 @@ async fn session(mut socket: axum::extract::ws::WebSocket, app: App) {
     let Ok(count) = noise.read_message(&confirm, &mut plain) else {
         return;
     };
+    if let Some(data) = plain[..count].strip_prefix(b"eya-browser-session-v1:") {
+        let Ok(value) = serde_json::from_slice::<Value>(data) else {
+            return;
+        };
+        let Some(id) = value["session"]
+            .as_str()
+            .filter(|id| id.len() == 64 && id.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        else {
+            return;
+        };
+        let Some(client) = value["client"]
+            .as_str()
+            .filter(|id| crate::workspaces::valid_id(id))
+        else {
+            return;
+        };
+        attach(
+            BrowserAttachment {
+                socket,
+                noise,
+                client: client.to_owned(),
+                takeover: value["takeover"].as_bool().unwrap_or(false),
+            },
+            id.to_owned(),
+            value["create"].as_bool().unwrap_or(false),
+            app,
+        )
+        .await;
+        return;
+    }
     if &plain[..count] != READY {
         return;
     }
@@ -199,6 +497,21 @@ async fn session(mut socket: axum::extract::ws::WebSocket, app: App) {
         return;
     }
 
+    let (_tx, rx) = mpsc::channel(1);
+    run(socket, noise, app, rx, None).await;
+}
+
+async fn run(
+    socket: axum::extract::ws::WebSocket,
+    mut noise: snow::TransportState,
+    app: App,
+    mut attachments: mpsc::Receiver<SessionCommand>,
+    mut identity: Option<(String, String)>,
+) {
+    let mut shutdown = app.shutdown.subscribe();
+    let mut socket = Some(RenderSocket::new(socket));
+    let mut plain = vec![0u8; MAX_WS_MESSAGE];
+    let mut offline_since = tokio::time::Instant::now();
     enum SessionEvent {
         Client(
             Result<
@@ -207,10 +520,27 @@ async fn session(mut socket: axum::extract::ws::WebSocket, app: App) {
             >,
         ),
         Cdp(Option<Value>),
+        Writable(Option<mpsc::OwnedPermit<WriteItem>>),
+        Command(SessionCommand),
+        Tick,
+        Shutdown,
     }
     let mut remote: Option<RemoteBrowser> = None;
     let mut remote_events: Option<mpsc::Receiver<Value>> = None;
     let mut frame_waiting: Option<(u32, u32)> = None;
+    let mut display_frame: Option<DisplayFrame> = None;
+    let mut deferred_frame: Option<Value> = None;
+    let mut frame_sent_at: Option<tokio::time::Instant> = None;
+    let mut refresh_after_frame = false;
+    let mut tile_enabled = false;
+    let mut tile_failures = 0u8;
+    let mut tile_suspended = false;
+    let mut tile_encoder = crate::browser_tiles::Encoder::default();
+    let mut tile_waiting: Option<u32> = None;
+    let mut tile_context = String::new();
+    let mut tile_reseed_needed = false;
+    let mut image_download_enabled = false;
+    let mut cursor_enabled = false;
     let mut pending_evaluations = std::collections::HashMap::<u32, PendingEvaluation>::new();
     let mut pending_sources = std::collections::HashMap::<u32, PendingSourceRequest>::new();
     let mut page_devtools = std::collections::HashMap::<String, RemotePageDevtoolsState>::new();
@@ -222,6 +552,7 @@ async fn session(mut socket: axum::extract::ws::WebSocket, app: App) {
     let mut remote_downloads = std::collections::HashMap::<u32, RemoteDownload>::new();
     let mut remote_download_ids = std::collections::HashMap::<String, u32>::new();
     let mut next_remote_download_id = 0u32;
+    let mut last_print_request = std::time::Instant::now() - Duration::from_secs(3);
     let mut debugger_breakpoints = std::collections::HashSet::<String>::new();
     let mut debugger_call_frames = std::collections::HashSet::<String>::new();
     let mut debugger_remote_objects = std::collections::HashSet::<String>::new();
@@ -233,6 +564,10 @@ async fn session(mut socket: axum::extract::ws::WebSocket, app: App) {
     let mut page_file_upload: Option<PageFileUpload> = None;
     let mut pending_file_chooser: Option<PendingPageFileChooser> = None;
     let mut next_file_chooser_id = 0u32;
+    let mut pending_native_action: Option<PendingNativeAction> = None;
+    let mut next_native_action_id = 0u32;
+    let mut native_contexts = std::collections::HashMap::<(String, u64), (String, String)>::new();
+    let mut native_gesture: Option<(String, std::time::Instant)> = None;
     let mut pending_javascript_dialogs =
         std::collections::HashMap::<String, PendingJavascriptDialog>::new();
     let mut next_javascript_dialog_id = 0u32;
@@ -240,9 +575,82 @@ async fn session(mut socket: axum::extract::ws::WebSocket, app: App) {
     let mut current_remote_url = String::new();
     let mut current_main_frame_id = String::new();
     loop {
+        if *shutdown.borrow() {
+            break;
+        }
+        // CDP activity can continuously win the select below. Expiry must not
+        // depend on an idle tick while a detached page keeps animating.
+        if socket.is_none() && offline_since.elapsed() >= app.resume_limits.browser_ttl {
+            break;
+        }
+        if socket.is_none() {
+            native_gesture = None;
+        }
+        if socket.is_some() {
+            offline_since = tokio::time::Instant::now();
+        } else if let Some((_, frame)) = frame_waiting.take()
+            && let Some(browser) = remote.as_mut()
+        {
+            browser.ack_frame(frame).await;
+        }
+        if pending_native_action.as_ref().is_some_and(|request| {
+            socket.is_none()
+                || request.created.elapsed() >= Duration::from_secs(55)
+                || remote.as_ref().and_then(RemoteBrowser::active_tab_id)
+                    != Some(request.tab_id.as_str())
+        }) && let Some(request) = pending_native_action.take()
+        {
+            if let Some(browser) = remote.as_mut() {
+                let _ = browser
+                    .resolve_native_action(&request, "", "AbortError")
+                    .await;
+            }
+            send_json(
+                &mut socket,
+                &mut noise,
+                STATUS,
+                &json!({"type":"native-action-closed","id":request.id,"tabId":request.tab_id}),
+            )
+            .await;
+        }
+        if socket.is_none() {
+            display_frame = None;
+        }
+        if display_frame
+            .as_ref()
+            .is_some_and(|frame| frame.started.elapsed() >= Duration::from_secs(30))
+        {
+            socket = None;
+            display_frame = None;
+        }
+        if frame_waiting.is_some()
+            && display_frame.is_none()
+            && frame_sent_at.is_some_and(|sent| sent.elapsed() >= Duration::from_secs(15))
+        {
+            if tile_waiting.is_some() {
+                tile_failures = tile_failures.saturating_add(1);
+                tile_suspended = tile_failures >= 3;
+            }
+            tile_encoder.reset();
+            tile_waiting = None;
+            frame_sent_at = None;
+            if let (Some(browser), Some((_, cdp_frame))) = (remote.as_mut(), frame_waiting.take()) {
+                browser.ack_frame(cdp_frame).await;
+                let _ = browser.refresh_screencast().await;
+            }
+        }
+        let writer = socket.as_ref().map(|socket| socket.sender.clone());
         let next = tokio::select! {
-            client = timeout(Duration::from_secs(180), socket.recv()) => SessionEvent::Client(client),
+            biased;
+            _ = shutdown.changed() => SessionEvent::Shutdown,
+            client = timeout(Duration::from_secs(180), async { match socket.as_mut() { Some(socket) => socket.recv().await, None => std::future::pending().await } }), if socket.is_some() => SessionEvent::Client(client),
+            _ = async { writer.as_ref().unwrap().closed().await }, if socket.is_some() => SessionEvent::Client(Ok(None)),
+            Some(command) = attachments.recv(), if identity.is_some() => SessionEvent::Command(command),
+            _ = sleep(Duration::from_secs(1)), if socket.is_none() || pending_native_action.is_some() || frame_waiting.is_some() => SessionEvent::Tick,
+            slot = async { writer.as_ref().unwrap().clone().reserve_owned().await.ok() }, if display_frame.is_some() && socket.is_some() => SessionEvent::Writable(slot),
             event = async {
+                if frame_waiting.is_none() && display_frame.is_none()
+                    && let Some(frame) = deferred_frame.take() { return Some(frame); }
                 if let Some(events) = remote_events.as_mut() {
                     events.recv().await
                 } else {
@@ -251,6 +659,32 @@ async fn session(mut socket: axum::extract::ws::WebSocket, app: App) {
             } => SessionEvent::Cdp(event),
         };
         match next {
+            SessionEvent::Shutdown => break,
+            SessionEvent::Writable(None) => {
+                socket = None;
+                display_frame = None;
+            }
+            SessionEvent::Writable(Some(slot)) => {
+                let frame = display_frame.as_mut().unwrap();
+                let offset = frame.next_chunk * MAX_CHUNK_BYTES;
+                let part = &frame.bytes[offset..(offset + MAX_CHUNK_BYTES).min(frame.bytes.len())];
+                let mut message = Vec::with_capacity(7 + part.len());
+                message.push(frame.opcode);
+                message.extend_from_slice(&frame.sequence.to_be_bytes());
+                message.extend_from_slice(&(frame.next_chunk as u16).to_be_bytes());
+                message.extend_from_slice(part);
+                let mut encrypted = vec![0; MAX_WS_MESSAGE];
+                let Ok(size) = noise.write_message(&message, &mut encrypted) else {
+                    break;
+                };
+                encrypted.truncate(size);
+                slot.send(WriteItem::Message(ClientMessage::Binary(encrypted.into())));
+                frame.next_chunk += 1;
+                if frame.next_chunk * MAX_CHUNK_BYTES >= frame.bytes.len() {
+                    display_frame = None;
+                    frame_sent_at = Some(tokio::time::Instant::now());
+                }
+            }
             SessionEvent::Client(Ok(Some(Ok(axum::extract::ws::Message::Binary(incoming))))) => {
                 let Ok(count) = noise.read_message(&incoming, &mut plain) else {
                     break;
@@ -438,6 +872,9 @@ async fn session(mut socket: axum::extract::ws::WebSocket, app: App) {
                         let previous_tab_id = browser.active_tab_id().map(str::to_owned);
                         match browser.activate_tab(&request.tab_id).await {
                             Ok((url, frame_id)) => {
+                                tile_encoder.reset();
+                                tile_waiting = None;
+                                tile_context.clear();
                                 let activated_tab_id = browser
                                     .active_tab_id()
                                     .unwrap_or(&request.tab_id)
@@ -587,10 +1024,63 @@ async fn session(mut socket: axum::extract::ws::WebSocket, app: App) {
                         {
                             continue;
                         }
-                        if let Some(browser) = remote.as_mut()
-                            && let Err(error) = browser.resize(resize.width, resize.height).await
-                        {
-                            send_error(&mut socket, &mut noise, &error).await;
+                        if let Some(browser) = remote.as_mut() {
+                            if let Err(error) = browser.resize(resize.width, resize.height).await {
+                                send_error(&mut socket, &mut noise, &error).await;
+                                continue;
+                            }
+                            let mut capabilities = Vec::new();
+                            if resize
+                                .capabilities
+                                .iter()
+                                .any(|value| value == "stream-settings-v1")
+                            {
+                                let stream = resize.stream.unwrap_or_default();
+                                if let Err(error) = stream.validate() {
+                                    send_error(&mut socket, &mut noise, &error).await;
+                                    continue;
+                                }
+                                if let Err(error) = browser.set_stream(stream).await {
+                                    send_error(&mut socket, &mut noise, &error).await;
+                                    continue;
+                                }
+                                capabilities.push("stream-settings-v1");
+                            }
+                            tile_failures = 0;
+                            tile_suspended = false;
+                            tile_enabled = resize
+                                .capabilities
+                                .iter()
+                                .any(|value| value == "tiles-rgba-v1");
+                            if tile_enabled {
+                                capabilities.push("tiles-rgba-v1");
+                            }
+                            if !tile_enabled
+                                || !browser.stream.tiles
+                                || browser.stream.format != "png"
+                            {
+                                if tile_waiting.take().is_some()
+                                    && let Some((_, cdp_frame)) = frame_waiting.take()
+                                {
+                                    browser.ack_frame(cdp_frame).await;
+                                }
+                                tile_encoder.reset();
+                            }
+                            image_download_enabled = resize
+                                .capabilities
+                                .iter()
+                                .any(|value| value == "image-download-v1");
+                            if image_download_enabled {
+                                capabilities.push("image-download-v1");
+                            }
+                            cursor_enabled =
+                                resize.capabilities.iter().any(|value| value == "cursor-v1");
+                            if cursor_enabled {
+                                capabilities.push("cursor-v1");
+                            }
+                            if !resize.capabilities.is_empty() {
+                                send_json(&mut socket, &mut noise, STATUS, &json!({"type":"stream-settings","capabilities":capabilities,"stream":browser.stream})).await;
+                            }
                         }
                     }
                     INPUT if count > 1 && count <= MAX_INPUT_BYTES => {
@@ -602,6 +1092,22 @@ async fn session(mut socket: axum::extract::ws::WebSocket, app: App) {
                                 != Some(input.tab_id.as_str())
                         {
                             continue;
+                        }
+                        if input.validate().is_ok()
+                            && matches!(
+                                input.action.as_str(),
+                                "mousePressed" | "touchStart" | "keyDown"
+                            )
+                        {
+                            native_gesture =
+                                Some((input.tab_id.clone(), std::time::Instant::now()));
+                        }
+                        if frame_waiting.is_some()
+                            && remote
+                                .as_ref()
+                                .is_some_and(|browser| !browser.send_last_frame)
+                        {
+                            refresh_after_frame = true;
                         }
                         if let Some(browser) = remote.as_mut()
                             && let Err(error) = browser.input(input).await
@@ -1468,6 +1974,143 @@ async fn session(mut socket: axum::extract::ws::WebSocket, app: App) {
                             }
                         }
                     }
+                    NATIVE_ACTION_REPLY if count > 1 && count <= 16 * 1024 => {
+                        let Ok(reply) =
+                            serde_json::from_slice::<NativeActionReply>(&plain[1..count])
+                        else {
+                            continue;
+                        };
+                        let matches = pending_native_action.as_ref().is_some_and(|request| {
+                            request.id == reply.id && request.tab_id == reply.tab_id
+                        });
+                        if !matches
+                            || reply.value.len() > 12 * 1024
+                            || !matches!(
+                                reply.error.as_str(),
+                                "" | "AbortError"
+                                    | "NotAllowedError"
+                                    | "InvalidStateError"
+                                    | "NotSupportedError"
+                                    | "DataError"
+                            )
+                        {
+                            continue;
+                        }
+                        let request = pending_native_action.take().unwrap();
+                        if let Some(browser) = remote.as_mut() {
+                            let error = if browser.active_tab_id() != Some(request.tab_id.as_str())
+                                || request.created.elapsed() >= Duration::from_secs(55)
+                            {
+                                "AbortError"
+                            } else {
+                                reply.error.as_str()
+                            };
+                            let value = if request.kind == "clipboard-read" && error.is_empty() {
+                                reply.value.as_str()
+                            } else {
+                                ""
+                            };
+                            let _ = browser.resolve_native_action(&request, value, error).await;
+                        }
+                        send_json(&mut socket, &mut noise, STATUS, &json!({"type":"native-action-closed","id":request.id,"tabId":request.tab_id})).await;
+                    }
+                    IMAGE_DOWNLOAD if count > 1 && count <= 1024 => {
+                        let Ok(request) = serde_json::from_slice::<ImageDownload>(&plain[1..count])
+                        else {
+                            continue;
+                        };
+                        let Some(browser) = remote.as_mut() else {
+                            continue;
+                        };
+                        if !image_download_enabled {
+                            send_error(
+                                &mut socket,
+                                &mut noise,
+                                "Image download was not negotiated",
+                            )
+                            .await;
+                            continue;
+                        }
+                        if !valid_remote_tab_id(&request.tab_id)
+                            || browser.active_tab_id() != Some(request.tab_id.as_str())
+                            || !request.valid(browser.width, browser.height)
+                            || remote_downloads.len() >= MAX_REMOTE_DOWNLOADS
+                        {
+                            continue;
+                        }
+                        next_remote_download_id = next_remote_download_id.wrapping_add(1).max(1);
+                        let id = next_remote_download_id;
+                        send_json(
+                            &mut socket,
+                            &mut noise,
+                            STATUS,
+                            &json!({"type":"download-start","id":id,"filename":"image"}),
+                        )
+                        .await;
+                        let path = browser.download_dir.join(format!("image-{id}"));
+                        let result = match browser.download_image(request.x, request.y, &path).await
+                        {
+                            Ok(filename) => {
+                                send_download_file(&mut socket, &mut noise, id, &filename, &path)
+                                    .await
+                            }
+                            Err(error) => Err(error),
+                        };
+                        let _ = tokio::fs::remove_file(path).await;
+                        if let Err(error) = result {
+                            send_json(
+                                &mut socket,
+                                &mut noise,
+                                STATUS,
+                                &json!({"type":"download-failed","id":id,"message":error}),
+                            )
+                            .await;
+                        }
+                    }
+                    PRINT_PDF if count > 1 && count <= 1024 => {
+                        let Ok(request) =
+                            serde_json::from_slice::<RemoteTabRequest>(&plain[1..count])
+                        else {
+                            continue;
+                        };
+                        let Some(browser) = remote.as_mut() else {
+                            continue;
+                        };
+                        if !valid_remote_tab_id(&request.tab_id)
+                            || browser.active_tab_id() != Some(request.tab_id.as_str())
+                            || remote_downloads.len() >= MAX_REMOTE_DOWNLOADS
+                        {
+                            continue;
+                        }
+                        next_remote_download_id = next_remote_download_id.wrapping_add(1).max(1);
+                        let id = next_remote_download_id;
+                        send_json(
+                            &mut socket,
+                            &mut noise,
+                            STATUS,
+                            &json!({"type":"download-start","id":id,"filename":"page.pdf"}),
+                        )
+                        .await;
+                        let path = browser.download_dir.join(format!("print-{id}.pdf"));
+                        let result = browser.print_pdf(&path).await;
+                        let result = match result {
+                            Ok(()) => {
+                                send_download_file(&mut socket, &mut noise, id, "page.pdf", &path)
+                                    .await
+                            }
+                            Err(error) => Err(error),
+                        };
+                        let _ = tokio::fs::remove_file(path).await;
+                        if let Err(error) = result {
+                            send_json(
+                                &mut socket,
+                                &mut noise,
+                                STATUS,
+                                &json!({"type":"download-failed","id":id,"message":error}),
+                            )
+                            .await;
+                        }
+                    }
                     JAVASCRIPT_DIALOG_REPLY if count > 1 && count <= 8192 => {
                         let Ok(request) =
                             serde_json::from_slice::<JavascriptDialogReply>(&plain[1..count])
@@ -1841,13 +2484,43 @@ async fn session(mut socket: axum::extract::ws::WebSocket, app: App) {
                             browser.privacy = settings.into();
                         }
                     }
-                    FRAME_ACK if count == 5 => {
+                    TILE_ACK if count == 6 && tile_enabled && display_frame.is_none() => {
+                        let sequence = u32::from_be_bytes(plain[1..5].try_into().unwrap());
+                        if plain[5] <= 1
+                            && tile_waiting == Some(sequence)
+                            && frame_waiting.as_ref().map(|entry| entry.0) == Some(sequence)
+                            && tile_encoder.ack(sequence, plain[5] == 1)
+                        {
+                            tile_waiting = None;
+                            tile_failures = if plain[5] == 1 {
+                                0
+                            } else {
+                                tile_failures.saturating_add(1)
+                            };
+                            tile_suspended = tile_failures >= 3;
+                            if tile_suspended {
+                                send_json(&mut socket, &mut noise, STATUS, &json!({"type":"stream-fallback","message":"Lossless tiles failed repeatedly; using PNG."})).await;
+                            }
+                            if let (Some(browser), Some((_, cdp_frame))) =
+                                (remote.as_mut(), frame_waiting.take())
+                            {
+                                browser.ack_frame(cdp_frame).await;
+                                if plain[5] == 0 || std::mem::take(&mut refresh_after_frame) {
+                                    let _ = browser.refresh_screencast().await;
+                                }
+                            }
+                        }
+                    }
+                    FRAME_ACK if count == 5 && display_frame.is_none() => {
                         let sequence = u32::from_be_bytes(plain[1..5].try_into().unwrap());
                         if let (Some(browser), Some((waiting, cdp_frame))) =
                             (remote.as_mut(), frame_waiting.take())
                         {
-                            if sequence == waiting {
+                            if sequence == waiting && tile_waiting != Some(sequence) {
                                 browser.ack_frame(cdp_frame).await;
+                                if std::mem::take(&mut refresh_after_frame) {
+                                    let _ = browser.refresh_screencast().await;
+                                }
                             } else {
                                 frame_waiting = Some((waiting, cdp_frame));
                             }
@@ -1875,16 +2548,179 @@ async fn session(mut socket: axum::extract::ws::WebSocket, app: App) {
                             }
                         }
                     }
+                    START if count == 1 && remote.is_some() => {
+                        let browser = remote.as_ref().unwrap();
+                        send_json(&mut socket, &mut noise, STATUS, &json!({"type":"ready","width":browser.width,"height":browser.height,"downloadsEnabled":browser.downloads_enabled,"resumed":true})).await;
+                    }
                     STOP if count == 1 => break,
                     _ => {
                         send_error(&mut socket, &mut noise, "Unknown remote browser message").await
                     }
                 }
             }
-            SessionEvent::Client(_) => break,
+            SessionEvent::Client(_) => {
+                if let Some(previous) = deferred_frame.take()
+                    && let Some(browser) = remote.as_mut()
+                {
+                    browser
+                        .ack_frame_for_session(
+                            previous["sessionId"].as_str().unwrap_or(""),
+                            previous["params"]["sessionId"].as_u64().unwrap_or(0) as u32,
+                        )
+                        .await;
+                }
+                tile_enabled = false;
+                tile_encoder.reset();
+                tile_waiting = None;
+                tile_context.clear();
+                image_download_enabled = false;
+                cursor_enabled = false;
+                if let Some(browser) = remote.as_mut() {
+                    let _ = browser.set_stream(StreamSettings::default()).await;
+                }
+                if identity.is_none() {
+                    break;
+                }
+                socket = None;
+                offline_since = tokio::time::Instant::now();
+                if let Some((_, frame)) = frame_waiting.take()
+                    && let Some(browser) = remote.as_mut()
+                {
+                    browser.ack_frame(frame).await;
+                }
+                // Partial transfers belong to the old attachment and are never replayed.
+                pending_evaluations.clear();
+                pending_sources.clear();
+                pending_site_data.clear();
+                pending_network_bodies.clear();
+                userscript_upload = None;
+                filter_upload = None;
+                extension_upload = None;
+                if let Some(upload) = page_file_upload.take() {
+                    let _ = tokio::fs::remove_dir_all(upload.root).await;
+                }
+            }
+            SessionEvent::Tick => {
+                if socket.is_none() && offline_since.elapsed() >= app.resume_limits.browser_ttl {
+                    break;
+                }
+            }
+            SessionEvent::Command(SessionCommand::Inspect(reply)) => {
+                let _ = reply.send(json!({"status":if socket.is_some(){"attached"}else{"detached"},"client":if socket.is_some(){identity.as_ref().map(|identity| identity.1.clone())}else{None},"started":remote.is_some()}));
+            }
+            SessionEvent::Command(SessionCommand::End) => {
+                send_json(
+                    &mut socket,
+                    &mut noise,
+                    STATUS,
+                    &json!({"type":"ended","message":"Browser session ended explicitly"}),
+                )
+                .await;
+                break;
+            }
+            SessionEvent::Command(SessionCommand::Attach(mut replacement)) => {
+                if socket.is_some()
+                    && identity
+                        .as_ref()
+                        .is_some_and(|identity| identity.1 != replacement.client)
+                    && !replacement.takeover
+                {
+                    hello(&mut replacement.socket, &mut replacement.noise, json!({"state":"in-use","message":"This browser is attached to another client. Use Take over explicitly."})).await;
+                    continue;
+                }
+                if let Some(previous) = deferred_frame.take()
+                    && let Some(browser) = remote.as_mut()
+                {
+                    browser
+                        .ack_frame_for_session(
+                            previous["sessionId"].as_str().unwrap_or(""),
+                            previous["params"]["sessionId"].as_u64().unwrap_or(0) as u32,
+                        )
+                        .await;
+                }
+                tile_enabled = false;
+                tile_encoder.reset();
+                tile_waiting = None;
+                tile_context.clear();
+                image_download_enabled = false;
+                cursor_enabled = false;
+                if let Some(browser) = remote.as_mut() {
+                    let _ = browser.set_stream(StreamSettings::default()).await;
+                }
+                let tabs: Vec<_> = remote
+                    .as_ref()
+                    .map(|browser| {
+                        browser
+                            .pages
+                            .iter()
+                            .map(|(id, page)| json!({"id":id,"url":page.url}))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let active = remote
+                    .as_ref()
+                    .and_then(|browser| browser.active_tab_id().map(str::to_owned));
+                if hello(&mut replacement.socket, &mut replacement.noise, json!({"state":"ready","id":identity.as_ref().map(|identity| &identity.0),"resumed":true,"tabs":tabs,"active":active})).await {
+                    native_gesture = None;
+                    if let Some(request) = pending_native_action.take() && let Some(browser) = remote.as_mut() {
+                        let _ = browser.resolve_native_action(&request, "", "AbortError").await;
+                    }
+                    pending_evaluations.clear(); pending_sources.clear(); pending_site_data.clear(); pending_network_bodies.clear();
+                    userscript_upload = None; filter_upload = None; extension_upload = None;
+                    if let Some(upload) = page_file_upload.take() { let _ = tokio::fs::remove_dir_all(upload.root).await; }
+                    send_json(&mut socket, &mut noise, STATUS, &json!({"type":"taken-over","message":"Browser attached by another client"})).await;
+                    if let Some((_,frame)) = frame_waiting.take() && let Some(browser) = remote.as_mut() { browser.ack_frame(frame).await; }
+                    display_frame = None;
+                    if let Some(previous) = socket.as_ref() { previous.flush().await; }
+                    socket = Some(RenderSocket::new(replacement.socket)); noise = replacement.noise;
+                    if let Some(identity) = identity.as_mut() { identity.1 = replacement.client; }
+                }
+            }
             SessionEvent::Cdp(Some(event)) => {
                 let event_session_id = event.get("sessionId").and_then(Value::as_str);
                 let method = event.get("method").and_then(Value::as_str).unwrap_or("");
+                if method == "Runtime.executionContextCreated" {
+                    if let (Some(session), Some(id), Some(frame), Some(origin)) = (
+                        event_session_id,
+                        event.pointer("/params/context/id").and_then(Value::as_u64),
+                        event
+                            .pointer("/params/context/auxData/frameId")
+                            .and_then(Value::as_str),
+                        event
+                            .pointer("/params/context/origin")
+                            .and_then(Value::as_str),
+                    ) && event
+                        .pointer("/params/context/auxData/isDefault")
+                        .and_then(Value::as_bool)
+                        == Some(true)
+                        && native_contexts.len() < 512
+                        && frame.len() <= 256
+                        && origin.len() <= 8192
+                    {
+                        native_contexts.insert(
+                            (session.to_owned(), id),
+                            (frame.to_owned(), origin.to_owned()),
+                        );
+                    }
+                    continue;
+                }
+                if method == "Runtime.executionContextDestroyed" {
+                    if let (Some(session), Some(id)) = (
+                        event_session_id,
+                        event
+                            .pointer("/params/executionContextId")
+                            .and_then(Value::as_u64),
+                    ) {
+                        native_contexts.remove(&(session.to_owned(), id));
+                    }
+                    continue;
+                }
+                if method == "Runtime.executionContextsCleared" {
+                    if let Some(session) = event_session_id {
+                        native_contexts.retain(|(id, _), _| id != session);
+                    }
+                    continue;
+                }
                 if method == "Target.targetCreated" {
                     let info = &event["params"]["targetInfo"];
                     let target_id = info.get("targetId").and_then(Value::as_str).unwrap_or("");
@@ -2290,6 +3126,132 @@ async fn session(mut socket: axum::extract::ws::WebSocket, app: App) {
                         browser.active_tab_id() == browser.tab_id_for_session(session_id)
                     })
                 });
+                if method == "Runtime.bindingCalled"
+                    && event.pointer("/params/name").and_then(Value::as_str)
+                        == Some("__eyaNativeRequest")
+                {
+                    if !is_active_page_event || socket.is_none() {
+                        continue;
+                    }
+                    let Some(context_id) = event
+                        .pointer("/params/executionContextId")
+                        .and_then(Value::as_u64)
+                    else {
+                        continue;
+                    };
+                    let Some(payload) = event
+                        .pointer("/params/payload")
+                        .and_then(Value::as_str)
+                        .filter(|value| value.len() <= 16 * 1024)
+                    else {
+                        continue;
+                    };
+                    let Ok(request) = serde_json::from_str::<NativeActionRequest>(payload) else {
+                        continue;
+                    };
+                    let Some(data) = validated_native_action(&request) else {
+                        continue;
+                    };
+                    let Some(browser) = remote.as_mut() else {
+                        continue;
+                    };
+                    let Some(tab_id) = browser.active_tab_id().map(str::to_owned) else {
+                        continue;
+                    };
+                    next_native_action_id = next_native_action_id.wrapping_add(1).max(1);
+                    let pending = PendingNativeAction {
+                        id: next_native_action_id,
+                        page_id: request.id,
+                        tab_id: tab_id.clone(),
+                        context_id,
+                        kind: request.kind.clone(),
+                        created: std::time::Instant::now(),
+                    };
+                    if pending_native_action.is_some() {
+                        let _ = browser
+                            .resolve_native_action(&pending, "", "InvalidStateError")
+                            .await;
+                        continue;
+                    }
+                    // Context metadata comes from Chromium, rather than mutable
+                    // page globals. A recent forwarded input supplies activation.
+                    let context = event_session_id
+                        .and_then(|session| native_contexts.get(&(session.to_owned(), context_id)));
+                    let page = browser.pages.get(&tab_id);
+                    let origin = context
+                        .map(|(_, origin)| origin.clone())
+                        .unwrap_or_default();
+                    let top_level = context
+                        .zip(page)
+                        .is_some_and(|((frame, _), page)| *frame == page.main_frame_id);
+                    let page_origin = page
+                        .and_then(|page| reqwest::Url::parse(&page.url).ok())
+                        .map(|url| url.origin().ascii_serialization())
+                        .unwrap_or_default();
+                    let activated = top_level
+                        && native_gesture.as_ref().is_some_and(|(id, time)| {
+                            *id == tab_id && time.elapsed() < Duration::from_secs(5)
+                        });
+                    let secure = reqwest::Url::parse(&origin).is_ok_and(|url| {
+                        url.scheme() == "https"
+                            || (url.scheme() == "http" && url.host_str() == Some("localhost"))
+                    });
+                    if !activated
+                        || origin.is_empty()
+                        || origin == "null"
+                        || origin != page_origin
+                        || (request.kind != "external" && !secure)
+                    {
+                        let _ = browser
+                            .resolve_native_action(&pending, "", "NotAllowedError")
+                            .await;
+                        continue;
+                    }
+                    native_gesture = None;
+                    send_json(&mut socket, &mut noise, STATUS, &json!({"type":"native-action","id":pending.id,"tabId":tab_id,"origin":origin,"kind":request.kind,"data":data})).await;
+                    pending_native_action = Some(pending);
+                    continue;
+                }
+                if method == "Runtime.bindingCalled" {
+                    if cursor_enabled
+                        && is_active_page_event
+                        && socket.is_some()
+                        && event.pointer("/params/name").and_then(Value::as_str)
+                            == Some("__eyaCursor")
+                        && let Some(cursor) = event
+                            .pointer("/params/payload")
+                            .and_then(Value::as_str)
+                            .filter(|value| valid_cursor(value))
+                    {
+                        let tab_id = remote.as_ref().and_then(|browser| browser.active_tab_id());
+                        send_json(
+                            &mut socket,
+                            &mut noise,
+                            STATUS,
+                            &json!({"type":"cursor","tabId":tab_id,"cursor":cursor}),
+                        )
+                        .await;
+                        continue;
+                    }
+                    if is_active_page_event
+                        && socket.is_some()
+                        && event.pointer("/params/name").and_then(Value::as_str)
+                            == Some("__eyaRequestPrint")
+                        && event.pointer("/params/payload").and_then(Value::as_str) == Some("print")
+                        && last_print_request.elapsed() >= Duration::from_secs(2)
+                    {
+                        last_print_request = std::time::Instant::now();
+                        let tab_id = remote.as_ref().and_then(|browser| browser.active_tab_id());
+                        send_json(
+                            &mut socket,
+                            &mut noise,
+                            STATUS,
+                            &json!({"type":"print-request","tabId":tab_id}),
+                        )
+                        .await;
+                    }
+                    continue;
+                }
                 if method == "Page.javascriptDialogOpening" {
                     let Some(tab_id) = remote.as_ref().and_then(|browser| {
                         event_session_id.and_then(|id| browser.tab_id_for_session(id))
@@ -2432,6 +3394,13 @@ async fn session(mut socket: axum::extract::ws::WebSocket, app: App) {
                     let frame = &event["params"]["frame"];
                     let url = frame.get("url").and_then(Value::as_str).unwrap_or("");
                     let frame_id = frame.get("id").and_then(Value::as_str).unwrap_or("");
+                    if pending_native_action
+                        .as_ref()
+                        .is_some_and(|request| request.tab_id == active_tab_id)
+                        && let Some(request) = pending_native_action.take()
+                    {
+                        send_json(&mut socket, &mut noise, STATUS, &json!({"type":"native-action-closed","id":request.id,"tabId":request.tab_id})).await;
+                    }
                     if let Some(dialog) = pending_javascript_dialogs.remove(&active_tab_id) {
                         send_json(
                             &mut socket,
@@ -2492,7 +3461,7 @@ async fn session(mut socket: axum::extract::ws::WebSocket, app: App) {
                     continue;
                 }
                 if method == "Page.fileChooserOpened" {
-                    let Some(browser) = remote.as_ref() else {
+                    let Some(browser) = remote.as_mut() else {
                         continue;
                     };
                     let Some(backend_node_id) = event
@@ -2511,6 +3480,25 @@ async fn session(mut socket: axum::extract::ws::WebSocket, app: App) {
                     {
                         continue;
                     }
+                    let accept = match browser
+                        .send_and_wait("DOM.describeNode", json!({"backendNodeId":backend_node_id}))
+                        .await
+                    {
+                        Ok(node) => node
+                            .pointer("/result/node/attributes")
+                            .and_then(Value::as_array)
+                            .and_then(|attributes| {
+                                attributes
+                                    .chunks_exact(2)
+                                    .find(|pair| pair[0].as_str() == Some("accept"))
+                            })
+                            .and_then(|pair| pair[1].as_str())
+                            .unwrap_or("")
+                            .chars()
+                            .take(1024)
+                            .collect::<String>(),
+                        Err(_) => String::new(),
+                    };
                     next_file_chooser_id = next_file_chooser_id.wrapping_add(1).max(1);
                     let chooser = PendingPageFileChooser {
                         id: next_file_chooser_id,
@@ -2522,7 +3510,7 @@ async fn session(mut socket: axum::extract::ws::WebSocket, app: App) {
                         &mut socket,
                         &mut noise,
                         STATUS,
-                        &json!({"type":"file-chooser","id":chooser.id,"tabId":chooser.tab_id,"multiple":chooser.multiple}),
+                        &json!({"type":"file-chooser","id":chooser.id,"tabId":chooser.tab_id,"multiple":chooser.multiple,"accept":accept}),
                     )
                     .await;
                     pending_file_chooser = Some(chooser);
@@ -2710,17 +3698,62 @@ async fn session(mut socket: axum::extract::ws::WebSocket, app: App) {
                         }
                     }
                 }
+                if method == "Page.screencastFrame" && socket.is_none() {
+                    if let Some(browser) = remote.as_mut() {
+                        browser
+                            .ack_frame(event["params"]["sessionId"].as_u64().unwrap_or(0) as u32)
+                            .await;
+                    }
+                    continue;
+                }
                 if method == "Page.screencastFrame" {
-                    if frame_waiting.is_some() {
+                    let params = &event["params"];
+                    let cdp_frame =
+                        params.get("sessionId").and_then(Value::as_u64).unwrap_or(0) as u32;
+                    if frame_waiting.is_some() || display_frame.is_some() {
+                        if let Some(previous) = deferred_frame.replace(event)
+                            && let Some(browser) = remote.as_mut()
+                        {
+                            let session = previous["sessionId"].as_str().unwrap_or("");
+                            let frame =
+                                previous["params"]["sessionId"].as_u64().unwrap_or(0) as u32;
+                            browser.ack_frame_for_session(session, frame).await;
+                        }
                         continue;
                     }
-                    let params = &event["params"];
                     let Some(encoded) = params.get("data").and_then(Value::as_str) else {
+                        if let Some(browser) = remote.as_mut() {
+                            browser.ack_frame(cdp_frame).await;
+                        }
                         continue;
                     };
-                    let Ok(frame) = BASE64.decode(encoded) else {
+                    // Reject base64 expansion before allocating the decoded image.
+                    if encoded.len() > MAX_FRAME_BYTES.div_ceil(3) * 4 {
+                        if let Some(browser) = remote.as_mut() {
+                            browser.ack_frame(cdp_frame).await;
+                        }
+                        continue;
+                    }
+                    let Ok(mut frame) = BASE64.decode(encoded) else {
+                        if let Some(browser) = remote.as_mut() {
+                            browser.ack_frame(cdp_frame).await;
+                        }
                         continue;
                     };
+                    let format = if frame.starts_with(b"\x89PNG\r\n\x1a\n") {
+                        "png"
+                    } else {
+                        "jpeg"
+                    };
+                    if remote
+                        .as_ref()
+                        .is_some_and(|browser| browser.stream.format != format)
+                    {
+                        if let Some(browser) = remote.as_mut() {
+                            browser.ack_frame(cdp_frame).await;
+                        }
+                        continue;
+                    }
                     if frame.is_empty() || frame.len() > MAX_FRAME_BYTES {
                         send_error(
                             &mut socket,
@@ -2728,10 +3761,11 @@ async fn session(mut socket: axum::extract::ws::WebSocket, app: App) {
                             "Remote browser frame exceeded the size limit",
                         )
                         .await;
+                        if let Some(browser) = remote.as_mut() {
+                            browser.ack_frame(cdp_frame).await;
+                        }
                         continue;
                     }
-                    let cdp_frame =
-                        params.get("sessionId").and_then(Value::as_u64).unwrap_or(0) as u32;
                     let metadata = &params["metadata"];
                     let width = metadata
                         .get("deviceWidth")
@@ -2742,36 +3776,90 @@ async fn session(mut socket: axum::extract::ws::WebSocket, app: App) {
                         .and_then(Value::as_u64)
                         .unwrap_or(DEFAULT_HEIGHT as u64) as u32;
                     next_frame_sequence = next_frame_sequence.wrapping_add(1).max(1);
-                    let chunks = frame.len().div_ceil(MAX_CHUNK_BYTES);
-                    send_json(
-                        &mut socket,
-                        &mut noise,
-                        FRAME_START,
-                        &json!({
-                            "seq":next_frame_sequence, "tabId":active_tab_id, "width":width, "height":height,
-                            "bytes":frame.len(), "chunks":chunks
-                        }),
-                    )
-                    .await;
-                    let mut sent_all = true;
-                    for (index, part) in frame.chunks(MAX_CHUNK_BYTES).enumerate() {
-                        let mut message = Vec::with_capacity(7 + part.len());
-                        message.push(FRAME_CHUNK);
-                        message.extend_from_slice(&next_frame_sequence.to_be_bytes());
-                        message.extend_from_slice(&(index as u16).to_be_bytes());
-                        message.extend_from_slice(part);
-                        if !send_encrypted(&mut socket, &mut noise, &message).await {
-                            sent_all = false;
+                    let mut frame_opcode = FRAME_START;
+                    let mut chunk_opcode = FRAME_CHUNK;
+                    let mut tile_metadata = None;
+                    if tile_enabled
+                        && !tile_suspended
+                        && format == "png"
+                        && remote.as_ref().is_some_and(|browser| browser.stream.tiles)
+                    {
+                        if tile_context != active_tab_id
+                            || tile_waiting.is_some()
+                            || tile_reseed_needed
+                        {
+                            tile_reseed_needed = false;
+                            tile_encoder.reset();
+                            tile_waiting = None;
+                            tile_context = active_tab_id.to_owned();
+                        }
+                        let png = frame;
+                        let seq = next_frame_sequence;
+                        let result = tokio::task::spawn_blocking(move || {
+                            let result = tile_encoder.prepare_png(&png, seq);
+                            (tile_encoder, png, result)
+                        })
+                        .await;
+                        let Ok((encoder, png, prepared)) = result else {
                             break;
+                        };
+                        tile_encoder = encoder;
+                        frame = png;
+                        match prepared {
+                            Ok(crate::browser_tiles::Prepared::Tiles {
+                                bytes,
+                                width,
+                                height,
+                                base,
+                                tile_count,
+                            }) => {
+                                frame = bytes;
+                                frame_opcode = TILE_START;
+                                chunk_opcode = TILE_CHUNK;
+                                tile_waiting = Some(seq);
+                                tile_metadata = Some(
+                                    json!({"pixelWidth":width,"pixelHeight":height,"base":base,"tiles":tile_count}),
+                                );
+                            }
+                            Ok(crate::browser_tiles::Prepared::Unchanged) => {
+                                if let Some(browser) = remote.as_mut() {
+                                    browser.ack_frame(cdp_frame).await;
+                                }
+                                continue;
+                            }
+                            Ok(crate::browser_tiles::Prepared::PngFallback) => {}
+                            Err(_) => {
+                                tile_encoder.reset();
+                            }
                         }
                     }
-                    if !sent_all {
-                        break;
+                    let chunks = frame.len().div_ceil(MAX_CHUNK_BYTES);
+                    let mut frame_metadata = json!({
+                        "seq":next_frame_sequence, "tabId":active_tab_id, "width":width, "height":height,
+                        "bytes":frame.len(), "chunks":chunks, "format":format
+                    });
+                    if let Some(extra) = tile_metadata {
+                        frame_metadata["format"] = json!("rgba-tiles-v1");
+                        for (name, value) in extra.as_object().unwrap() {
+                            frame_metadata[name] = value.clone();
+                        }
                     }
+                    send_json(&mut socket, &mut noise, frame_opcode, &frame_metadata).await;
+                    display_frame = Some(DisplayFrame {
+                        bytes: frame,
+                        sequence: next_frame_sequence,
+                        opcode: chunk_opcode,
+                        next_chunk: 0,
+                        started: tokio::time::Instant::now(),
+                    });
+                    frame_sent_at = None;
                     frame_waiting = Some((next_frame_sequence, cdp_frame));
                 } else {
                     if method == "Page.frameNavigated" {
                         let frame = &event["params"]["frame"];
+                        if frame.get("parentId").is_none() {
+                            tile_reseed_needed = true;
+                        }
                         if frame.get("parentId").is_none()
                             && let Some(url) = frame.get("url").and_then(Value::as_str)
                         {
@@ -2808,6 +3896,9 @@ async fn session(mut socket: axum::extract::ws::WebSocket, app: App) {
                         history["tabId"] = json!(active_tab_id);
                         send_json(&mut socket, &mut noise, STATUS, &history).await;
                     }
+                    if method == "Page.loadEventFired" {
+                        tile_reseed_needed = true;
+                    }
                     if method == "Page.loadEventFired"
                         && let Some(browser) = remote.as_mut()
                         && let Ok(command_id) = browser.evaluate("document.title").await
@@ -2821,25 +3912,27 @@ async fn session(mut socket: axum::extract::ws::WebSocket, app: App) {
                         );
                     }
                     if is_debug_event(&event) {
-                        send_json(
-                            &mut socket,
+                        try_send_debug_event(
+                            &socket,
                             &mut noise,
-                            CDP_EVENT,
                             &json!({
-                                "tabId":active_tab_id,
-                                "method":method,
+                                "tabId":active_tab_id, "method":method,
                                 "params":event.get("params").cloned().unwrap_or(Value::Null)
                             }),
-                        )
-                        .await;
+                        );
                     }
                 }
             }
             SessionEvent::Cdp(None) => break,
         }
     }
+    // Terminate the renderer and erase its private profile before waiting on
+    // the final notification: a slow peer must not prolong browser lifetime.
     if let Some(browser) = remote {
         browser.stop().await;
+    }
+    if let Some(socket) = socket.as_ref() {
+        socket.flush().await;
     }
 }
 
@@ -3020,7 +4113,7 @@ fn validated_origin(raw: &str) -> Option<String> {
 }
 
 async fn send_source_chunks(
-    socket: &mut axum::extract::ws::WebSocket,
+    socket: &mut Option<RenderSocket>,
     noise: &mut snow::TransportState,
     request_id: u32,
     tab_id: &str,
@@ -3050,7 +4143,7 @@ async fn send_source_chunks(
 }
 
 async fn send_network_body_chunks(
-    socket: &mut axum::extract::ws::WebSocket,
+    socket: &mut Option<RenderSocket>,
     noise: &mut snow::TransportState,
     request_id: u32,
     tab_id: &str,
@@ -3079,7 +4172,7 @@ async fn send_network_body_chunks(
 }
 
 async fn send_download_file(
-    socket: &mut axum::extract::ws::WebSocket,
+    socket: &mut Option<RenderSocket>,
     noise: &mut snow::TransportState,
     id: u32,
     filename: &str,
@@ -3242,7 +4335,7 @@ fn truncate_utf8(value: &str, max_bytes: usize) -> String {
 }
 
 async fn send_error(
-    socket: &mut axum::extract::ws::WebSocket,
+    socket: &mut Option<RenderSocket>,
     noise: &mut snow::TransportState,
     message: &str,
 ) {
@@ -3250,7 +4343,7 @@ async fn send_error(
 }
 
 async fn send_json(
-    socket: &mut axum::extract::ws::WebSocket,
+    socket: &mut Option<RenderSocket>,
     noise: &mut snow::TransportState,
     op: u8,
     value: &Value,
@@ -3260,24 +4353,62 @@ async fn send_json(
     let _ = send_encrypted(socket, noise, &message).await;
 }
 
+fn try_send_debug_event(
+    socket: &Option<RenderSocket>,
+    noise: &mut snow::TransportState,
+    value: &Value,
+) {
+    let Some(socket) = socket.as_ref() else {
+        return;
+    };
+    let Ok(slot) = socket.sender.try_reserve() else {
+        return;
+    };
+    let mut message = vec![CDP_EVENT];
+    message.extend_from_slice(&serde_json::to_vec(value).unwrap_or_default());
+    if message.len() > MAX_WS_MESSAGE - 16 {
+        return;
+    }
+    let mut encrypted = vec![0; MAX_WS_MESSAGE];
+    let Ok(size) = noise.write_message(&message, &mut encrypted) else {
+        return;
+    };
+    encrypted.truncate(size);
+    slot.send(WriteItem::Message(ClientMessage::Binary(encrypted.into())));
+}
+
 async fn send_encrypted(
-    socket: &mut axum::extract::ws::WebSocket,
+    socket: &mut Option<RenderSocket>,
     noise: &mut snow::TransportState,
     message: &[u8],
 ) -> bool {
     if message.len() > MAX_WS_MESSAGE {
         return false;
     }
+    if socket.is_none() {
+        return true;
+    }
     let mut encrypted = vec![0u8; MAX_WS_MESSAGE];
     let Ok(size) = noise.write_message(message, &mut encrypted) else {
         return false;
     };
-    socket
-        .send(axum::extract::ws::Message::Binary(
-            encrypted[..size].to_vec().into(),
-        ))
-        .await
-        .is_ok()
+    let sent = matches!(
+        timeout(
+            Duration::from_secs(5),
+            socket
+                .as_mut()
+                .unwrap()
+                .send(axum::extract::ws::Message::Binary(
+                    encrypted[..size].to_vec().into()
+                ))
+        )
+        .await,
+        Ok(Ok(()))
+    );
+    if !sent {
+        *socket = None;
+    }
+    sent
 }
 
 fn is_debug_event(event: &Value) -> bool {
@@ -3395,6 +4526,78 @@ struct Navigate {
 }
 
 #[derive(Deserialize)]
+struct NativeActionRequest {
+    id: u32,
+    kind: String,
+    data: Value,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NativeActionReply {
+    id: u32,
+    tab_id: String,
+    #[serde(default)]
+    value: String,
+    #[serde(default)]
+    error: String,
+}
+
+struct PendingNativeAction {
+    id: u32,
+    page_id: u32,
+    tab_id: String,
+    context_id: u64,
+    kind: String,
+    created: std::time::Instant,
+}
+
+fn validated_native_action(request: &NativeActionRequest) -> Option<Value> {
+    if request.id == 0 {
+        return None;
+    }
+    match request.kind.as_str() {
+        "clipboard-read" => Some(json!({})),
+        "clipboard-write" => {
+            let text = request.data.get("text")?.as_str()?;
+            (serde_json::to_vec(text).ok()?.len() <= 12 * 1024).then(|| json!({"text":text}))
+        }
+        "external" => {
+            let value = request.data.get("url")?.as_str()?;
+            if value.len() > 4096 || value.chars().any(char::is_control) {
+                return None;
+            }
+            let url = reqwest::Url::parse(value).ok()?;
+            matches!(url.scheme(), "mailto" | "tel").then(|| json!({"url":url.as_str()}))
+        }
+        "share" => {
+            if request.data.get("files").is_some() {
+                return None;
+            }
+            let mut data = serde_json::Map::new();
+            for key in ["title", "text", "url"] {
+                if let Some(value) = request.data.get(key) {
+                    let text = value.as_str()?;
+                    if key == "url" {
+                        let url = reqwest::Url::parse(text).ok()?;
+                        if !matches!(url.scheme(), "http" | "https")
+                            || !url.username().is_empty()
+                            || url.password().is_some()
+                        {
+                            return None;
+                        }
+                    }
+                    data.insert(key.to_owned(), Value::String(text.to_owned()));
+                }
+            }
+            (!data.is_empty() && serde_json::to_vec(&data).ok()?.len() <= 12 * 1024)
+                .then_some(Value::Object(data))
+        }
+        _ => None,
+    }
+}
+
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RemoteTabRequest {
     tab_id: String,
@@ -3409,10 +4612,72 @@ struct RemoteHistoryRequest {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct ImageDownload {
+    tab_id: String,
+    x: f64,
+    y: f64,
+}
+impl ImageDownload {
+    fn valid(&self, width: u32, height: u32) -> bool {
+        self.x.is_finite()
+            && self.y.is_finite()
+            && self.x >= 0.0
+            && self.y >= 0.0
+            && self.x < width as f64
+            && self.y < height as f64
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Resize {
     tab_id: String,
     width: u32,
     height: u32,
+    #[serde(default)]
+    capabilities: Vec<String>,
+    #[serde(default)]
+    stream: Option<StreamSettings>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize, serde::Serialize)]
+#[serde(default, rename_all = "camelCase")]
+struct StreamSettings {
+    tiles: bool,
+    format: String,
+    quality: u32,
+    max_width: u32,
+    max_height: u32,
+}
+impl Default for StreamSettings {
+    fn default() -> Self {
+        Self {
+            tiles: false,
+            format: "jpeg".into(),
+            quality: 80,
+            max_width: MAX_WIDTH,
+            max_height: MAX_HEIGHT,
+        }
+    }
+}
+impl StreamSettings {
+    fn validate(&self) -> Result<(), String> {
+        if !matches!(self.format.as_str(), "jpeg" | "png")
+            || !(10..=100).contains(&self.quality)
+            || !(320..=MAX_WIDTH).contains(&self.max_width)
+            || !(240..=MAX_HEIGHT).contains(&self.max_height)
+        {
+            return Err("Invalid stream settings".into());
+        }
+        Ok(())
+    }
+    fn cdp_params(&self) -> Value {
+        let mut params = json!({"format":self.format,"maxWidth":self.max_width,"maxHeight":self.max_height,"everyNthFrame":1,"maxFramesInFlight":1});
+        if self.format == "jpeg" {
+            params["quality"] = json!(self.quality);
+        }
+        params
+    }
 }
 
 #[derive(Deserialize)]
@@ -4263,6 +5528,47 @@ fn cdp_command_payload(id: u32, method: &str, params: Value, session_id: Option<
     command
 }
 
+fn valid_cursor(value: &str) -> bool {
+    matches!(
+        value,
+        "default"
+            | "none"
+            | "context-menu"
+            | "help"
+            | "pointer"
+            | "progress"
+            | "wait"
+            | "cell"
+            | "crosshair"
+            | "text"
+            | "vertical-text"
+            | "alias"
+            | "copy"
+            | "move"
+            | "no-drop"
+            | "not-allowed"
+            | "grab"
+            | "grabbing"
+            | "all-scroll"
+            | "col-resize"
+            | "row-resize"
+            | "n-resize"
+            | "e-resize"
+            | "s-resize"
+            | "w-resize"
+            | "ne-resize"
+            | "nw-resize"
+            | "se-resize"
+            | "sw-resize"
+            | "ew-resize"
+            | "ns-resize"
+            | "nesw-resize"
+            | "nwse-resize"
+            | "zoom-in"
+            | "zoom-out"
+    )
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Input {
@@ -4860,7 +6166,7 @@ pub fn exec_browser_in_cgroup_from_args() -> Result<(), String> {
 
 struct RemoteBrowser {
     child: Child,
-    _render_slot: tokio::sync::OwnedSemaphorePermit,
+    _render_slot: crate::server_config::Permit,
     _profile: Profile,
     cgroup: Option<BrowserCgroup>,
     download_dir: PathBuf,
@@ -4883,6 +6189,8 @@ struct RemoteBrowser {
     staged_upload_bytes: std::collections::HashMap<String, usize>,
     width: u32,
     height: u32,
+    stream: StreamSettings,
+    send_last_frame: bool,
     next_command_id: u32,
     privacy: RemotePrivacy,
     filters: RemoteFilterSet,
@@ -4974,7 +6282,7 @@ impl From<PrivacySettings> for RemotePrivacy {
 impl RemoteBrowser {
     async fn start(
         proxy: Arc<Proxy>,
-        render_slot: tokio::sync::OwnedSemaphorePermit,
+        render_slot: crate::server_config::Permit,
     ) -> Result<Self, String> {
         let profile =
             Profile::create().map_err(|_| "Could not create an isolated browser profile")?;
@@ -5028,6 +6336,20 @@ impl RemoteBrowser {
         if let Some(path) = env::var_os("PATH") {
             command.env("PATH", path);
         }
+        // The session registry cannot reattach a Chromium process after this
+        // server exits. Do not leave its browser process running on a crash.
+        let parent_pid = unsafe { libc::getpid() };
+        unsafe {
+            command.pre_exec(move || {
+                if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) != 0 {
+                    return Err(io::Error::last_os_error());
+                }
+                if libc::getppid() != parent_pid {
+                    return Err(io::Error::other("Eya exited while starting Chromium"));
+                }
+                Ok(())
+            });
+        }
         let mut child = command
             .spawn()
             .map_err(|_| "Could not launch Chromium; configure EYA_BROWSER_CHROMIUM")?;
@@ -5040,6 +6362,7 @@ impl RemoteBrowser {
                 return Err(error);
             }
         };
+        let send_last_frame = screencast_retains_latest(active_port.0).await;
         let ws_url = format!(
             "ws://127.0.0.1:{}/{}",
             active_port.0,
@@ -5098,6 +6421,18 @@ impl RemoteBrowser {
         for (method, params) in [
             ("Page.enable", json!({"enableFileChooserOpenedEvent":true})),
             ("Runtime.enable", json!({})),
+            ("DOM.enable", json!({})),
+            ("Runtime.addBinding", json!({"name":"__eyaRequestPrint"})),
+            ("Runtime.addBinding", json!({"name":"__eyaNativeRequest"})),
+            ("Runtime.addBinding", json!({"name":"__eyaCursor"})),
+            (
+                "Page.addScriptToEvaluateOnNewDocument",
+                json!({"source":format!("{};\n{}", NATIVE_PRINT_SCRIPT, NATIVE_ACTION_SCRIPT)}),
+            ),
+            (
+                "Runtime.evaluate",
+                json!({"expression":format!("{};\n{}", NATIVE_PRINT_SCRIPT, NATIVE_ACTION_SCRIPT)}),
+            ),
             ("Network.enable", json!({})),
             (
                 "Fetch.enable",
@@ -5162,12 +6497,41 @@ impl RemoteBrowser {
                                     continue;
                                 }
                             }
+                            // Page code can call a binding repeatedly. Keep these requests
+                            // bounded and droppable so they cannot stall command responses.
+                            if method == "Runtime.bindingCalled" {
+                                if (event.pointer("/params/name").and_then(Value::as_str)
+                                    == Some("__eyaRequestPrint")
+                                    && event.pointer("/params/payload").and_then(Value::as_str)
+                                        == Some("print"))
+                                    || (event.pointer("/params/name").and_then(Value::as_str)
+                                        == Some("__eyaNativeRequest")
+                                        && event
+                                            .pointer("/params/payload")
+                                            .and_then(Value::as_str)
+                                            .is_some_and(|payload| payload.len() <= 16 * 1024))
+                                    || (event.pointer("/params/name").and_then(Value::as_str)
+                                        == Some("__eyaCursor")
+                                        && event
+                                            .pointer("/params/payload")
+                                            .and_then(Value::as_str)
+                                            .is_some_and(valid_cursor))
+                                {
+                                    let _ = event_tx.try_send(event);
+                                }
+                                continue;
+                            }
                             let is_frame = method == "Page.screencastFrame";
                             let is_control = event.get("id").is_some()
                                 || method == "Fetch.requestPaused"
                                 || method == "Browser.downloadWillBegin"
                                 || method == "Browser.downloadProgress"
                                 || method == "Page.fileChooserOpened"
+                                || method == "Page.javascriptDialogOpening"
+                                || method == "Page.javascriptDialogClosed"
+                                || method == "Runtime.executionContextCreated"
+                                || method == "Runtime.executionContextDestroyed"
+                                || method == "Runtime.executionContextsCleared"
                                 || method == "Target.targetCreated"
                                 || method == "Target.targetInfoChanged"
                                 || method == "Target.targetDestroyed";
@@ -5207,6 +6571,8 @@ impl RemoteBrowser {
             reader,
             width: DEFAULT_WIDTH,
             height: DEFAULT_HEIGHT,
+            stream: StreamSettings::default(),
+            send_last_frame,
             next_command_id: id,
             pending_commands,
             user_script_ids: Vec::new(),
@@ -5227,11 +6593,7 @@ impl RemoteBrowser {
         browser
             .send(
                 "Page.startScreencast",
-                json!({
-                    "format":"jpeg","quality":60,
-                    "maxWidth":DEFAULT_WIDTH,"maxHeight":DEFAULT_HEIGHT,
-                    "everyNthFrame":1,"maxFramesInFlight":1
-                }),
+                browser.screencast_params(&StreamSettings::default()),
             )
             .await?;
         Ok(browser)
@@ -5248,6 +6610,7 @@ impl RemoteBrowser {
             return Err("Remote tab id is invalid".into());
         }
         if self.active_tab_id.as_deref() == Some(tab_id) {
+            self.send_and_wait("Page.bringToFront", json!({})).await?;
             let page = self
                 .pages
                 .get(tab_id)
@@ -5265,6 +6628,7 @@ impl RemoteBrowser {
                 },
             );
             self.active_tab_id = Some(tab_id.to_owned());
+            self.send_and_wait("Page.bringToFront", json!({})).await?;
             self.ensure_active_main_frame_id().await;
             let page = self.pages.get(tab_id).expect("activated page is present");
             return Ok((page.url.clone(), page.main_frame_id.clone()));
@@ -5322,6 +6686,18 @@ impl RemoteBrowser {
             for (method, params) in [
                 ("Page.enable", json!({"enableFileChooserOpenedEvent":true})),
                 ("Runtime.enable", json!({})),
+                ("DOM.enable", json!({})),
+                ("Runtime.addBinding", json!({"name":"__eyaRequestPrint"})),
+                ("Runtime.addBinding", json!({"name":"__eyaNativeRequest"})),
+                ("Runtime.addBinding", json!({"name":"__eyaCursor"})),
+                (
+                    "Page.addScriptToEvaluateOnNewDocument",
+                    json!({"source":format!("{};\n{}", NATIVE_PRINT_SCRIPT, NATIVE_ACTION_SCRIPT)}),
+                ),
+                (
+                    "Runtime.evaluate",
+                    json!({"expression":format!("{};\n{}", NATIVE_PRINT_SCRIPT, NATIVE_ACTION_SCRIPT)}),
+                ),
                 ("Network.enable", json!({})),
                 (
                     "Fetch.enable",
@@ -5346,16 +6722,12 @@ impl RemoteBrowser {
                 .send_and_wait("Page.setDownloadBehavior", json!({"behavior":"deny"}))
                 .await;
         }
+        // A retained target can be hidden after another target was created.
+        // Restarting screencast alone yields an initial image but no repaints.
+        self.send_and_wait("Page.bringToFront", json!({})).await?;
         self.ensure_active_main_frame_id().await;
-        self.send_and_wait(
-            "Page.startScreencast",
-            json!({
-                "format":"jpeg","quality":60,
-                "maxWidth":self.width,"maxHeight":self.height,
-                "everyNthFrame":1,"maxFramesInFlight":1
-            }),
-        )
-        .await?;
+        self.send_and_wait("Page.startScreencast", self.screencast_params(&self.stream))
+            .await?;
         let page = self.pages.get(tab_id).expect("activated page is present");
         Ok((page.url.clone(), page.main_frame_id.clone()))
     }
@@ -5466,6 +6838,12 @@ impl RemoteBrowser {
             for (method, params) in [
                 ("Page.enable", json!({"enableFileChooserOpenedEvent":true})),
                 ("Runtime.enable", json!({})),
+                ("DOM.enable", json!({})),
+                ("Runtime.addBinding", json!({"name":"__eyaRequestPrint"})),
+                ("Runtime.addBinding", json!({"name":"__eyaNativeRequest"})),
+            ("Runtime.addBinding", json!({"name":"__eyaCursor"})),
+                ("Page.addScriptToEvaluateOnNewDocument", json!({"source":format!("{};\n{}", NATIVE_PRINT_SCRIPT, NATIVE_ACTION_SCRIPT)})),
+                ("Runtime.evaluate", json!({"expression":format!("{};\n{}", NATIVE_PRINT_SCRIPT, NATIVE_ACTION_SCRIPT)})),
                 ("Network.enable", json!({})),
                 (
                     "Fetch.enable",
@@ -5697,6 +7075,40 @@ impl RemoteBrowser {
         }
     }
 
+    fn screencast_params(&self, settings: &StreamSettings) -> Value {
+        let mut params = settings.cdp_params();
+        if self.send_last_frame {
+            params["sendLastFrame"] = json!(true);
+        }
+        params
+    }
+
+    async fn refresh_screencast(&mut self) -> Result<(), String> {
+        self.send_and_wait("Page.stopScreencast", json!({})).await?;
+        self.send_and_wait("Page.startScreencast", self.screencast_params(&self.stream))
+            .await?;
+        Ok(())
+    }
+
+    async fn set_stream(&mut self, settings: StreamSettings) -> Result<(), String> {
+        settings.validate()?;
+        if self.stream == settings {
+            return Ok(());
+        }
+        self.send_and_wait("Page.stopScreencast", json!({})).await?;
+        if let Err(error) = self
+            .send_and_wait("Page.startScreencast", self.screencast_params(&settings))
+            .await
+        {
+            let _ = self
+                .send_and_wait("Page.startScreencast", self.screencast_params(&self.stream))
+                .await;
+            return Err(error);
+        }
+        self.stream = settings;
+        Ok(())
+    }
+
     async fn resize(&mut self, width: u32, height: u32) -> Result<(), String> {
         self.width = width.clamp(320, MAX_WIDTH);
         self.height = height.clamp(240, MAX_HEIGHT);
@@ -5754,7 +7166,7 @@ impl RemoteBrowser {
                 }
                 params["buttons"] = json!(input.buttons);
                 if input.click_count > 0 {
-                    params["clickCount"] = json!(input.click_count.clamp(1, 2));
+                    params["clickCount"] = json!(input.click_count.clamp(1, 3));
                 }
                 if input.action == "mouseWheel" {
                     params["deltaX"] = json!(input.delta_x.clamp(-2000.0, 2000.0));
@@ -6232,6 +7644,199 @@ impl RemoteBrowser {
         self.send_wait(method, params, false).await
     }
 
+    async fn resolve_native_action(
+        &mut self,
+        request: &PendingNativeAction,
+        value: &str,
+        error: &str,
+    ) -> Result<(), String> {
+        let session = self
+            .pages
+            .get(&request.tab_id)
+            .ok_or("Native action tab closed")?
+            .session_id
+            .clone();
+        let previous = std::mem::replace(&mut self.session_id, session);
+        let expression = format!(
+            "globalThis.__eyaNativeResolve?.({}, {}, {})",
+            request.page_id,
+            serde_json::to_string(value).unwrap(),
+            serde_json::to_string(error).unwrap()
+        );
+        let result = self
+            .send_and_wait(
+                "Runtime.evaluate",
+                json!({"contextId":request.context_id,"expression":expression}),
+            )
+            .await;
+        self.session_id = previous;
+        result.map(|_| ())
+    }
+
+    async fn print_pdf(&mut self, path: &Path) -> Result<(), String> {
+        let response = self.send_and_wait("Page.printToPDF", json!({"printBackground":true,"preferCSSPageSize":true,"transferMode":"ReturnAsStream"})).await?;
+        let handle = response
+            .pointer("/result/stream")
+            .and_then(Value::as_str)
+            .ok_or("Chromium did not return a PDF stream")?
+            .to_owned();
+        self.save_cdp_stream(&handle, path).await
+    }
+
+    async fn download_image(&mut self, x: f64, y: f64, path: &Path) -> Result<String, String> {
+        let expression = format!(
+            "(()=>{{const e=document.elementFromPoint({x},{y})?.closest('img');const s=e?.currentSrc||e?.src||'';return s.length<=2097152?s:null}})()"
+        );
+        let response = self
+            .send_and_wait(
+                "Runtime.evaluate",
+                json!({"expression":expression,"returnByValue":true,"timeout":5000}),
+            )
+            .await?;
+        let source = response
+            .pointer("/result/result/value")
+            .and_then(Value::as_str)
+            .ok_or("No image at this position")?;
+        if source.starts_with("data:") {
+            let (bytes, filename) = inline_image(source)?;
+            tokio::fs::write(path, bytes)
+                .await
+                .map_err(|_| "Could not write image")?;
+            return Ok(filename);
+        }
+        let page = self
+            .pages
+            .get(self.active_tab_id.as_deref().unwrap_or(""))
+            .ok_or("Page closed")?;
+        let url = if let Some(inner) = source.strip_prefix("blob:") {
+            if source.len() > 8192
+                || !(inner.starts_with("null/")
+                    && (page.url.is_empty() || page.url == "about:blank"))
+                    && reqwest::Url::parse(inner)
+                        .ok()
+                        .zip(reqwest::Url::parse(&page.url).ok())
+                        .is_none_or(|(blob, page)| {
+                            !matches!(blob.scheme(), "http" | "https")
+                                || blob.origin() != page.origin()
+                        })
+            {
+                return Err("Image blob must belong to the active page".into());
+            }
+            return self.download_blob_image(source, path).await;
+        } else {
+            validated_navigation_url(source)?
+        };
+        // Chromium uses the same validated SOCKS egress as page loads; no host HTTP client or local-file URL.
+        let response = self.send_and_wait("Network.loadNetworkResource", json!({"frameId":page.main_frame_id,"url":url.as_str(),"options":{"disableCache":false,"includeCredentials":true}})).await?;
+        let resource = &response["result"]["resource"];
+        let handle = resource["stream"]
+            .as_str()
+            .ok_or("Chromium could not read the image")?
+            .to_owned();
+        if resource["success"].as_bool() != Some(true) {
+            let _ = self
+                .send_and_wait("IO.close", json!({"handle":handle}))
+                .await;
+            return Err("Image request failed".into());
+        }
+        self.save_cdp_stream(&handle, path).await?;
+        let filename = url
+            .path_segments()
+            .and_then(|mut parts| parts.next_back())
+            .filter(|name| !name.is_empty())
+            .unwrap_or("image");
+        let filename = if url.scheme() == "blob" {
+            "image"
+        } else {
+            filename
+        };
+        Ok(filename
+            .chars()
+            .take(180)
+            .map(|c| {
+                if c.is_control()
+                    || matches!(c, '/' | '\\' | ':' | '*' | '?' | '\"' | '<' | '>' | '|')
+                {
+                    '_'
+                } else {
+                    c
+                }
+            })
+            .collect())
+    }
+
+    async fn download_blob_image(&mut self, source: &str, path: &Path) -> Result<String, String> {
+        let group = format!("eya-image-{}", self.next_command_id);
+        let result = timeout(Duration::from_secs(30), async {
+            let expression = format!("(async()=>{{const r=await fetch({});const reader=r.body.getReader(),parts=[];let size=0;try{{for(;;){{const chunk=await reader.read();if(chunk.done)break;size+=chunk.value.byteLength;if(size>67108864)throw Error('Image exceeds 64 MiB');parts.push(chunk.value)}}return new Blob(parts,{{type:r.headers.get('content-type')||''}})}}finally{{reader.cancel()}}}})()", serde_json::to_string(source).unwrap());
+            let response = self.send_and_wait("Runtime.evaluate", json!({"expression":expression,"awaitPromise":true,"returnByValue":false,"objectGroup":group,"timeout":5000})).await?;
+            let object = response.pointer("/result/result/objectId").and_then(Value::as_str).ok_or("Could not read the image blob")?.to_owned();
+            let response = self.send_and_wait("Runtime.callFunctionOn", json!({"objectId":object,"functionDeclaration":"function(){return {size:this.size,type:this.type}}","returnByValue":true})).await?;
+            let size = response.pointer("/result/result/value/size").and_then(Value::as_u64).filter(|size| *size <= MAX_REMOTE_DOWNLOAD_BYTES).ok_or("Image exceeds the 64 MiB limit")?;
+            let mime = response.pointer("/result/result/value/type").and_then(Value::as_str).unwrap_or("").to_owned();
+            let mut file = tokio::fs::File::create(path).await.map_err(|_| "Could not create image download")?;
+            let mut offset = 0u64;
+            while offset < size {
+                let length = (size - offset).min(MAX_CHUNK_BYTES as u64);
+                let response = self.send_and_wait("Runtime.callFunctionOn", json!({"objectId":object,"functionDeclaration":"async function(offset,size){const bytes=new Uint8Array(await this.slice(offset,offset+size).arrayBuffer());let text='';for(const byte of bytes)text+=String.fromCharCode(byte);return btoa(text)}","arguments":[{"value":offset},{"value":length}],"awaitPromise":true,"returnByValue":true})).await?;
+                let encoded = response.pointer("/result/result/value").and_then(Value::as_str).filter(|value| value.len() <= MAX_CHUNK_BYTES.div_ceil(3)*4).ok_or("Invalid image chunk")?;
+                let bytes = BASE64.decode(encoded).map_err(|_| "Invalid image bytes")?;
+                if bytes.len() as u64 != length { return Err("Image chunk length changed".to_string()); }
+                file.write_all(&bytes).await.map_err(|_| "Could not write image download")?;
+                offset += length;
+            }
+            Ok(match mime.as_str() { "image/png"=>"image.png", "image/jpeg"=>"image.jpg", "image/svg+xml"=>"image.svg", "image/webp"=>"image.webp", "image/gif"=>"image.gif", "image/avif"=>"image.avif", _=>"image" }.to_owned())
+        }).await.unwrap_or_else(|_| Err("Image download timed out".into()));
+        let _ = self
+            .send_and_wait("Runtime.releaseObjectGroup", json!({"objectGroup":group}))
+            .await;
+        result
+    }
+
+    async fn save_cdp_stream(&mut self, handle: &str, path: &Path) -> Result<(), String> {
+        let result = timeout(Duration::from_secs(30), async {
+            let mut file = tokio::fs::File::create(path)
+                .await
+                .map_err(|_| "Could not create download")?;
+            let mut total = 0usize;
+            loop {
+                let response = self
+                    .send_and_wait("IO.read", json!({"handle":handle,"size":MAX_CHUNK_BYTES}))
+                    .await?;
+                let data = response
+                    .pointer("/result/data")
+                    .and_then(Value::as_str)
+                    .ok_or("Invalid download stream")?;
+                let bytes = if response
+                    .pointer("/result/base64Encoded")
+                    .and_then(Value::as_bool)
+                    == Some(true)
+                {
+                    BASE64.decode(data).map_err(|_| "Invalid download bytes")?
+                } else {
+                    data.as_bytes().to_vec()
+                };
+                total += bytes.len();
+                if total > MAX_REMOTE_DOWNLOAD_BYTES as usize {
+                    return Err("Download exceeds the 64 MiB limit".to_owned());
+                }
+                file.write_all(&bytes)
+                    .await
+                    .map_err(|_| "Could not write download")?;
+                if response.pointer("/result/eof").and_then(Value::as_bool) == Some(true) {
+                    break;
+                }
+            }
+            Ok(())
+        })
+        .await
+        .unwrap_or_else(|_| Err("Download stream timed out".to_owned()));
+        let _ = self
+            .send_and_wait("IO.close", json!({"handle":handle}))
+            .await;
+        result
+    }
+
     async fn handle_javascript_dialog_for_tab(
         &mut self,
         tab_id: &str,
@@ -6323,14 +7928,37 @@ impl RemoteBrowser {
 
     async fn stop(mut self) {
         self.reader.abort();
-        let _ = self.sink.send(CdpMessage::Close(None)).await;
-        let _ = self.child.start_kill();
-        let _ = timeout(Duration::from_secs(3), self.child.wait()).await;
+        // Let Chromium close its child processes and profile writers before
+        // erasing the profile. Killing only its main process can leave writers
+        // racing remove_dir_all. Neither command nor exit may wait indefinitely.
+        let close = json!({"id":self.next_command_id,"method":"Browser.close","params":{}});
+        let _ = timeout(
+            Duration::from_secs(1),
+            self.sink.send(CdpMessage::Text(close.to_string().into())),
+        )
+        .await;
+        if !matches!(
+            timeout(Duration::from_secs(2), self.child.wait()).await,
+            Ok(Ok(_))
+        ) {
+            let _ = self.child.start_kill();
+            let _ = timeout(Duration::from_secs(3), self.child.wait()).await;
+        }
         if let Some(mut cgroup) = self.cgroup.take() {
             cgroup.stop().await;
         }
         if let Some(mut egress) = self.egress.take() {
             egress.stop().await;
+        }
+        // Profile::drop remains a final fallback. Run normal filesystem cleanup
+        // in the blocking pool and tolerate a short last-writer race explicitly.
+        for attempt in 0..3 {
+            match tokio::fs::remove_dir_all(&self._profile.0).await {
+                Ok(()) => break,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => break,
+                Err(_) if attempt < 2 => sleep(Duration::from_millis(50)).await,
+                Err(_) => break,
+            }
         }
     }
 }
@@ -6453,6 +8081,56 @@ fn find_executable(name: &str) -> Option<PathBuf> {
         .find(|path| path.is_file())
 }
 
+// Probe the launched browser's own schema rather than trusting its version.
+// This endpoint is the private loopback DevTools port, never a page URL.
+async fn screencast_retains_latest(port: u16) -> bool {
+    let Ok(client) = reqwest::Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(2))
+        .build()
+    else {
+        return false;
+    };
+    let Ok(mut response) = client
+        .get(format!("http://127.0.0.1:{port}/json/protocol"))
+        .send()
+        .await
+    else {
+        return false;
+    };
+    if !response.status().is_success() {
+        return false;
+    }
+    let mut bytes = Vec::new();
+    loop {
+        match response.chunk().await {
+            Ok(Some(chunk)) if bytes.len() + chunk.len() <= 4 * 1024 * 1024 => {
+                bytes.extend_from_slice(&chunk)
+            }
+            Ok(None) => break,
+            _ => return false,
+        }
+    }
+    serde_json::from_slice::<Value>(&bytes)
+        .ok()
+        .is_some_and(|schema| {
+            schema["domains"].as_array().is_some_and(|domains| {
+                domains.iter().any(|domain| {
+                    domain["domain"] == "Page"
+                        && domain["commands"].as_array().is_some_and(|commands| {
+                            commands.iter().any(|command| {
+                                command["name"] == "startScreencast"
+                                    && command["parameters"].as_array().is_some_and(|params| {
+                                        params.iter().any(|param| param["name"] == "sendLastFrame")
+                                    })
+                            })
+                        })
+                })
+            })
+        })
+}
+
 async fn wait_for_devtools_port(
     profile: &Path,
     child: &mut Child,
@@ -6532,6 +8210,54 @@ async fn cdp_command(
     }
 }
 
+fn inline_image(source: &str) -> Result<(Vec<u8>, String), String> {
+    if source.len() > 2 * 1024 * 1024 {
+        return Err("Inline image exceeds 2 MiB".into());
+    }
+    let (header, data) = source.split_once(',').ok_or("Invalid inline image")?;
+    let mime = header
+        .strip_prefix("data:")
+        .ok_or("Invalid inline image")?
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let extension = match mime.as_str() {
+        "image/png" => "png",
+        "image/jpeg" => "jpg",
+        "image/gif" => "gif",
+        "image/webp" => "webp",
+        "image/svg+xml" => "svg",
+        "image/avif" => "avif",
+        _ => return Err("Unsupported inline image type".into()),
+    };
+    let bytes = if header.ends_with(";base64") {
+        BASE64
+            .decode(data)
+            .map_err(|_| "Invalid inline image bytes")?
+    } else {
+        let mut bytes = Vec::new();
+        let mut input = data.bytes();
+        while let Some(byte) = input.next() {
+            if byte == b'%' {
+                let high = input
+                    .next()
+                    .and_then(|v| (v as char).to_digit(16))
+                    .ok_or("Invalid inline image escape")?;
+                let low = input
+                    .next()
+                    .and_then(|v| (v as char).to_digit(16))
+                    .ok_or("Invalid inline image escape")?;
+                bytes.push((high * 16 + low) as u8);
+            } else {
+                bytes.push(byte);
+            }
+        }
+        bytes
+    };
+    Ok((bytes, format!("image.{extension}")))
+}
+
 fn validated_navigation_url(raw: &str) -> Result<reqwest::Url, String> {
     if raw.len() > 8192 {
         return Err("URL is too long".into());
@@ -6557,6 +8283,111 @@ fn validated_popup_url(raw: &str) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn inline_image_downloads_are_bounded_and_typed() {
+        assert_eq!(
+            inline_image("data:image/png;base64,aGk=").unwrap(),
+            (b"hi".to_vec(), "image.png".into())
+        );
+        assert_eq!(
+            inline_image("data:image/svg+xml,%3Csvg%3E").unwrap().0,
+            b"<svg>"
+        );
+        assert!(inline_image("data:text/html,hello").is_err());
+        assert!(inline_image("data:image/png;base64,???").is_err());
+        assert!(inline_image("data:image/svg+xml,%xx").is_err());
+        assert!(inline_image(&format!("data:image/png,{}", "x".repeat(2 * 1024 * 1024))).is_err());
+    }
+
+    #[test]
+    fn stream_settings_are_optional_bounded_and_explicit() {
+        let old: Resize =
+            serde_json::from_value(json!({"tabId":"tab","width":800,"height":600,"unknown":true}))
+                .unwrap();
+        assert!(old.capabilities.is_empty());
+        assert!(old.stream.is_none());
+        let defaults = StreamSettings::default();
+        assert!(defaults.validate().is_ok());
+        assert_eq!(defaults.cdp_params()["quality"], 80);
+        let png: StreamSettings = serde_json::from_value(
+            json!({"format":"png","quality":60,"maxWidth":1280,"maxHeight":720,"future":true}),
+        )
+        .unwrap();
+        assert!(png.validate().is_ok());
+        assert!(png.cdp_params().get("quality").is_none());
+        for patch in [
+            json!({"format":"av1"}),
+            json!({"quality":101}),
+            json!({"maxWidth":100000}),
+            json!({"maxHeight":0}),
+        ] {
+            let value: StreamSettings = serde_json::from_value(patch).unwrap();
+            assert!(value.validate().is_err());
+        }
+        let request = ImageDownload {
+            tab_id: "tab".into(),
+            x: f64::NAN,
+            y: 4.0,
+        };
+        assert!(!request.valid(800, 600));
+        let request = ImageDownload {
+            x: 800.0,
+            ..request
+        };
+        assert!(!request.valid(800, 600));
+        let request = ImageDownload {
+            x: 799.0,
+            ..request
+        };
+        assert!(request.valid(800, 600));
+    }
+
+    #[test]
+    fn native_action_validation_bounds_capabilities() {
+        let request = |kind: &str, data: Value| NativeActionRequest {
+            id: 1,
+            kind: kind.to_owned(),
+            data,
+        };
+        assert!(validated_native_action(&request("clipboard-read", json!({}))).is_some());
+        assert!(
+            validated_native_action(&request(
+                "clipboard-write",
+                json!({"text":"x".repeat(13 * 1024)})
+            ))
+            .is_none()
+        );
+        assert!(validated_native_action(&request("clipboard-write", json!({"text":42}))).is_none());
+        assert!(
+            validated_native_action(&request(
+                "share",
+                json!({"url":"https://example.test/","text":"hello"})
+            ))
+            .is_some()
+        );
+        for url in [
+            "javascript:alert(1)",
+            "file:///etc/passwd",
+            "https://user:pass@example.test/",
+        ] {
+            assert!(validated_native_action(&request("share", json!({"url":url}))).is_none());
+        }
+        assert!(validated_native_action(&request("share", json!({"files":["x"]}))).is_none());
+        assert!(validated_native_action(&request("share", json!({}))).is_none());
+        for url in ["mailto:test@example.test", "tel:+15551234567"] {
+            assert!(validated_native_action(&request("external", json!({"url":url}))).is_some());
+        }
+        for url in [
+            "javascript:alert(1)",
+            "custom:payload",
+            "file:///etc/passwd",
+            "tel:123\n456",
+        ] {
+            assert!(validated_native_action(&request("external", json!({"url":url}))).is_none());
+        }
+        assert!(validated_native_action(&request("notification", json!({}))).is_none());
+    }
 
     #[test]
     fn navigation_accepts_only_credential_free_http_urls() {

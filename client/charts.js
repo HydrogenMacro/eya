@@ -133,9 +133,11 @@ export function createChart({ label = 'Resource usage', series = [], format = de
     geometry.data.forEach((sample, index) => { if (Math.abs(geometry.x(sample.time) - target) < Math.abs(geometry.x(geometry.data[nearest].time) - target)) nearest = index; });
     selection(nearest);
   }
-  svg.addEventListener('pointermove', point, { signal: abort.signal });
-  svg.addEventListener('pointerdown', point, { signal: abort.signal });
-  svg.addEventListener('pointerleave', () => selection(-1), { signal: abort.signal });
+  // Listen on the stable plot, so overlays never change the coordinate origin
+  // or create synthetic leave/enter cycles as the tooltip moves.
+  plot.addEventListener('pointermove', point, { signal: abort.signal });
+  plot.addEventListener('pointerdown', point, { signal: abort.signal });
+  plot.addEventListener('pointerleave', () => selection(-1), { signal: abort.signal });
   svg.addEventListener('blur', () => selection(-1), { signal: abort.signal });
   svg.addEventListener('keydown', event => {
     if (event.key === 'Escape') { selection(-1); return; }

@@ -1,0 +1,36 @@
+.dock-drop-preview{position:fixed;pointer-events:none;z-index:2147483000;box-sizing:border-box;border:2px solid var(--ui-accent,#7fdbc5);border-radius:5px;background:color-mix(in srgb,var(--ui-accent,#7fdbc5) 27%,transparent)}
+.dock-drop-preview[hidden]{display:none}
+.tab-dock,.dock-group,.dock-split,.dock-content{min-width:0;min-height:0;overflow:hidden}
+.tab-dock{display:flex;flex:1 1 0}
+.tab-dock>.dock-group,.tab-dock>.dock-split{flex:1 1 0}
+.dock-group{display:flex;flex-direction:column}
+.dock-split{display:flex}
+.dock-split[data-axis=vertical]{flex-direction:column}
+.dock-tabs{display:flex;flex:0 0 auto;overflow-x:auto;align-items:stretch;border-bottom:1px solid var(--ui-border,#344854);background:var(--ui-control,#253541);min-height:34px}
+.dock-tabs>button{flex:0 0 auto;font:inherit;font-size:12px;padding:7px 10px;margin:0;border:0;border-radius:0;background:transparent;color:var(--ui-muted,#9bb0bc);cursor:pointer;white-space:nowrap}
+.dock-tabs>button[aria-selected=true]{color:var(--ui-accent,#7fdbc5);box-shadow:inset 0 -2px var(--ui-accent,#7fdbc5)}
+.dock-tabs>button:focus-visible{outline:2px solid var(--ui-accent,#7fdbc5);outline-offset:-2px}
+.dock-tabs>.dock-divide{margin-left:auto;padding:5px 8px}
+.dock-tabs>.dock-divide:disabled{opacity:.3;cursor:default}
+.dock-content{flex:1 1 0;overflow:auto;padding:10px;box-sizing:border-box}
+.dock-content>[hidden]{display:none!important}
+.dock-sash,.dock-sidebar-sash{flex:0 0 6px;background:var(--ui-border,#344854);touch-action:none;cursor:col-resize;z-index:2}
+.dock-split[data-axis=vertical]>.dock-sash{cursor:row-resize}
+.dock-sash:hover,.dock-sash:focus-visible,.dock-sidebar-sash:hover,.dock-sidebar-sash:focus-visible{background:var(--ui-accent,#7fdbc5)}
+.dock-sidebar-layout{display:flex;min-width:0;min-height:0;overflow:hidden}
+.dock-sidebar-layout>.dock-main-content{flex:1 1 0;min-width:0;min-height:0}
+.dock-sidebar-layout>.dock-sidebar{flex:0 0 min(var(--dock-sidebar-size,280px),calc(100% - 80px),60%);background:var(--ui-surface,#1a2730)}
+.dock-sidebar-layout[data-sidebar-side=left]{flex-direction:row-reverse}
+.dock-sidebar-layout[data-sidebar-side=top]{flex-direction:column-reverse}
+.dock-sidebar-layout[data-sidebar-side=bottom]{flex-direction:column}
+.dock-sidebar-layout[data-sidebar-side=top]>.dock-sidebar-sash,.dock-sidebar-layout[data-sidebar-side=bottom]>.dock-sidebar-sash{cursor:row-resize}
+.dock-content{overscroll-behavior:contain;touch-action:pan-x pan-y}
+@media(pointer:coarse){
+ .dock-touch-handle{touch-action:none!important}
+ .dock-tabs{min-height:44px}.dock-tabs>button{min-height:44px}
+ .dock-sash,.dock-sidebar-sash{flex-basis:20px;position:relative;background:transparent}
+ .dock-sash::after,.dock-sidebar-sash::after{content:'';position:absolute;inset:0 8px;background:var(--ui-border,#344854);border-radius:3px}
+ .dock-split[data-axis=vertical]>.dock-sash::after,.dock-sidebar-layout[data-sidebar-side=top]>.dock-sidebar-sash::after,.dock-sidebar-layout[data-sidebar-side=bottom]>.dock-sidebar-sash::after{inset:8px 0}
+}
+
+.dock-sidebar-layout>.dock-sidebar[hidden],.dock-sidebar-layout>.dock-sidebar-sash[hidden]{display:none}

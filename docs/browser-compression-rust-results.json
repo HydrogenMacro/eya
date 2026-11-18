@@ -1,0 +1,110 @@
+{
+  "arch": "aarch64",
+  "captureMetadata": {
+    "cases": [
+      "unchanged",
+      "caret",
+      "typing",
+      "selection",
+      "scroll-32px",
+      "scroll-256px",
+      "image-simplification",
+      "image-animation"
+    ],
+    "chromium": "156.0.8078.4",
+    "height": 720,
+    "width": 1280
+  },
+  "description": "Production Rust PNG decode, changed-area scan and adaptive64px raw-DEFLATE replacement/XOR encoder; five preparations per scene; exact keyframe/delta reconstruction asserted. Timings exclude Chromium capture, network and client presentation.",
+  "optimized": true,
+  "results": [
+    {
+      "keyframeBytes": 499608,
+      "maxPrepareMs": 5.78449,
+      "medianKeyframeMs": 18.414109,
+      "medianPrepareMs": 5.0317549999999995,
+      "mode": "omitted",
+      "pngBytes": 426565,
+      "scene": "unchanged",
+      "tiles": 0,
+      "updateBytes": 0
+    },
+    {
+      "keyframeBytes": 499608,
+      "maxPrepareMs": 5.703971,
+      "medianKeyframeMs": 17.770954,
+      "medianPrepareMs": 5.634963,
+      "mode": "tiles",
+      "pngBytes": 426534,
+      "scene": "caret",
+      "tiles": 1,
+      "updateBytes": 222
+    },
+    {
+      "keyframeBytes": 499608,
+      "maxPrepareMs": 6.240672,
+      "medianKeyframeMs": 17.741008,
+      "medianPrepareMs": 6.21234,
+      "mode": "tiles",
+      "pngBytes": 430195,
+      "scene": "typing",
+      "tiles": 8,
+      "updateBytes": 7736
+    },
+    {
+      "keyframeBytes": 499608,
+      "maxPrepareMs": 6.431915,
+      "medianKeyframeMs": 17.867305,
+      "medianPrepareMs": 6.257755,
+      "mode": "tiles",
+      "pngBytes": 426777,
+      "scene": "selection",
+      "tiles": 8,
+      "updateBytes": 9203
+    },
+    {
+      "keyframeBytes": 499608,
+      "maxPrepareMs": 4.568854,
+      "medianKeyframeMs": 17.746112,
+      "medianPrepareMs": 4.512397,
+      "mode": "png",
+      "pngBytes": 428812,
+      "scene": "scroll-32px",
+      "tiles": 0,
+      "updateBytes": 428812
+    },
+    {
+      "keyframeBytes": 499608,
+      "maxPrepareMs": 4.063298,
+      "medianKeyframeMs": 17.627209,
+      "medianPrepareMs": 4.045433999999999,
+      "mode": "png",
+      "pngBytes": 337342,
+      "scene": "scroll-256px",
+      "tiles": 0,
+      "updateBytes": 337342
+    },
+    {
+      "keyframeBytes": 499608,
+      "maxPrepareMs": 11.050455000000001,
+      "medianKeyframeMs": 17.725226,
+      "medianPrepareMs": 10.879263,
+      "mode": "tiles",
+      "pngBytes": 129115,
+      "scene": "image-simplification",
+      "tiles": 40,
+      "updateBytes": 14562
+    },
+    {
+      "keyframeBytes": 499608,
+      "maxPrepareMs": 15.497751000000001,
+      "medianKeyframeMs": 17.663145,
+      "medianPrepareMs": 15.463898,
+      "mode": "tiles",
+      "pngBytes": 426420,
+      "scene": "image-animation",
+      "tiles": 40,
+      "updateBytes": 365439
+    }
+  ]
+}

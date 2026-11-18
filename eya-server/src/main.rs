@@ -1,9 +1,16 @@
 mod browser;
 mod browser_egress;
 mod browser_render;
+mod browser_tiles;
+mod control;
 mod files;
 mod resume;
+mod server_config;
+mod session_ends;
 mod system;
+mod updates;
+mod wire;
+mod workspaces;
 
 use axum::{
     Router,
@@ -13,6 +20,7 @@ use axum::{
     },
     response::{Html, IntoResponse},
     routing::get,
+    serve::ListenerExt,
 };
 use futures_util::{SinkExt, StreamExt};
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
@@ -28,7 +36,7 @@ use std::{
     time::Duration,
 };
 use tokio::{
-    io::AsyncReadExt,
+    io::{AsyncReadExt, AsyncSeekExt},
     sync::{Semaphore, mpsc},
     time::timeout,
 };
@@ -43,16 +51,23 @@ const CLIENT_CONFIG_MARKER: &str = r#"<script id="eya-config" type="application/
 struct App {
     key: Arc<[u8; 32]>,
     client_key: Arc<str>,
-    slots: Arc<Semaphore>,
+    slots: Arc<server_config::Slots>,
     terminal: Arc<CommandBuilder>,
     files: Arc<files::FileManager>,
     sessions: resume::Registry,
-    session_slots: Arc<Semaphore>,
+    session_slots: Arc<server_config::Slots>,
     resume_limits: resume::Limits,
-    machine_slots: Arc<Semaphore>,
-    browser_slots: Arc<Semaphore>,
-    browser_render_slots: Arc<Semaphore>,
+    server_config: Arc<server_config::Config>,
+    machine_slots: Arc<server_config::Slots>,
+    browser_slots: Arc<server_config::Slots>,
+    browser_render_slots: Arc<server_config::Slots>,
     browser: Arc<browser::Proxy>,
+    workspaces: Arc<std::sync::Mutex<workspaces::Store>>,
+    control_slots: Arc<server_config::Slots>,
+    update_slots: Arc<Semaphore>,
+    browser_sessions: browser_render::Registry,
+    shutdown: tokio::sync::watch::Sender<bool>,
+    session_ends: Arc<session_ends::SessionEnds>,
 }
 
 #[tokio::main]
@@ -74,22 +89,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let key = derive_key(&key);
     let terminal = terminal_command()?;
     let files = files::FileManager::from_env()?;
+    system::start_history(&files);
     // A session has the privileges of this host process, so do not expose it to
     // the network unless the operator explicitly opts in with EYA_BIND.
     let bind = env::var("EYA_BIND").unwrap_or_else(|_| "127.0.0.1:8080".into());
+    let (shutdown, _) = tokio::sync::watch::channel(false);
+    let server_config = server_config::Config::from_env()?;
     let app = App {
         key: Arc::new(key),
         client_key,
-        slots: Arc::new(Semaphore::new(8)),
+        slots: server_config.slots("handshakeConnections"),
         terminal: Arc::new(terminal),
         files: Arc::new(files),
         sessions: Arc::new(std::sync::Mutex::new(HashMap::new())),
-        session_slots: Arc::new(Semaphore::new(8)),
+        session_slots: server_config.slots("terminalSessions"),
         resume_limits: resume::Limits::from_env()?,
-        machine_slots: Arc::new(Semaphore::new(8)),
-        browser_slots: Arc::new(Semaphore::new(4)),
-        browser_render_slots: Arc::new(Semaphore::new(1)),
+        server_config: server_config.clone(),
+        machine_slots: server_config.slots("machineJobs"),
+        browser_slots: server_config.slots("basicBrowserConnections"),
+        browser_render_slots: server_config.slots("fullBrowserRuntimes"),
         browser: Arc::new(browser::Proxy::new()?),
+        workspaces: Arc::new(std::sync::Mutex::new(workspaces::Store::from_env()?)),
+        control_slots: server_config.slots("workspaceConnections"),
+        update_slots: Arc::new(Semaphore::new(4)),
+        browser_sessions: Arc::new(std::sync::Mutex::new(HashMap::new())),
+        shutdown,
+        session_ends: Arc::new(session_ends::SessionEnds::default()),
     };
     let router = Router::new()
         .route("/", get(|| async { Html(GENERATOR) }))
@@ -118,6 +143,114 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 },
             ),
         )
+        .route(
+            "/eya-media/player.html",
+            get(|| async {
+                (
+                    [
+                        ("content-type", "text/html; charset=utf-8"),
+                        ("cache-control", "no-store"),
+                    ],
+                    include_str!("../../client/media-player.html"),
+                )
+            }),
+        )
+        .route(
+            "/eya-media/player.js",
+            get(|| async {
+                (
+                    [
+                        ("content-type", "text/javascript; charset=utf-8"),
+                        ("cache-control", "no-store"),
+                    ],
+                    include_str!("../../client/media-player.js"),
+                )
+            }),
+        )
+        .route(
+            "/eya-media/keybinds-core.js",
+            get(|| async {
+                (
+                    [
+                        ("content-type", "text/javascript; charset=utf-8"),
+                        ("cache-control", "no-store"),
+                    ],
+                    include_str!("../../client/keybinds-core.js"),
+                )
+            }),
+        )
+        .route(
+            "/eya-media/ids.js",
+            get(|| async {
+                (
+                    [
+                        ("content-type", "text/javascript; charset=utf-8"),
+                        ("cache-control", "no-store"),
+                    ],
+                    include_str!("../../client/ids.js"),
+                )
+            }),
+        )
+        .route(
+            "/eya-media/controls.js",
+            get(|| async {
+                (
+                    [
+                        ("content-type", "text/javascript; charset=utf-8"),
+                        ("cache-control", "no-store"),
+                    ],
+                    include_str!("../../client/video-controls.js"),
+                )
+            }),
+        )
+        .route(
+            "/eya-media/video-cues.js",
+            get(|| async {
+                (
+                    [
+                        ("content-type", "text/javascript; charset=utf-8"),
+                        ("cache-control", "no-store"),
+                    ],
+                    include_str!("../../client/video-cues.js"),
+                )
+            }),
+        )
+        .route(
+            "/eya-media/video-seek-preview.js",
+            get(|| async {
+                (
+                    [
+                        ("content-type", "text/javascript; charset=utf-8"),
+                        ("cache-control", "no-store"),
+                    ],
+                    include_str!("../../client/video-seek-preview.js"),
+                )
+            }),
+        )
+        .route(
+            "/eya-media/video-subtitle-settings.js",
+            get(|| async {
+                (
+                    [
+                        ("content-type", "text/javascript; charset=utf-8"),
+                        ("cache-control", "no-store"),
+                    ],
+                    include_str!("../../client/video-subtitle-settings.js"),
+                )
+            }),
+        )
+        .route(
+            "/eya-media/worker.js",
+            get(|| async {
+                (
+                    [
+                        ("content-type", "text/javascript; charset=utf-8"),
+                        ("cache-control", "no-store"),
+                    ],
+                    include_str!("../../client/media-worker.js"),
+                )
+            }),
+        )
         .route("/client.html", get(hosted_client))
         .route(
             "/client-template.html",
@@ -144,13 +277,50 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }),
         )
         .route("/ws", get(upgrade))
+        .route("/ws/update", get(updates::upgrade))
         .route("/browser-ws", get(browser::upgrade))
         .route("/browser-render-ws", get(browser_render::upgrade))
-        .with_state(app);
-    let listener = tokio::net::TcpListener::bind(&bind).await?;
+        .with_state(app.clone());
+    let listener = tokio::net::TcpListener::bind(&bind)
+        .await?
+        .tap_io(|socket| {
+            // An input ACK and its terminal echo are independent small frames.
+            // Nagle can otherwise hold the echo for another slow-link RTT while
+            // the ACK's TCP acknowledgement is still travelling back.
+            if let Err(error) = socket.set_nodelay(true) {
+                eprintln!("Could not enable TCP_NODELAY: {error}");
+            }
+        });
     eprintln!("Eya listening on {bind}");
-    axum::serve(listener, router).await?;
+    tokio::select! {
+        result = axum::serve(listener, router).into_future() => result?,
+        _ = shutdown_signal() => {
+            app.shutdown.send_replace(true);
+            let terminals: Vec<_> = app.sessions.lock().map(|sessions| sessions.values().cloned().collect()).unwrap_or_default();
+            let browsers: Vec<_> = app.browser_sessions.lock().map(|sessions| sessions.values().cloned().collect()).unwrap_or_default();
+            let mut requests = tokio::task::JoinSet::new();
+            for sender in terminals { requests.spawn(async move { let _ = timeout(Duration::from_millis(500), sender.send(resume::Command::End)).await; }); }
+            for sender in browsers { requests.spawn(async move { let _ = timeout(Duration::from_millis(500), sender.send(browser_render::SessionCommand::End)).await; }); }
+            while requests.join_next().await.is_some() {}
+            let deadline = tokio::time::Instant::now() + Duration::from_secs(4);
+            loop {
+                let terminals = app.sessions.lock().map(|sessions| sessions.is_empty()).unwrap_or(true) && app.session_slots.active() == 0;
+                let browsers = app.browser_sessions.lock().map(|sessions| sessions.is_empty()).unwrap_or(true) && app.browser_render_slots.active() == 0;
+                if terminals && browsers { break; }
+                // A stuck host syscall must not hold shutdown forever. Closing
+                // process fds releases PTYs; Chromium also has a parent-death signal.
+                if tokio::time::Instant::now() >= deadline { std::process::exit(0); }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        }
+    }
     Ok(())
+}
+
+async fn shutdown_signal() {
+    let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        .expect("install SIGTERM handler");
+    tokio::select! { _ = tokio::signal::ctrl_c() => {}, _ = terminate.recv() => {} }
 }
 
 async fn hosted_client(State(app): State<App>) -> impl IntoResponse {
@@ -218,7 +388,7 @@ async fn handshake_and_run(
     key: Arc<[u8; 32]>,
     terminal: Arc<CommandBuilder>,
     files: Arc<files::FileManager>,
-    slot: tokio::sync::OwnedSemaphorePermit,
+    slot: server_config::Permit,
     app: App,
 ) {
     let Ok(params) = PROTOCOL.parse() else { return };
@@ -256,6 +426,23 @@ async fn handshake_and_run(
     let Ok(n) = noise.read_message(&confirm, &mut buf) else {
         return;
     };
+    if *app.shutdown.borrow() {
+        return;
+    }
+    if let Some(ready) = buf[..n].strip_prefix(b"eya-workspace-v1:") {
+        let Ok(ready) = serde_json::from_slice::<serde_json::Value>(ready) else {
+            return;
+        };
+        let Ok(permit) = app.control_slots.clone().try_acquire_owned() else {
+            return;
+        };
+        drop(slot);
+        tokio::spawn(async move {
+            let _permit = permit;
+            control::run(socket, noise, ready, app).await;
+        });
+        return;
+    }
     if let Some(ready) = buf[..n].strip_prefix(b"eya-ready-v4:") {
         drop(slot);
         resume::attach(socket, noise, ready, app).await;
@@ -273,7 +460,15 @@ async fn handshake_and_run(
     tokio::spawn(async move {
         let _slot = slot;
         let _session_slot = session_slot;
-        run_terminal(socket, noise, flow_control, terminal, files).await;
+        run_terminal(
+            socket,
+            noise,
+            flow_control,
+            terminal,
+            files,
+            app.shutdown.subscribe(),
+        )
+        .await;
     });
 }
 async fn run_terminal(
@@ -282,7 +477,11 @@ async fn run_terminal(
     flow_control: bool,
     terminal: Arc<CommandBuilder>,
     files: Arc<files::FileManager>,
+    mut shutdown: tokio::sync::watch::Receiver<bool>,
 ) {
+    if *shutdown.borrow() {
+        return;
+    }
     let pty = native_pty_system();
     let Ok(pair) = pty.openpty(PtySize {
         rows: 24,
@@ -326,6 +525,7 @@ async fn run_terminal(
     let mut uploads = HashMap::<u32, files::Upload>::new();
     loop {
         tokio::select! {
+            _ = shutdown.changed() => break,
             msg = receiver.next() => match msg {
                 Some(Ok(Message::Binary(data))) => {
                     let Ok(n) = noise.read_message(&data, &mut plain) else { break };
@@ -404,11 +604,11 @@ async fn run_terminal(
     let _ = child.wait();
 }
 
-async fn handle_file_request(
+async fn handle_file_request<S: futures_util::Sink<Message> + Unpin>(
     data: &[u8],
     files: &files::FileManager,
     uploads: &mut HashMap<u32, files::Upload>,
-    sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
+    sender: &mut S,
     noise: &mut snow::TransportState,
     cipher: &mut [u8],
 ) -> io::Result<()> {
@@ -465,17 +665,29 @@ async fn handle_file_request(
                 files.remove(path, recursive).await?;
                 send_file_json(serde_json::json!({"id": id, "ok": true, "op": op}), sender, noise, cipher).await
             }
-            "read" => {
+            "read" | "read_range" => {
                 let (logical, initial_metadata) = files.metadata(path).await?;
                 if !initial_metadata.is_file() { return Err(invalid_config("only regular files can be opened")); }
                 let mut file = files.open(path).await?;
                 let metadata = file.metadata().await?;
                 if !metadata.is_file() { return Err(invalid_config("only regular files can be opened")); }
-                if metadata.len() > files.max_file_bytes { return Err(invalid_config("file exceeds the configured transfer limit")); }
-                send_file_json(serde_json::json!({"id": id, "ok": true, "op": op, "path": logical, "size": metadata.len(), "version": file_version(&metadata), "modified": metadata.modified().ok().and_then(|value| value.duration_since(std::time::UNIX_EPOCH).ok()).and_then(|value| u64::try_from(value.as_millis()).ok()).unwrap_or(0)}), sender, noise, cipher).await?;
+                let (offset, length) = if op == "read_range" {
+                    let offset = request.get("offset").and_then(|v| v.as_u64()).ok_or_else(|| invalid_config("valid offset is required"))?;
+                    let length = request.get("length").and_then(|v| v.as_u64()).filter(|v| *v > 0 && *v <= 1024 * 1024).ok_or_else(|| invalid_config("length must be between 1 and 1048576"))?;
+                    if offset > metadata.len() { return Err(invalid_config("offset is beyond the end of the file")); }
+                    if let Some(version) = request.get("version").and_then(|v| v.as_str()) {
+                        if version != file_version(&metadata) { return Err(invalid_config("file changed since the previous read")); }
+                    }
+                    (offset, length.min(metadata.len() - offset))
+                } else {
+                    if metadata.len() > files.max_file_bytes { return Err(invalid_config("file exceeds the configured transfer limit")); }
+                    (0, metadata.len())
+                };
+                file.seek(std::io::SeekFrom::Start(offset)).await?;
+                send_file_json(serde_json::json!({"id": id, "ok": true, "op": op, "path": logical, "size": metadata.len(), "offset": offset, "length": length, "version": file_version(&metadata), "modified": metadata.modified().ok().and_then(|value| value.duration_since(std::time::UNIX_EPOCH).ok()).and_then(|value| u64::try_from(value.as_millis()).ok()).unwrap_or(0)}), sender, noise, cipher).await?;
                 let mut buffer = vec![0u8; 60_000];
-                if metadata.len() == 0 { send_file_chunk(id, true, &[], sender, noise, cipher).await?; }
-                let mut remaining = metadata.len();
+                if length == 0 { send_file_chunk(id, true, &[], sender, noise, cipher).await?; }
+                let mut remaining = length;
                 while remaining > 0 {
                     let limit = remaining.min(buffer.len() as u64) as usize;
                     let read = file.read(&mut buffer[..limit]).await?;
@@ -490,7 +702,11 @@ async fn handle_file_request(
                 let overwrite = request.get("overwrite").and_then(|value| value.as_bool()).unwrap_or(false);
                 if uploads.contains_key(&id) { return Err(invalid_config("upload id is already active")); }
                 if uploads.len() >= 8 { return Err(invalid_config("too many active uploads; finish or reconnect before starting more")); }
-                let upload = files.begin_upload(id, path, size, overwrite).await?;
+                let mut upload = files.begin_upload(id, path, size, overwrite).await?;
+                if let Some(version) = request.get("version") {
+                    let Some(version) = version.as_str().filter(|version| version.len() <= 256) else { upload.cancel().await; return Err(invalid_config("invalid expected file version")); };
+                    upload.require_version(version.to_owned());
+                }
                 uploads.insert(id, upload);
                 send_file_json(serde_json::json!({"id": id, "ok": true, "op": op, "ready": true}), sender, noise, cipher).await
             }
@@ -516,10 +732,10 @@ fn file_version(metadata: &std::fs::Metadata) -> String {
     )
 }
 
-async fn send_file_error(
+async fn send_file_error<S: futures_util::Sink<Message> + Unpin>(
     id: u32,
     message: &str,
-    sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
+    sender: &mut S,
     noise: &mut snow::TransportState,
     cipher: &mut [u8],
 ) -> io::Result<()> {
@@ -532,9 +748,9 @@ async fn send_file_error(
     .await
 }
 
-async fn send_file_json(
+async fn send_file_json<S: futures_util::Sink<Message> + Unpin>(
     value: serde_json::Value,
-    sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
+    sender: &mut S,
     noise: &mut snow::TransportState,
     cipher: &mut [u8],
 ) -> io::Result<()> {
@@ -562,11 +778,11 @@ async fn send_file_json(
     send_encrypted(&message, sender, noise, cipher).await
 }
 
-async fn send_file_chunk(
+async fn send_file_chunk<S: futures_util::Sink<Message> + Unpin>(
     id: u32,
     final_chunk: bool,
     data: &[u8],
-    sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
+    sender: &mut S,
     noise: &mut snow::TransportState,
     cipher: &mut [u8],
 ) -> io::Result<()> {
@@ -578,9 +794,9 @@ async fn send_file_chunk(
     send_encrypted(&message, sender, noise, cipher).await
 }
 
-async fn send_encrypted(
+async fn send_encrypted<S: futures_util::Sink<Message> + Unpin>(
     data: &[u8],
-    sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
+    sender: &mut S,
     noise: &mut snow::TransportState,
     cipher: &mut [u8],
 ) -> io::Result<()> {

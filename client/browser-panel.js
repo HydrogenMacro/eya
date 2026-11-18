@@ -1,8 +1,21 @@
+import { findClassicWorkerChunks } from './browser-proxy-worker.js';
+import { installProxyLocation, installProxyModuleImports, rewriteProxyScriptReads, parseProxyModuleImports } from './browser-proxy-script.js';
+import { createProxyCssTools } from './browser-proxy-css.js';
+import { installProxyDomResources, prepareProxyStaticResources } from './browser-proxy-dom.js';
+import { KEYBIND_ACTIONS, getActionKeybinds, normalizeKeybind, matchesKeybind, subscribeKeybinds } from './keybinds-core.js';
+import { installProxyUnsupportedApis } from './browser-proxy-apis.js';
+import { sanitizeProxyState } from './browser-proxy-state.js';
+import { createBrowserTileDecoder } from './browser-tiles.js';
+import { createBrowserNativeActions } from './browser-native-actions.js';
+import { createBrowserFilePicker, createBrowserServerSave } from './browser-native-files.js';
+import { installBrowserAuxiliary } from './browser-auxiliary.js';
 import { parseEventSourceBlock } from './browser-eventsource.js';
 import { createHtmlViewer } from './html-viewer.js';
+import { buttonIcon, icon, createMenu, menuAction } from './ui.js';
 import { parser as javascriptParser } from '@lezer/javascript';
 export { parseEventSourceBlock } from './browser-eventsource.js';
 
+const proxyCssTools = createProxyCssTools();
 const HISTORY_KEY = 'eya-browser-history-v1';
 const BOOKMARK_KEY = 'eya-browser-bookmarks-v1';
 const PREFS_KEY = 'eya-browser-preferences-v1';
@@ -54,18 +67,18 @@ const MAX_STORAGE_TOTAL_BYTES = 8 * 1024 * 1024;
 const MAX_TAB_SESSION_STORAGE_BYTES = 2 * 1024 * 1024;
 const MAX_STORAGE_ITEMS = 5000;
 const MAX_BROWSER_TABS = 24;
-const FRAME_MESSAGE_LIMITS = Object.freeze({ console: 120, network: 120, dom: 30, storage: 1000, cookie: 120, navigate: 120, 'navigation-unhandled': 4, history: 240, 'history-go': 120, 'open-tab': 120, download: 120, 'userscript-storage': 20, 'find-open': 10, 'find-result': 20 });
+const FRAME_MESSAGE_LIMITS = Object.freeze({ console: 120, network: 120, dom: 30, storage: 1000, cookie: 120, navigate: 120, 'navigation-unhandled': 4, history: 240, 'history-go': 120, 'open-tab': 120, download: 120, 'userscript-storage': 20, 'find-open': 10, 'browser-shortcut': 30, 'find-result': 20 });
 const MAX_BUFFERED_STATIC_LOADS = 2;
 const MAX_RETAINED_STATIC_BYTES = 256 * 1024 * 1024;
 const MAX_WORKER_SCRIPT_BYTES = 2 * 1024 * 1024;
-const MAX_WORKER_RESPONSE_BYTES = 2 * 1024 * 1024;
+const MAX_WORKER_RESPONSE_BYTES = 4 * 1024 * 1024;
 const MAX_WORKER_FETCHES = 2;
 const MAX_WORKERS_PER_TAB = 4;
 const MAX_WORKER_GRAPH_BYTES = 4 * 1024 * 1024;
 const MAX_WORKER_GRAPH_SCRIPTS = 16;
 const MAX_WORKER_IMPORT_DEPTH = 4;
 const MAX_PAGE_MODULE_GRAPH_BYTES = 8 * 1024 * 1024;
-const MAX_PAGE_MODULE_GRAPHS = 16;
+const MAX_PAGE_MODULE_GRAPHS = 64;
 
 export function sanitizeBrowserBookmarkImport(input, limit = MAX_BOOKMARKS) {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_BOOKMARKS) throw new RangeError(`Bookmark import limit must be between 1 and ${MAX_BOOKMARKS}.`);
@@ -274,7 +287,7 @@ function workerXmlHttpRequestSource() {
     _change(state){this.readyState=state;this._emit('readystatechange')}
     open(method,url,async=true){if(async===false)throw new DOMException('Synchronous XHR is not supported in proxied Workers.','NotSupportedError');if(this._controller&&!this._controller.signal.aborted)this._controller.abort();this._generation++;this._method=String(method).toUpperCase();this._url=new URL(String(url),base).href;this._requestHeaders=new Headers();this._responseHeaders=new Headers();this._sent=false;this._timedOut=false;this.status=0;this.statusText='';this.responseURL='';this._text='';this._response=null;this._change(1)}
     setRequestHeader(name,value){if(this.readyState!==1||this._sent)throw new DOMException('Invalid XHR state.','InvalidStateError');this._requestHeaders.append(name,value)}
-    overrideMimeType(value){if(this._sent)throw new DOMException('Invalid XHR state.','InvalidStateError');this._mimeType=String(value)}
+    overrideMimeType(){if(this._sent)throw new DOMException('Invalid XHR state.','InvalidStateError');throw new DOMException('XHR MIME overrides are unavailable in Proxy browser. Open in Browser.','NotSupportedError')}
     getResponseHeader(name){return this.readyState<2?null:this._responseHeaders.get(String(name))}
     getAllResponseHeaders(){return this.readyState<2?'':[...this._responseHeaders].map(([name,value])=>name+': '+value+'\r\n').join('')}
     send(body=null){if(this.readyState!==1||this._sent)throw new DOMException('Invalid XHR state.','InvalidStateError');this._sent=true;this._timedOut=false;const generation=this._generation,controller=new AbortController();this._controller=controller;this._emit('loadstart');const timeout=Number(this.timeout),timer=Number.isFinite(timeout)&&timeout>0?setTimeout(()=>{if(generation===this._generation){this._timedOut=true;controller.abort(new DOMException('Worker XHR timed out.','TimeoutError'))}},Math.min(timeout,120000)):null;proxiedFetch(this._url,{method:this._method,headers:this._requestHeaders,body,signal:controller.signal,credentials:this.withCredentials?'include':'same-origin',mode:'cors'}).then(async response=>{if(generation!==this._generation)return;this.status=response.status;this.statusText=response.statusText;this.responseURL=response.url||this._url;this._responseHeaders=response.headers;this._change(2);this._change(3);const bytes=new Uint8Array(await response.arrayBuffer());if(generation!==this._generation)return;this._text=new TextDecoder().decode(bytes);const type=this._responseType;if(type==='arraybuffer')this._response=bytes.buffer;else if(type==='blob')this._response=new Blob([bytes],{type:response.headers.get('content-type')||''});else if(type==='json'){try{this._response=JSON.parse(this._text)}catch{this._response=null}}else this._response=this._text;this._change(4);this._emit('load');this._emit('loadend')}).catch(error=>{if(generation!==this._generation)return;this.status=0;this.statusText='';if(this._timedOut){this._change(4);this._emit('timeout')}else if(error?.name==='AbortError'){this._change(4);this._emit('abort')}else{this._change(4);this._emit('error')}this._emit('loadend')}).finally(()=>{if(timer!==null)clearTimeout(timer)})}
@@ -289,9 +302,11 @@ function workerBootstrapSource() {
   const xhrSource = workerXmlHttpRequestSource();
   return String.raw`(()=>{
     const stopImmediate=Function.prototype.call.bind(Event.prototype.stopImmediatePropagation);
-    let bridge=null,base='',booting=true,initSeen=false,nextId=0,nativeImportScripts=null;
+    let bridge=null,base='',booting=true,initSeen=false,nextId=0,nativeImportScripts=null,failed=false;
+    (${installProxyLocation.toString()})(()=>base,()=>{throw new DOMException('Worker location is read-only.','SecurityError')});
     const pending=new Map(),earlyMessages=[];let workerSources=new Map();
-    const fail=(error)=>{self.postMessage({type:'eya-worker-error',error:String(error&&error.message||error).slice(0,1024)})};
+    const finishBoot=()=>{if(failed)return;booting=false;self.postMessage({type:'eya-worker-ready'});for(const event of earlyMessages)self.dispatchEvent(new MessageEvent('message',event));earlyMessages.length=0};
+    const fail=(error)=>{if(failed)return;failed=true;earlyMessages.length=0;self.postMessage({type:'eya-worker-error',error:String(error&&error.message||error).slice(0,1024)})};
     const readBody=async body=>{if(body==null)return new Uint8Array();const reader=new Response(body).body.getReader(),chunks=[];let size=0;for(;;){const part=await reader.read();if(part.done)break;size+=part.value.byteLength;if(size>4*1024*1024){await reader.cancel();throw new TypeError('Worker request body exceeds the 4 MiB proxy limit.')}chunks.push(part.value)}const output=new Uint8Array(size);let offset=0;for(const part of chunks){output.set(part,offset);offset+=part.byteLength}return output};
     const proxiedFetch=async(input,init={})=>{
       if(!bridge)throw new TypeError('Worker proxy is not ready.');
@@ -308,11 +323,12 @@ function workerBootstrapSource() {
     Object.defineProperty(self,'fetch',{configurable:true,writable:true,value:proxiedFetch});
     ${xhrSource}
     self.addEventListener('message',event=>{
+      if(failed){stopImmediate(event);return}
       const message=event.data;
       if(message&&message.type==='eya-init'&&!initSeen){initSeen=true;base=String(message.base||'');bridge=event.ports[0]||null;if(!bridge){fail('Missing worker proxy channel');return}bridge.onmessage=bridgeEvent=>{const response=bridgeEvent.data;if(!response||response.type!=='fetch-response'||!Number.isSafeInteger(response.id))return;const entry=pending.get(response.id);if(!entry)return;entry.cleanup();if(response.error){entry.reject(new TypeError(String(response.error).slice(0,1024)));return}try{if(response.opaque){const opaque=new Response(null);Object.defineProperties(opaque,{type:{value:'opaque'},status:{value:0},ok:{value:false},headers:{value:new Headers()}});entry.resolve(opaque);return}const status=Number(response.status)||200,noBody=entry.method==='HEAD'||[204,205,304].includes(status),result=new Response(noBody?null:response.body?new Uint8Array(response.body):null,{status,statusText:String(response.statusText||''),headers:Array.isArray(response.headers)?response.headers:[]});if(typeof response.url==='string')Object.defineProperty(result,'url',{value:response.url});entry.resolve(result)}catch(error){entry.reject(error)}};bridge.start?.();stopImmediate(event);return}
-      if(message&&message.type==='eya-source'&&initSeen&&booting){try{if(typeof message.source!=='string')throw Error('Invalid worker script');if(typeof message.base==='string')base=message.base;workerSources=new Map(Object.entries(message.sources||{}));workerSources.set(base,message.source);nativeImportScripts=self.importScripts.bind(self);self.importScripts=(...urls)=>{for(const specifier of urls){const resolved=new URL(String(specifier),base).href,source=workerSources.get(resolved);if(typeof source!=='string')throw new TypeError('Worker import was not preloaded through the proxy.');const dependency=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));try{nativeImportScripts(dependency)}finally{URL.revokeObjectURL(dependency)}}};const blob=URL.createObjectURL(new Blob([message.source],{type:'text/javascript'}));try{nativeImportScripts(blob)}finally{URL.revokeObjectURL(blob)}booting=false;self.postMessage({type:'eya-worker-ready'});for(const data of earlyMessages)self.dispatchEvent(new MessageEvent('message',{data}));earlyMessages.length=0}catch(error){fail(error)}stopImmediate(event);return}
+      if(message&&message.type==='eya-source'&&initSeen&&booting){try{if(typeof message.source!=='string')throw Error('Invalid worker script');if(typeof message.base==='string')base=message.base;workerSources=new Map(Object.entries(message.sources||{}));workerSources.set(base,message.source);nativeImportScripts=self.importScripts.bind(self);self.importScripts=(...urls)=>{for(const specifier of urls){const resolved=new URL(String(specifier),base).href,source=workerSources.get(message.aliases?.[resolved]||resolved);if(typeof source!=='string')throw new TypeError('Worker import was not preloaded through the proxy.');const dependency=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));try{nativeImportScripts(dependency)}finally{URL.revokeObjectURL(dependency)}}};const blob=URL.createObjectURL(new Blob([message.source],{type:'text/javascript'}));try{nativeImportScripts(blob)}finally{URL.revokeObjectURL(blob)}setTimeout(finishBoot,0)}catch(error){fail(error)}stopImmediate(event);return}
       if(message&&message.type==='eya-source-error'&&booting){fail(message.error||'Worker script could not be loaded');stopImmediate(event);return}
-      if(booting){earlyMessages.push(message);stopImmediate(event)}
+      if(booting){if(earlyMessages.length>=128)fail('Worker startup message limit exceeded.');else earlyMessages.push({data:message,ports:event.ports,origin:event.origin});stopImmediate(event)}
     },true);
   })();`;
 }
@@ -342,7 +358,7 @@ function moduleWorkerBootstrapSource() {
     self.addEventListener('message',async event=>{
       const message=event.data;
       if(message&&message.type==='eya-init'&&!initSeen){initSeen=true;base=String(message.base||'');bridge=event.ports[0]||null;if(!bridge){fail('Missing worker proxy channel');return}bridge.onmessage=bridgeEvent=>{const response=bridgeEvent.data;if(!response||response.type!=='fetch-response'||!Number.isSafeInteger(response.id))return;const entry=pending.get(response.id);if(!entry)return;entry.cleanup();if(response.error){entry.reject(new TypeError(String(response.error).slice(0,1024)));return}try{if(response.opaque){const opaque=new Response(null);Object.defineProperties(opaque,{type:{value:'opaque'},status:{value:0},ok:{value:false},headers:{value:new Headers()}});entry.resolve(opaque);return}const status=Number(response.status)||200,noBody=entry.method==='HEAD'||[204,205,304].includes(status),result=new Response(noBody?null:response.body?new Uint8Array(response.body):null,{status,statusText:String(response.statusText||''),headers:Array.isArray(response.headers)?response.headers:[]});if(typeof response.url==='string')Object.defineProperty(result,'url',{value:response.url});entry.resolve(result)}catch(error){entry.reject(error)}};bridge.start?.();stopImmediate(event);return}
-      if(message&&message.type==='eya-source'&&initSeen&&booting){const objectUrls=[];try{if(typeof message.source!=='string'||!Array.isArray(message.order)||!message.modules)throw Error('Invalid worker module graph');if(typeof message.base==='string')base=message.base;const urls=new Map();for(const moduleUrl of message.order){const record=message.modules[moduleUrl];if(!record||typeof record.source!=='string'||!Array.isArray(record.imports))throw Error('Invalid worker module record');let source=record.source;const replacements=record.imports.map(edge=>{const dependency=urls.get(edge.url);if(!dependency)throw Error('Worker module dependency order is invalid.');return{from:edge.from,to:edge.to,text:JSON.stringify(dependency)}});for(const replacement of replacements.sort((a,b)=>b.from-a.from))source=source.slice(0,replacement.from)+replacement.text+source.slice(replacement.to);const url=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));urls.set(moduleUrl,url);objectUrls.push(url)}await import(urls.get(base));booting=false;self.postMessage({type:'eya-worker-ready'});for(const data of earlyMessages)self.dispatchEvent(new MessageEvent('message',{data}));earlyMessages.length=0}catch(error){fail(error)}finally{for(const url of objectUrls)URL.revokeObjectURL(url)}stopImmediate(event);return}
+      if(message&&message.type==='eya-source'&&initSeen&&booting){const objectUrls=[];try{if(typeof message.source!=='string'||!Array.isArray(message.order)||!message.modules)throw Error('Invalid worker module graph');if(typeof message.base==='string')base=message.base;const urls=new Map();for(const moduleUrl of message.order){const record=message.modules[moduleUrl];if(!record||typeof record.source!=='string'||!Array.isArray(record.imports))throw Error('Invalid worker module record');let source=record.source;const replacements=record.imports.map(edge=>{const dependency=urls.get(edge.url);if(!dependency)throw Error('Worker module dependency order is invalid.');return{from:edge.from,to:edge.to,text:JSON.stringify(dependency)}});for(const replacement of replacements.sort((a,b)=>b.from-a.from))source=source.slice(0,replacement.from)+replacement.text+source.slice(replacement.to);const url=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));urls.set(moduleUrl,url);objectUrls.push(url)}await import(urls.get(base));booting=false;self.postMessage({type:'eya-worker-ready'});for(const data of earlyMessages)self.dispatchEvent(new MessageEvent('message',{data}));earlyMessages.length=0}catch(error){for(const url of objectUrls)URL.revokeObjectURL(url);fail(error)}stopImmediate(event);return}
       if(message&&message.type==='eya-source-error'&&booting){fail(message.error||'Worker module graph could not be loaded');stopImmediate(event);return}
       if(booting){earlyMessages.push(message);stopImmediate(event)}
     },true);
@@ -352,8 +368,11 @@ function moduleWorkerBootstrapSource() {
 export function buildDedicatedWorkerRuntime() { return workerBootstrapSource(); }
 export function buildModuleWorkerRuntime() { return moduleWorkerBootstrapSource(); }
 
-export function browserFrameCsp() {
-  return "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:; worker-src blob:; style-src 'unsafe-inline' blob: data:; img-src blob: data:; font-src blob: data:; media-src blob: data:; connect-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none'";
+export function browserFrameCsp(readerNonce = '', baseOrigin = '') {
+  const scripts = readerNonce ? `'nonce-${readerNonce}'` : "'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:";
+  const workers = readerNonce ? "'none'" : 'blob:';
+  const base = readerNonce ? `; base-uri ${baseOrigin}` : '';
+  return `default-src 'none'; script-src ${scripts}; worker-src ${workers}; style-src 'unsafe-inline' blob: data:; img-src blob: data:; font-src blob: data:; media-src blob: data:; connect-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none'${base}`;
 }
 
 export function proxyNavigationAvailable(browserWindow = globalThis.window) {
@@ -368,6 +387,20 @@ export function remoteViewportPoint(bounds, viewport, clientX, clientY) {
   const rawX = (clientX - left) / scale, rawY = (clientY - top) / scale;
   return { x: Math.max(0, Math.min(viewport.width, rawX)), y: Math.max(0, Math.min(viewport.height, rawY)), scale: 1 / scale,
     inside: rawX >= 0 && rawX <= viewport.width && rawY >= 0 && rawY <= viewport.height };
+}
+
+// Run only for an explicit client copy/cut gesture; never poll the remote clipboard.
+export function remoteClipboardExpression(cutText) {
+  return `(() => {
+    let element = document.activeElement;
+    while (element?.shadowRoot?.activeElement) element = element.shadowRoot.activeElement;
+    if (element?.type === 'password') return '';
+    const field = element && typeof element.selectionStart === 'number';
+    const text = field ? element.value.slice(element.selectionStart, element.selectionEnd) : String(window.getSelection() || '');
+    if (new TextEncoder().encode(JSON.stringify(text)).length > 12 * 1024) throw Error('Clipboard text exceeds 12 KiB.');
+    ${cutText === undefined ? '' : `if (text === ${JSON.stringify(cutText)} && !(field && (element.readOnly || element.disabled))) document.execCommand('delete');`}
+    return text;
+  })()`;
 }
 
 export function scanCssResourceMatches(css, expression) {
@@ -482,6 +515,7 @@ export function parseClassicWorkerImports(source, baseUrl) {
   const calls = [];
   let error = '';
   const tree = javascriptParser.parse(text);
+  const computed = text.includes('.f.i') ? findClassicWorkerChunks(text, tree) : new Map();
   const cursor = tree.cursor();
   const visit = () => {
     if (error) return;
@@ -495,14 +529,18 @@ export function parseClassicWorkerImports(source, baseUrl) {
       if (isImportScripts) {
         const args = node.getChild('ArgList');
         const values = [];
-        for (let arg = args?.firstChild; arg; arg = arg.nextSibling) {
+        const chunkSpecifiers = computed.get(node.from);
+        const specifiers = chunkSpecifiers || [];
+        if (!chunkSpecifiers) for (let arg = args?.firstChild; arg; arg = arg.nextSibling) {
           if (['(', ')', ',', 'LineComment', 'BlockComment'].includes(arg.name)) continue;
           const raw = text.slice(arg.from, arg.to);
           if (arg.name !== 'String' || !/^(['"])[^\\\r\n]*\1$/.test(raw)) {
             error = 'Worker importScripts() requires static string URLs.';
             return;
           }
-          const specifier = raw.slice(1, -1);
+          specifiers.push(raw.slice(1, -1));
+        }
+        for (const specifier of specifiers) {
           let resolved;
           try { resolved = new URL(specifier, base); }
           catch { error = 'Worker importScripts() contains an invalid URL.'; return; }
@@ -512,7 +550,7 @@ export function parseClassicWorkerImports(source, baseUrl) {
           }
           values.push(resolved.href);
         }
-        if (values.length) calls.push({ from: args.from, to: args.to, urls: values });
+        if (values.length) calls.push({ from: args.from, to: args.to, urls: values, ...(chunkSpecifiers ? { computed: true } : {}) });
       }
     }
     if (cursor.firstChild()) {
@@ -525,56 +563,7 @@ export function parseClassicWorkerImports(source, baseUrl) {
 }
 
 export function parseModuleWorkerImports(source, baseUrl) {
-  const text = String(source ?? '');
-  const base = new URL(baseUrl);
-  const imports = [];
-  let error = '';
-  const tree = javascriptParser.parse(text);
-  const cursor = tree.cursor();
-  const visit = () => {
-    if (error) return;
-    if (cursor.name === '⚠') {
-      error = 'Worker module uses unsupported JavaScript syntax or import attributes.';
-      return;
-    }
-    if (cursor.name === 'ImportMeta') {
-      error = 'Worker modules using import.meta are not supported by the blob proxy.';
-      return;
-    }
-    if (cursor.name === 'DynamicImport') {
-      error = 'Dynamic import() is not supported in proxied worker modules.';
-      return;
-    }
-    if (cursor.name === 'ImportDeclaration' || cursor.name === 'ExportDeclaration') {
-      const literal = cursor.node.getChild('String');
-      if (literal) {
-        const raw = text.slice(literal.from, literal.to);
-        if (!/^(['"])[^\\\r\n]*\1$/.test(raw)) {
-          error = 'Worker module specifiers must be plain string literals.';
-          return;
-        }
-        const specifier = raw.slice(1, -1);
-        if (!/^(?:\.{1,2}\/|\/|[a-z][a-z\d+.-]*:)/i.test(specifier)) {
-          error = 'Bare worker module specifiers are not supported.';
-          return;
-        }
-        let resolved;
-        try { resolved = new URL(specifier, base); }
-        catch { error = 'Worker module contains an invalid import URL.'; return; }
-        if (!['http:', 'https:'].includes(resolved.protocol) || resolved.origin !== base.origin || resolved.username || resolved.password) {
-          error = 'Worker module imports must stay on the worker origin.';
-          return;
-        }
-        imports.push({ from: literal.from, to: literal.to, url: resolved.href });
-      }
-    }
-    if (cursor.firstChild()) {
-      do { visit(); } while (cursor.nextSibling());
-      cursor.parent();
-    }
-  };
-  visit();
-  return { imports, error };
+  return parseProxyModuleImports(source, baseUrl);
 }
 
 export function orderWorkerModuleGraph(modules, entryUrl) {
@@ -1217,32 +1206,6 @@ export function corsVisibleHeaders(headers, credentials = 'same-origin') {
   return normalizeHeaders(headers).filter(([name]) => safe.has(String(name).toLowerCase()));
 }
 
-const readStore = (key, fallback) => {
-  try { const value = JSON.parse(localStorage.getItem(key)); return value ?? fallback; }
-  catch { return fallback; }
-};
-const writeStore = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* file:// storage is optional */ } };
-function openBrowserStorageDb() {
-  return new Promise((resolve, reject) => {
-    if (!globalThis.indexedDB) { reject(Error('IndexedDB is unavailable.')); return; }
-    const request = indexedDB.open('eya-browser-profile', 1);
-    request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains('state')) request.result.createObjectStore('state'); };
-    request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error || Error('Could not open browser storage.'));
-  });
-}
-function readBrowserStorageDb(db, key) {
-  return new Promise((resolve, reject) => {
-    const request = db.transaction('state', 'readonly').objectStore('state').get(key);
-    request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error || Error('Could not read browser storage.'));
-  });
-}
-function writeBrowserStorageDb(db, key, value) {
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction('state', 'readwrite');
-    transaction.objectStore('state').put(value, key);
-    transaction.oncomplete = () => resolve(); transaction.onerror = transaction.onabort = () => reject(transaction.error || Error('Could not save browser storage.'));
-  });
-}
 const storageObject = items => Object.fromEntries(sanitizeStorageItems(items));
 const storageObjectBytes = value => Object.entries(value || {}).reduce((sum, [key, item]) => sum + new TextEncoder().encode(key).byteLength + new TextEncoder().encode(String(item)).byteLength, 0);
 const sanitizeSiteStorage = raw => {
@@ -1257,7 +1220,6 @@ const sanitizeSiteStorage = raw => {
   }
   return result;
 };
-const readSiteStorage = () => sanitizeSiteStorage(readStore(SITE_STORAGE_KEY, {}));
 const safeUrl = (raw, base) => {
   const value = String(raw || '').trim();
   if (!value) throw Error('Enter a web address or search query.');
@@ -1280,17 +1242,77 @@ const randomToken = () => {
   return [...bytes].map(value => value.toString(16).padStart(2, '0')).join('');
 };
 
-function bootstrapSource(nonce, initialCookies = '', initialStorage = {}, initialUrl = 'https://example.test/') {
+const browserShortcutActions = KEYBIND_ACTIONS.filter(action => ['Global', 'Browser'].includes(action.group));
+function browserShortcutBindings() {
+  return browserShortcutActions.filter(action => action.id !== 'browser.print').map(action => ({
+    id: action.id,
+    strokes: getActionKeybinds(action.id).map(normalizeKeybind).filter(Boolean).map(stroke => {
+      const parts = stroke.split('+'), key = parts.pop();
+      return { key, mod: parts.includes('Mod'), ctrl: parts.includes('Ctrl'), meta: parts.includes('Meta'), alt: parts.includes('Alt'), shift: parts.includes('Shift') };
+    }),
+  }));
+}
+
+// The real iframe URL stays opaque. Fragment navigation updates virtual history
+// and scrolls within the current document instead of fetching its HTML again.
+function createProxyFragments({ getUrl, getEntry, updateHistory }) {
+  const sameDocument = (previous, next) => previous.origin === next.origin
+    && previous.pathname === next.pathname && previous.search === next.search
+    && !next.username && !next.password;
+  const scrollToFragment = url => {
+    const fragment = new URL(url).hash.slice(1);
+    let name = fragment;
+    try { name = decodeURIComponent(fragment); } catch { /* Use malformed escapes literally. */ }
+    const target = name && (document.getElementById(name)
+      || Array.from(document.getElementsByName(name)).find(node => node.localName === 'a'));
+    if (target) target.scrollIntoView();
+    else if (!name || name.toLowerCase() === 'top') window.scrollTo(0, 0);
+  };
+  const saveScroll = () => { getEntry().scroll = [window.scrollX, window.scrollY]; };
+  const hashChanged = (oldURL, newURL) => {
+    if (new URL(oldURL).hash !== new URL(newURL).hash) {
+      window.dispatchEvent(new HashChangeEvent('hashchange', { oldURL, newURL }));
+    }
+  };
+  const navigate = (target, { replace = false, explicit = false } = {}) => {
+    const current = new URL(getUrl());
+    if (!sameDocument(current, target) || (!explicit && current.hash === target.hash)) return false;
+    if (target.href !== current.href) {
+      saveScroll();
+      updateHistory(replace ? 'replace' : 'push', null, target.href);
+    }
+    scrollToFragment(target.href);
+    hashChanged(current.href, target.href);
+    return true;
+  };
+  const restore = (previous, next) => {
+    const oldUrl = new URL(previous), nextUrl = new URL(next);
+    if (window.history.scrollRestoration === 'manual' || !sameDocument(oldUrl, nextUrl)
+      || oldUrl.hash === nextUrl.hash) return;
+    const position = getEntry().scroll;
+    if (position) window.scrollTo(...position);
+    else scrollToFragment(next);
+  };
+  const initial = getUrl();
+  if (new URL(initial).hash) window.addEventListener('load', () => {
+    if (getUrl() === initial) scrollToFragment(initial);
+  }, { once: true });
+  return { navigate, restore, saveScroll, hashChanged };
+}
+
+function bootstrapSource(nonce, initialCookies = '', initialStorage = {}, initialUrl = 'https://example.test/', readerMode = false) {
   // This code only runs inside the opaque-origin sandbox. The frame receives a
   // capability-limited MessagePort; it never receives Eya's Noise key/API.
   const token = JSON.stringify(nonce);
   const cookieSnapshot = JSON.stringify(initialCookies);
   const storageSnapshot = JSON.stringify(initialStorage).replaceAll('<', '\\u003c');
   const eventSourceParser = parseEventSourceBlock.toString();
-  return `globalThis.__eyaProxyInitialUrl=${JSON.stringify(initialUrl)};` + String.raw`(()=>{const N=${token},S=${storageSnapshot},P=parent,nativeEval=window.eval,NativeWorker=window.Worker,nativeFind=typeof window.find==='function'?window.find.bind(window):null,nativeStop=typeof window.stop==='function'?window.stop.bind(window):()=>{},nativePreventDefault=Function.prototype.call.bind(Event.prototype.preventDefault),workerBootstrap=${JSON.stringify(workerBootstrapSource())},moduleWorkerBootstrap=${JSON.stringify(moduleWorkerBootstrapSource())},stopImmediate=Function.prototype.call.bind(Event.prototype.stopImmediatePropagation);let port=null,seq=0;const pending=new Map(),resources=new Map(),pageSockets=new Map(),responseUrls=new WeakMap(),workerPrivate=new WeakMap(),workerCount={value:0},queued=[],nodeIds=new WeakMap(),elementsById=new Map();let nextNodeId=0,highlightedElement=null,highlightStyle=null,performanceObservers=[],performanceRecording=false;` +
-    `const parseEventSourceBlock=${eventSourceParser};const scanCssResourceMatches=${scanCssResourceMatches.toString()};` +
+  return `globalThis.__eyaProxyInitialUrl=${JSON.stringify(initialUrl)};` + String.raw`(()=>{const N=${token},S=${storageSnapshot},readerMode=${readerMode},P=parent,nativeEval=window.eval,NativeWorker=window.Worker,nativeFind=typeof window.find==='function'?window.find.bind(window):null,nativeStop=typeof window.stop==='function'?window.stop.bind(window):()=>{},nativePreventDefault=Function.prototype.call.bind(Event.prototype.preventDefault),workerBootstrap=${JSON.stringify(workerBootstrapSource())},moduleWorkerBootstrap=${JSON.stringify(moduleWorkerBootstrapSource())},stopImmediate=Function.prototype.call.bind(Event.prototype.stopImmediatePropagation);let port=null,seq=0,shortcutBindings=${JSON.stringify(browserShortcutBindings())};const pending=new Map(),resources=new Map(),pageSockets=new Map(),responseUrls=new WeakMap(),workerPrivate=new WeakMap(),workerCount={value:0},queued=[],nodeIds=new WeakMap(),elementsById=new Map();let nextNodeId=0,highlightedElement=null,highlightStyle=null,performanceObservers=[],performanceRecording=false;` +
+    `const parseEventSourceBlock=${eventSourceParser};const scanCssResourceMatches=${scanCssResourceMatches.toString()};const proxyCssTools=(${createProxyCssTools.toString()})();` +
+    String.raw`const nativeProperty=Object.defineProperty,nativePortPost=Function.prototype.call.bind(MessagePort.prototype.postMessage),nativePortStart=Function.prototype.call.bind(MessagePort.prototype.start),nativePortListen=Function.prototype.call.bind(EventTarget.prototype.addEventListener),nativePortSet=Function.prototype.call.bind(Object.getOwnPropertyDescriptor(MessagePort.prototype,'onmessage').set),nativeMessageData=Function.prototype.call.bind(Object.getOwnPropertyDescriptor(MessageEvent.prototype,'data').get),nativeMessagePorts=Function.prototype.call.bind(Object.getOwnPropertyDescriptor(MessageEvent.prototype,'ports').get),nativeMessageSource=Function.prototype.call.bind(Object.getOwnPropertyDescriptor(MessageEvent.prototype,'source').get),nativeKey=Object.fromEntries(['key','code','ctrlKey','metaKey','altKey','shiftKey'].map(name=>[name,Function.prototype.call.bind(Object.getOwnPropertyDescriptor(KeyboardEvent.prototype,name).get)]));` +
     String.raw`let documentCookie=${cookieSnapshot};try{Object.defineProperty(document,'cookie',{configurable:true,get(){return documentCookie},set(raw){raw=String(raw);const pair=raw.split(';',1)[0],at=pair.indexOf('=');if(at>0){const name=pair.slice(0,at).trim(),value=pair.slice(at+1).trim(),parts=documentCookie?documentCookie.split(/;\s*/).filter(item=>item.slice(0,item.indexOf('='))!==name):[],age=raw.match(/(?:^|;)\s*max-age\s*=\s*(-?\d+)/i),expires=raw.match(/(?:^|;)\s*expires\s*=\s*([^;]+)/i),remove=age?Number(age[1])<=0:expires&&Date.parse(expires[1])<=Date.now();if(!remove)parts.push(name+'='+value);documentCookie=parts.join('; ')}send({type:'cookie',value:raw})}})}catch{}` +
-    String.raw`const send=(m,t=[])=>{if(port)port.postMessage(m,t);else queued.push([m,t])};let virtualHistory=[{url:String(globalThis.__eyaProxyInitialUrl||document.baseURI),state:null}],virtualHistoryIndex=0;try{delete globalThis.__eyaProxyInitialUrl}catch{};const virtualUrl=()=>virtualHistory[virtualHistoryIndex]?.url||document.baseURI;const updateVirtualBase=url=>{const base=document.querySelector('base[data-eya-proxy-base]');if(base)base.href=url};const cloneHistoryState=value=>{let clone;try{clone=structuredClone(value)}catch{throw new DOMException('History state cannot be cloned.','DataCloneError')}let size;try{size=new TextEncoder().encode(JSON.stringify(clone)??'null').byteLength}catch{throw new DOMException('History state must be serializable.','DataCloneError')}if(size>65536)throw new DOMException('History state exceeds the 64 KiB limit.','QuotaExceededError');return clone};const reportHistory=(action,index=virtualHistoryIndex)=>send({type:'history',action,url:virtualUrl(),index});const routeHistory=(action,state,url)=>{const current=new URL(virtualUrl()),target=url==null?current:new URL(String(url),current);if(!['http:','https:'].includes(target.protocol)||target.origin!==current.origin)throw new DOMException('History URL must remain same-origin.','SecurityError');const cloned=cloneHistoryState(state);if(action==='push'){virtualHistory=virtualHistory.slice(0,virtualHistoryIndex+1);virtualHistory.push({url:target.href,state:cloned});if(virtualHistory.length>50)virtualHistory.shift();virtualHistoryIndex=virtualHistory.length-1}else virtualHistory[virtualHistoryIndex]={url:target.href,state:cloned};updateVirtualBase(target.href);reportHistory(action);return undefined};const routePageNavigation=(raw,history='push')=>{let target;try{target=new URL(history==='reload'?virtualUrl():String(raw),virtualUrl())}catch{return ''}if(!['http:','https:'].includes(target.protocol)){send({type:'console',level:'error',args:['Blocked page navigation',target.href]});return ''}send({type:'navigate',url:target.href,history});return target.href};try{Object.defineProperty(window,'__eyaNavigate',{value:routePageNavigation,configurable:false,writable:false})}catch{};try{const historyObject=window.history;Object.defineProperty(historyObject,'pushState',{configurable:true,writable:true,value:(state,title,url)=>routeHistory('push',state,url)});Object.defineProperty(historyObject,'replaceState',{configurable:true,writable:true,value:(state,title,url)=>routeHistory('replace',state,url)});Object.defineProperty(historyObject,'state',{configurable:true,get:()=>cloneHistoryState(virtualHistory[virtualHistoryIndex]?.state??null)});Object.defineProperty(historyObject,'length',{configurable:true,get:()=>virtualHistory.length});Object.defineProperty(historyObject,'back',{configurable:true,writable:true,value:()=>send({type:'history-go',delta:-1})});Object.defineProperty(historyObject,'forward',{configurable:true,writable:true,value:()=>send({type:'history-go',delta:1})});Object.defineProperty(historyObject,'go',{configurable:true,writable:true,value:delta=>{delta=Number(delta??0);if(!Number.isFinite(delta))return;delta=Math.trunc(delta);if(delta===0)send({type:'navigate',url:virtualUrl(),history:'reload'});else send({type:'history-go',delta:Math.max(-50,Math.min(50,delta))})}})}catch{}` +
+    String.raw`const send=(m,t=[])=>{if(port)port.postMessage(m,t);else queued.push([m,t])};let virtualHistory=[{url:String(globalThis.__eyaProxyInitialUrl||document.baseURI),state:null}],virtualHistoryIndex=0;try{delete globalThis.__eyaProxyInitialUrl}catch{};const virtualUrl=()=>virtualHistory[virtualHistoryIndex]?.url||document.baseURI;const updateVirtualBase=url=>{const base=document.querySelector('base[data-eya-proxy-base]');if(base)base.href=url};const cloneHistoryState=value=>{let clone;try{clone=structuredClone(value)}catch{throw new DOMException('History state cannot be cloned.','DataCloneError')}let size;try{size=new TextEncoder().encode(JSON.stringify(clone)??'null').byteLength}catch{throw new DOMException('History state must be serializable.','DataCloneError')}if(size>65536)throw new DOMException('History state exceeds the 64 KiB limit.','QuotaExceededError');return clone};const reportHistory=(action,index=virtualHistoryIndex)=>send({type:'history',action,url:virtualUrl(),index});const routeHistory=(action,state,url)=>{const current=new URL(virtualUrl()),target=url==null?current:new URL(String(url),current);if(!['http:','https:'].includes(target.protocol)||target.origin!==current.origin)throw new DOMException('History URL must remain same-origin.','SecurityError');const cloned=cloneHistoryState(state);if(action==='push'){virtualHistory=virtualHistory.slice(0,virtualHistoryIndex+1);virtualHistory.push({url:target.href,state:cloned});if(virtualHistory.length>50)virtualHistory.shift();virtualHistoryIndex=virtualHistory.length-1}else virtualHistory[virtualHistoryIndex]={url:target.href,state:cloned};updateVirtualBase(target.href);reportHistory(action);return undefined};const fragments=(${createProxyFragments.toString()})({getUrl:virtualUrl,getEntry:()=>virtualHistory[virtualHistoryIndex],updateHistory:routeHistory});const routePageNavigation=(raw,history='push')=>{let target;try{target=new URL(history==='reload'?virtualUrl():String(raw),virtualUrl())}catch{return ''}if(!['http:','https:'].includes(target.protocol)){send({type:'console',level:'error',args:['Blocked page navigation',target.href]});return ''}if(history!=='reload'&&fragments.navigate(target,{replace:history==='replace'}))return target.href;send({type:'navigate',url:target.href,history});return target.href};try{Object.defineProperty(window,'__eyaNavigate',{value:routePageNavigation,configurable:false,writable:false})}catch{};try{const historyObject=window.history;Object.defineProperty(historyObject,'pushState',{configurable:true,writable:true,value:(state,title,url)=>routeHistory('push',state,url)});Object.defineProperty(historyObject,'replaceState',{configurable:true,writable:true,value:(state,title,url)=>routeHistory('replace',state,url)});Object.defineProperty(historyObject,'state',{configurable:true,get:()=>cloneHistoryState(virtualHistory[virtualHistoryIndex]?.state??null)});Object.defineProperty(historyObject,'length',{configurable:true,get:()=>virtualHistory.length});Object.defineProperty(historyObject,'back',{configurable:true,writable:true,value:()=>send({type:'history-go',delta:-1})});Object.defineProperty(historyObject,'forward',{configurable:true,writable:true,value:()=>send({type:'history-go',delta:1})});Object.defineProperty(historyObject,'go',{configurable:true,writable:true,value:delta=>{delta=Number(delta??0);if(!Number.isFinite(delta))return;delta=Math.trunc(delta);if(delta===0)send({type:'navigate',url:virtualUrl(),history:'reload'});else send({type:'history-go',delta:Math.max(-50,Math.min(50,delta))})}})}catch{}` +
+    `(${installProxyLocation.toString()})(virtualUrl,routePageNavigation);` +
     String.raw`const perfEntry=e=>{let name=String(e.name||'');try{const u=new URL(name);if(['http:','https:','ws:','wss:'].includes(u.protocol)){u.username='';u.password='';u.search='';u.hash='';name=u.href}}catch{}const out={entryType:String(e.entryType||'').slice(0,32),name:name.slice(0,512)};for(const key of ['startTime','duration','transferSize','encodedBodySize','decodedBodySize','domInteractive','domContentLoadedEventStart','domContentLoadedEventEnd','loadEventStart','loadEventEnd','responseStart','responseEnd','value'])if(Number.isFinite(e[key]))out[key]=e[key];for(const key of ['initiatorType','nextHopProtocol'])if(typeof e[key]==='string')out[key]=e[key].slice(0,64);if(typeof e.hadRecentInput==='boolean')out.hadRecentInput=e.hadRecentInput;return out};` +
     String.raw`const perfSnapshot=()=>{let memory=null;try{const m=performance.memory;if(m)memory={usedJSHeapSize:m.usedJSHeapSize,totalJSHeapSize:m.totalJSHeapSize,jsHeapSizeLimit:m.jsHeapSizeLimit}}catch{}return{entries:performance.getEntries().slice(-500).map(perfEntry),memory}};` +
     String.raw`const stopPerformance=()=>{performanceRecording=false;for(const observer of performanceObservers)observer.disconnect();performanceObservers=[]};` +
@@ -1298,13 +1320,15 @@ function bootstrapSource(nonce, initialCookies = '', initialStorage = {}, initia
     String.raw`const preview=(value,depth=0,seen=new WeakSet())=>{if(value===null||value===undefined||typeof value==='number'||typeof value==='boolean')return value;if(typeof value==='string')return value.length>4096?value.slice(0,4096)+'… [truncated]':value;if(typeof value==='bigint')return String(value)+'n';if(typeof value==='symbol')return String(value);if(typeof value==='function')return '[Function '+(value.name||'anonymous')+']';if(value instanceof Node)return '<'+(value.nodeName||'node').toLowerCase()+(value.id?'#'+value.id:'')+'>';if(depth>=3)return '[Object]';if(seen.has(value))return '[Circular]';seen.add(value);if(Array.isArray(value))return value.slice(0,50).map(item=>preview(item,depth+1,seen));const result={};for(const key of Object.keys(value).slice(0,50)){let descriptor;try{descriptor=Object.getOwnPropertyDescriptor(value,key)}catch{}result[key]=descriptor&&'value'in descriptor?preview(descriptor.value,depth+1,seen):'[Getter]'}return result};` +
     String.raw`const bytes=async b=>{if(b==null)return new Uint8Array();const reader=new Response(b).body.getReader(),chunks=[];let size=0;for(;;){const part=await reader.read();if(part.done)break;size+=part.value.byteLength;if(size>4*1024*1024){await reader.cancel();throw new TypeError('Request body exceeds the 4 MiB WebSocket upload limit.')}chunks.push(part.value)}const out=new Uint8Array(size);let offset=0;for(const chunk of chunks){out.set(chunk,offset);offset+=chunk.byteLength}return out};` +
     String.raw`const proxyResource=(url,resourceType,options={})=>new Promise((resolve,reject)=>{const id=++seq;resources.set(id,{resolve,reject});send({type:'resource',id,url:new URL(url,document.baseURI).href,resourceType,skipLocationRewrite:options.skipLocationRewrite===true})});const proxyResourceSource=(url,moduleMode=false,pageModule=false)=>{const id=++seq;let rejectRequest;const promise=new Promise((resolve,reject)=>{rejectRequest=reject;resources.set(id,{resolve,reject})});send({type:'resource',id,url:new URL(url,document.baseURI).href,resourceType:'script',transferSource:true,moduleMode,pageModule});return{promise,cancel(){if(resources.delete(id)){send({type:'cancel',id});rejectRequest(new DOMException('Module load cancelled.','AbortError'))}}}};` +
-    String.raw`const createModuleGraph=message=>{const urls=new Map(),created=[];try{if(!message||!Array.isArray(message.order)||!message.modules||typeof message.url!=='string')throw Error('Invalid module graph');for(const moduleUrl of message.order){const record=message.modules[moduleUrl];if(!record||typeof record.source!=='string'||!Array.isArray(record.imports))throw Error('Invalid module record');let source=record.source;const replacements=record.imports.map(edge=>{const dependency=urls.get(edge.url);if(!dependency||!Number.isSafeInteger(edge.from)||!Number.isSafeInteger(edge.to)||edge.from<0||edge.to<edge.from||edge.to>source.length)throw Error('Invalid module dependency graph');return{from:edge.from,to:edge.to,text:JSON.stringify(dependency)}});for(const replacement of replacements.sort((a,b)=>b.from-a.from))source=source.slice(0,replacement.from)+replacement.text+source.slice(replacement.to);const blob=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));urls.set(moduleUrl,blob);created.push(blob)}const entry=urls.get(message.url);if(!entry)throw Error('Module graph has no entry point');let released=false;return{url:entry,release(){if(released)return;released=true;for(const blob of created)URL.revokeObjectURL(blob)}}}catch(error){for(const blob of created)URL.revokeObjectURL(blob);throw error}};` +
+    `const pageModuleUrls=new Map();const pageModuleImportMap=message=>{const imports=Object.create(null),created=[];for(const [key,record] of Object.entries(message.modules)){if(pageModuleUrls.has(key))continue;let source=record.source;for(const edge of [...record.imports].sort((a,b)=>b.from-a.from))source=source.slice(0,edge.from)+JSON.stringify(edge.url)+source.slice(edge.to);const url=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));pageModuleUrls.set(key,url);imports[key]=url;created.push(url)}if(created.length){const map=document.createElement('script');map.type='importmap';map.textContent=JSON.stringify({imports});document.head.append(map)}const url=pageModuleUrls.get(message.url);if(!url)throw Error('Missing module entry');addEventListener('pagehide',()=>{for(const url of created)URL.revokeObjectURL(url)},{once:true});return{url,release(){}}};` +
+    String.raw`const createModuleGraph=message=>{if(message.pageModule)return pageModuleImportMap(message);const urls=new Map(),created=[];try{if(!message||!Array.isArray(message.order)||!message.modules||typeof message.url!=='string')throw Error('Invalid module graph');for(const moduleUrl of message.order){const record=message.modules[moduleUrl];if(!record||typeof record.source!=='string'||!Array.isArray(record.imports))throw Error('Invalid module record');let source=record.source;const replacements=record.imports.map(edge=>{const dependency=urls.get(edge.url);if(!dependency||!Number.isSafeInteger(edge.from)||!Number.isSafeInteger(edge.to)||edge.from<0||edge.to<edge.from||edge.to>source.length)throw Error('Invalid module dependency graph');return{from:edge.from,to:edge.to,text:JSON.stringify(dependency)}});for(const replacement of replacements.sort((a,b)=>b.from-a.from))source=source.slice(0,replacement.from)+replacement.text+source.slice(replacement.to);const blob=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));urls.set(moduleUrl,blob);created.push(blob)}const entry=urls.get(message.url);if(!entry)throw Error('Module graph has no entry point');let released=false;addEventListener('pagehide',()=>{for(const blob of created)URL.revokeObjectURL(blob)},{once:true});return{url:entry,release(){if(released)return;released=true;for(const blob of created)URL.revokeObjectURL(blob)}}}catch(error){for(const blob of created)URL.revokeObjectURL(blob);throw error}};` +
     String.raw`const request=async(input,init={},userscriptId='',followRedirects=true)=>{const effective=new Request(input,init),u=effective.url;` +
     String.raw`const method=effective.method.toUpperCase();const headers=new Headers(effective.headers);` +
     String.raw`const body=await bytes(effective.body);const id=++seq;` +
     String.raw`const signal=effective.signal,credentials=effective.credentials,mode=effective.mode;return new Promise((resolve,reject)=>{const cancel=()=>{const p=pending.get(id);if(!p||!pending.delete(id))return;signal?.removeEventListener('abort',cancel);send({type:'cancel',id});const error=new DOMException('The operation was aborted.','AbortError');p.streamController?.error(error);reject(error)};pending.set(id,{resolve,reject,method,signal,cancel});if(signal){if(signal.aborted){cancel();return}signal.addEventListener('abort',cancel,{once:true})}send({type:'request',id,url:new URL(u,document.baseURI).href,method,headers:[...headers],body:body.buffer,credentials,mode,resourceType:init.resourceType||'xmlhttprequest',discardBody:init.discardBody===true,userscriptId:typeof userscriptId==='string'?userscriptId:undefined,followRedirects:followRedirects!==false},[body.buffer])});};` +
     String.raw`window.__eyaUserscriptRequest=(scriptId,options,signal)=>{if(!options||typeof options!=='object')return Promise.reject(new TypeError('GM_xmlhttpRequest options are required.'));const url=String(options.url||'');const method=String(options.method||'GET').toUpperCase();return request(url,{method,headers:options.headers||{},body:options.data,signal,credentials:'omit',mode:'cors',resourceType:'xmlhttprequest'},scriptId,false).then(response=>({response,finalUrl:responseUrls.get(response)||url}))};` +
-    String.raw`if(NativeWorker){class EyaWorker extends NativeWorker{constructor(url,options={}){const target=new URL(url,document.baseURI);if(!/^https?:$/.test(target.protocol)||target.origin!==new URL(document.baseURI).origin)throw new DOMException('Worker scripts must be same-origin HTTP or HTTPS URLs.','SecurityError');if(workerCount.value>=${MAX_WORKERS_PER_TAB})throw new DOMException('This page reached the dedicated worker limit.','QuotaExceededError');const config=options&&typeof options==='object'?options:{};const moduleMode=config.type==='module';const bootUrl=URL.createObjectURL(new Blob([moduleMode?moduleWorkerBootstrap:workerBootstrap],{type:'text/javascript'}));super(bootUrl,{type:'classic',name:typeof config.name==='string'?config.name:''});let bootUrlRevoked=false;const revoke=()=>{if(bootUrlRevoked)return;bootUrlRevoked=true;URL.revokeObjectURL(bootUrl)};workerCount.value++;let released=false;const release=()=>{if(released)return;released=true;workerCount.value=Math.max(0,workerCount.value-1)};const channel=new MessageChannel();const sourceLoad=proxyResourceSource(target.href,moduleMode);const state={port:channel.port1,fetches:new Map(),revoke,release,sourceLoad};workerPrivate.set(this,state);state.port.start();this.addEventListener('error',()=>{revoke()},{once:true});this.addEventListener('message',event=>{if(event.data?.type==='eya-worker-ready'){stopImmediate(event);revoke()}else if(event.data?.type==='eya-worker-error'){stopImmediate(event);revoke();this.dispatchEvent(new ErrorEvent('error',{message:String(event.data.error||'Worker failed')}));this.terminate()}},{capture:true});super.postMessage({type:'eya-init',base:target.href},[channel.port2]);sourceLoad.promise.then(result=>{if(!bootUrlRevoked)super.postMessage({type:'eya-source',...result,base:result.url||target.href})}).catch(error=>{if(!bootUrlRevoked)super.postMessage({type:'eya-source-error',error:String(error.message||error).slice(0,1024)})});state.port.onmessage=event=>{const message=event.data;if(!message||!Number.isSafeInteger(message.id))return;if(message.type==='fetch-cancel'){state.fetches.get(message.id)?.abort();return}if(message.type!=='fetch')return;if(state.fetches.size>=${MAX_WORKER_FETCHES}){state.port.postMessage({type:'fetch-response',id:message.id,error:'Worker fetch limit reached'});return}const controller=new AbortController();state.fetches.set(message.id,controller);request(new URL(String(message.url||''),target.href).href,{method:message.method,headers:message.headers,body:message.body?.byteLength?new Uint8Array(message.body):undefined,credentials:message.credentials,mode:message.mode,signal:controller.signal,resourceType:'xmlhttprequest'}).then(async response=>{const reader=response.body?.getReader();const chunks=[];let size=0;if(reader){for(;;){const part=await reader.read();if(part.done)break;size+=part.value.byteLength;if(size>${MAX_WORKER_RESPONSE_BYTES}){await reader.cancel();throw new TypeError('Worker response exceeds the bridge limit.')}chunks.push(part.value)}}const bytes=new Uint8Array(size);let offset=0;for(const part of chunks){bytes.set(part,offset);offset+=part.byteLength}state.port.postMessage({type:'fetch-response',id:message.id,status:response.status,statusText:response.statusText,headers:[...response.headers],url:responseUrls.get(response)||'',opaque:response.type==='opaque',body:bytes.buffer},[bytes.buffer])}).catch(error=>{try{state.port.postMessage({type:'fetch-response',id:message.id,error:String(error.message||error).slice(0,1024)})}catch{}}).finally(()=>state.fetches.delete(message.id))};state.port.onmessageerror=()=>{};}terminate(){const state=workerPrivate.get(this);if(state){for(const controller of state.fetches.values())controller.abort();state.fetches.clear();state.port.close();state.sourceLoad.cancel();state.revoke();state.release();workerPrivate.delete(this)}super.terminate()}}window.Worker=EyaWorker;}` +
+    `(${installProxyModuleImports.toString()})(url=>proxyResourceSource(url,true,true).promise.then(createModuleGraph),virtualUrl);` +
+    String.raw`if(!readerMode&&NativeWorker){class EyaWorker extends NativeWorker{constructor(url,options={}){const target=new URL(url,virtualUrl());if(!/^https?:$/.test(target.protocol)||target.origin!==new URL(virtualUrl()).origin)throw new DOMException('Worker scripts must be same-origin HTTP or HTTPS URLs.','SecurityError');if(workerCount.value>=${MAX_WORKERS_PER_TAB})throw new DOMException('This page reached the dedicated worker limit.','QuotaExceededError');const config=options&&typeof options==='object'?options:{};const moduleMode=config.type==='module';const bootUrl=URL.createObjectURL(new Blob([moduleMode?moduleWorkerBootstrap:workerBootstrap],{type:'text/javascript'}));super(bootUrl,{type:'classic',name:typeof config.name==='string'?config.name:''});let bootUrlRevoked=false;const revoke=()=>{if(bootUrlRevoked)return;bootUrlRevoked=true;URL.revokeObjectURL(bootUrl)};workerCount.value++;let released=false;const release=()=>{if(released)return;released=true;workerCount.value=Math.max(0,workerCount.value-1)};const channel=new MessageChannel();const sourceLoad=proxyResourceSource(target.href,moduleMode);const state={port:channel.port1,fetches:new Map(),revoke,release,sourceLoad};workerPrivate.set(this,state);state.port.start();this.addEventListener('error',()=>{revoke()},{once:true});this.addEventListener('message',event=>{if(event.data?.type==='eya-worker-ready'){stopImmediate(event);revoke()}else if(event.data?.type==='eya-worker-error'){stopImmediate(event);revoke();this.dispatchEvent(new ErrorEvent('error',{message:String(event.data.error||'Worker failed')}));this.terminate()}},{capture:true});super.postMessage({type:'eya-init',base:target.href},[channel.port2]);sourceLoad.promise.then(result=>{if(!bootUrlRevoked)super.postMessage({type:'eya-source',...result,base:result.url||target.href})}).catch(error=>{if(!bootUrlRevoked)super.postMessage({type:'eya-source-error',error:String(error.message||error).slice(0,1024)})});state.port.onmessage=event=>{const message=event.data;if(!message||!Number.isSafeInteger(message.id))return;if(message.type==='fetch-cancel'){state.fetches.get(message.id)?.abort();return}if(message.type!=='fetch')return;if(state.fetches.size>=${MAX_WORKER_FETCHES}){state.port.postMessage({type:'fetch-response',id:message.id,error:'Worker fetch limit reached'});return}const controller=new AbortController();state.fetches.set(message.id,controller);request(new URL(String(message.url||''),target.href).href,{method:message.method,headers:message.headers,body:message.body?.byteLength?new Uint8Array(message.body):undefined,credentials:message.credentials,mode:message.mode,signal:controller.signal,resourceType:'xmlhttprequest'}).then(async response=>{const reader=response.body?.getReader();const chunks=[];let size=0;if(reader){for(;;){const part=await reader.read();if(part.done)break;size+=part.value.byteLength;if(size>${MAX_WORKER_RESPONSE_BYTES}){await reader.cancel();throw new TypeError('Worker response exceeds the bridge limit.')}chunks.push(part.value)}}const bytes=new Uint8Array(size);let offset=0;for(const part of chunks){bytes.set(part,offset);offset+=part.byteLength}state.port.postMessage({type:'fetch-response',id:message.id,status:response.status,statusText:response.statusText,headers:[...response.headers],url:responseUrls.get(response)||'',opaque:response.type==='opaque',body:bytes.buffer},[bytes.buffer])}).catch(error=>{try{state.port.postMessage({type:'fetch-response',id:message.id,error:String(error.message||error).slice(0,1024)})}catch{}}).finally(()=>state.fetches.delete(message.id))};state.port.onmessageerror=()=>{};}terminate(){const state=workerPrivate.get(this);if(state){for(const controller of state.fetches.values())controller.abort();state.fetches.clear();state.port.close();state.sourceLoad.cancel();state.revoke();state.release();workerPrivate.delete(this)}super.terminate()}}window.Worker=EyaWorker;}` +
     String.raw`window.__eyaUserscriptStorage=(scriptId,action,key,value)=>send({type:'userscript-storage',scriptId,action,key,value});window.fetch=(input,init)=>request(input,init);` +
     String.raw`class EyaEventSource extends EventTarget{constructor(url,options={}){super();this.url=new URL(url,document.baseURI).href;this.withCredentials=!!options.withCredentials;this.readyState=0;this.onopen=this.onmessage=this.onerror=null;this.lastEventId='';this._retry=3000;this._closed=false;this._controller=null;this._connect()}close(){this._closed=true;this.readyState=2;this._controller?.abort()}_emit(type,event){this.dispatchEvent(event);if(typeof this['on'+type]==='function')this['on'+type](event)}async _connect(){if(!/^https?:/i.test(this.url)){this.readyState=2;this._closed=true;this._emit('error',new Event('error'));return}while(!this._closed){const controller=new AbortController();this._controller=controller;try{const headers={accept:'text/event-stream'};if(this.lastEventId)headers['last-event-id']=this.lastEventId;const response=await request(this.url,{method:'GET',headers,signal:controller.signal,credentials:this.withCredentials?'include':'same-origin',resourceType:'xmlhttprequest'});if(response.status===204){this.close();return}if(response.status<200||response.status>=300||!/^text\/event-stream\b/i.test(response.headers.get('content-type')||'')){this._terminal=true;throw Error('EventSource response must be a successful text/event-stream response.')}this.readyState=1;this._emit('open',new Event('open'));const reader=response.body?.getReader();if(!reader)throw Error('EventSource response has no stream.');const decoder=new TextDecoder();let buffer='';while(!this._closed){const part=await reader.read();if(part.done)break;buffer+=decoder.decode(part.value,{stream:true});if(buffer.length>1048576)throw Error('EventSource event exceeds the 1 MiB limit.');let boundary;while((boundary=/(?:\r\n\r\n|\n\n|\r\r)/.exec(buffer))){const block=buffer.slice(0,boundary.index);buffer=buffer.slice(boundary.index+boundary[0].length);this._dispatchBlock(block)}}if(!this._closed&&buffer)this._dispatchBlock(buffer)}catch(error){if(this._closed||error.name==='AbortError')return;if(this._terminal){this._closed=true;this.readyState=2;this._emit('error',new Event('error'));return}}finally{if(this._controller===controller)this._controller=null}if(!this._closed){this.readyState=0;this._emit('error',new Event('error'));await new Promise(resolve=>setTimeout(resolve,this._retry))}}}_dispatchBlock(block){const parsed=parseEventSourceBlock(block,this);if(parsed)this._emit(parsed.type,new MessageEvent(parsed.type,{data:parsed.data,lastEventId:parsed.lastEventId,origin:new URL(this.url).origin}))}}EyaEventSource.CONNECTING=0;EyaEventSource.OPEN=1;EyaEventSource.CLOSED=2;EyaEventSource.prototype.CONNECTING=0;EyaEventSource.prototype.OPEN=1;EyaEventSource.prototype.CLOSED=2;window.EventSource=EyaEventSource;` +
     String.raw`const installSendBeacon=()=>{try{Object.defineProperty(navigator,'sendBeacon',{configurable:true,value:(url,data=null)=>{let body=new Uint8Array(),headers={};if(data==null){}else if(typeof data==='string'){body=new TextEncoder().encode(data);headers['content-type']='text/plain;charset=UTF-8'}else if(data instanceof URLSearchParams){body=new TextEncoder().encode(data.toString());headers['content-type']='application/x-www-form-urlencoded;charset=UTF-8'}else if(data instanceof Blob){if(data.size>40960)return false;headers['content-type']=data.type||'application/octet-stream';data.arrayBuffer().then(value=>request(url,{method:'POST',headers,body:new Uint8Array(value),credentials:'same-origin',resourceType:'ping',discardBody:true}).catch(()=>{})).catch(()=>{});return true}else if(data instanceof ArrayBuffer)body=new Uint8Array(data);else if(ArrayBuffer.isView(data))body=new Uint8Array(data.buffer,data.byteOffset,data.byteLength);else return false;if(body.byteLength>40960)return false;request(url,{method:'POST',headers,body,credentials:'same-origin',resourceType:'ping',discardBody:true}).catch(()=>{});return true}})}catch{}};installSendBeacon();` +
@@ -1314,20 +1338,21 @@ function bootstrapSource(nonce, initialCookies = '', initialStorage = {}, initia
       close(code=1000,reason=''){if(this.readyState>=2)return;if(code!==1000&&(code<3000||code>4999))throw new DOMException('Invalid WebSocket close code.','InvalidAccessError');if(new TextEncoder().encode(reason).length>123)throw new DOMException('WebSocket close reason is too long.','SyntaxError');this.readyState=2;send({type:'ws-close',id:this._id,code,reason})}
       _emit(type,event){this.dispatchEvent(event);if(typeof this['on'+type]==='function')this['on'+type](event)}}
     EyaWebSocket.CONNECTING=0;EyaWebSocket.OPEN=1;EyaWebSocket.CLOSING=2;EyaWebSocket.CLOSED=3;EyaWebSocket.prototype.CONNECTING=0;EyaWebSocket.prototype.OPEN=1;EyaWebSocket.prototype.CLOSING=2;EyaWebSocket.prototype.CLOSED=3;window.WebSocket=EyaWebSocket;window.MozWebSocket=EyaWebSocket;` +
-    String.raw`addEventListener('message',e=>{if(e.source!==P||e.data?.type!=='eya-connect'||e.data.nonce!==N||!e.ports[0])return;stopImmediate(e);` +
-    String.raw`port=e.ports[0];for(const [m,t] of queued.splice(0))port.postMessage(m,t);port.onmessage=async ev=>{const m=ev.data;if(m.type==='find-in-page'){const id=m.id,query=typeof m.text==='string'?m.text.slice(0,256):'';let found=false;if(query&&nativeFind){try{if(m.reset===true)window.getSelection()?.removeAllRanges();found=nativeFind(query,false,m.backwards===true,true,false,false)===true}catch{}}send({type:'find-result',id,found});return}if(m.type==='performance-snapshot'){send({type:'performance-data',id:m.id,...perfSnapshot()});return}if(m.type==='performance-record-start'){startPerformance();send({type:'performance-data',id:m.id,memory:perfSnapshot().memory,entries:[]});return}if(m.type==='performance-record-stop'){stopPerformance();return}if(m.type==='cookie-snapshot'){documentCookie=String(m.value||'');return}if(m.type==='storage-sync'){const map=m.area==='local'?localStore:sessionStore,key=String(m.key||''),oldValue=map.get(key)??null;map.__eyaApply?.(m.action,key,m.value);try{if(m.notify!==false){const event=new Event('storage');for(const [name,value] of Object.entries({key:m.action==='clear'?null:key,oldValue:m.action==='clear'?null:oldValue,newValue:m.action==='set'?String(m.value):null,url:String(m.url||''),storageArea:m.area==='local'?window.localStorage:window.sessionStorage}))Object.defineProperty(event,name,{value});window.dispatchEvent(event)}}catch{}return}if(m.type==='ws-open-result'){const s=pageSockets.get(m.id);if(!s)return;if(m.ok){s.protocol=m.protocol||'';s.readyState=1;s._emit('open',new Event('open'))}else{s.readyState=3;pageSockets.delete(m.id);s._emit('error',new Event('error'));s._emit('close',new CloseEvent('close',{code:1006,reason:m.error||'',wasClean:false}))}return}if(m.type==='ws-message'){const s=pageSockets.get(m.id);if(!s||s.readyState!==1)return;const bytes=new Uint8Array(m.body);const data=m.kind===1?new TextDecoder().decode(bytes):s.binaryType==='arraybuffer'?bytes.buffer:new Blob([bytes]);try{s._emit('message',new MessageEvent('message',{data,origin:new URL(s.url).origin}))}finally{send({type:'ws-credit',id:m.id})}return}if(m.type==='ws-error'){const s=pageSockets.get(m.id);if(s)s._emit('error',new Event('error'));return}if(m.type==='ws-close'){const s=pageSockets.get(m.id);if(!s)return;pageSockets.delete(m.id);s.readyState=3;s._emit('close',new CloseEvent('close',{code:m.code||1006,reason:m.reason||'',wasClean:m.wasClean===true}));return}if(m.type==='highlight-node'){const node=elementsById.get(m.id);if(!node?.isConnected)return;if(highlightedElement===node){node.scrollIntoView?.({block:'nearest',inline:'nearest'});return}if(highlightedElement&&highlightStyle){if(highlightStyle.outline)highlightedElement.style.setProperty('outline',highlightStyle.outline,highlightStyle.outlinePriority);else highlightedElement.style.removeProperty('outline');if(highlightStyle.offset)highlightedElement.style.setProperty('outline-offset',highlightStyle.offset,highlightStyle.offsetPriority);else highlightedElement.style.removeProperty('outline-offset')}highlightedElement=node;highlightStyle={outline:node.style.getPropertyValue('outline'),outlinePriority:node.style.getPropertyPriority('outline'),offset:node.style.getPropertyValue('outline-offset'),offsetPriority:node.style.getPropertyPriority('outline-offset')};node.style.setProperty('outline','2px solid #13b8a6','important');node.style.setProperty('outline-offset','2px','important');node.scrollIntoView?.({block:'nearest',inline:'nearest'});return}if(m.type==='resource-url'||m.type==='resource-source'||m.type==='resource-error'){const r=resources.get(m.id);if(r){resources.delete(m.id);m.type==='resource-url'?r.resolve(m.url):m.type==='resource-source'?r.resolve({source:m.source,url:m.url,sources:m.sources,modules:m.modules,order:m.order}):r.reject(new TypeError(m.error||'Resource request failed'))}return}const p=pending.get(m.id);if(m.type==='response'){if(!p)return;` +
+    String.raw`addEventListener('message',e=>{if(!e.isTrusted||nativeMessageSource(e)!==P||nativeMessageData(e)?.type!=='eya-connect'||nativeMessageData(e).nonce!==N||!nativeMessagePorts(e)[0])return;stopImmediate(e);const privatePort=nativeMessagePorts(e)[0];let privateHandler=null;nativeProperty(privatePort,'postMessage',{value:(m,t=[])=>nativePortPost(privatePort,m,t)});nativeProperty(privatePort,'start',{value:()=>nativePortStart(privatePort)});nativeProperty(privatePort,'addEventListener',{value:(...args)=>nativePortListen(privatePort,...args)});nativeProperty(privatePort,'onmessage',{get:()=>privateHandler,set:handler=>{privateHandler=handler;nativePortSet(privatePort,handler)}});` +
+    `const auxiliary=(${installBrowserAuxiliary.toString()})(()=>send({type:'aux-consumed'}));` +
+    String.raw`port=privatePort;for(const [m,t] of queued.splice(0))port.postMessage(m,t);port.onmessage=async ev=>{const m=nativeMessageData(ev);if(m.type==='inspect-dom'){inspectDom=m.active===true&&!readerMode;if(inspectDom)reportDom();else{clearTimeout(domTimer);elementsById.clear()}return}if(m.type==='shortcut-bindings'){if(Array.isArray(m.bindings)&&m.bindings.length<=64)shortcutBindings=m.bindings;return}if(['aux-key','aux-paste','aux-modifiers'].includes(m.type)){auxiliary(m);return}if(m.type==='find-in-page'){const id=m.id,query=typeof m.text==='string'?m.text.slice(0,256):'';let found=false;if(query&&nativeFind){try{if(m.reset===true)window.getSelection()?.removeAllRanges();found=nativeFind(query,false,m.backwards===true,true,false,false)===true}catch{}}send({type:'find-result',id,found});return}if(m.type==='performance-snapshot'){send({type:'performance-data',id:m.id,...perfSnapshot()});return}if(m.type==='performance-record-start'){startPerformance();send({type:'performance-data',id:m.id,memory:perfSnapshot().memory,entries:[]});return}if(m.type==='performance-record-stop'){stopPerformance();return}if(m.type==='cookie-snapshot'){documentCookie=String(m.value||'');return}if(m.type==='storage-sync'){const map=m.area==='local'?localStore:sessionStore,key=String(m.key||''),oldValue=map.get(key)??null;map.__eyaApply?.(m.action,key,m.value);try{if(m.notify!==false){const event=new Event('storage');for(const [name,value] of Object.entries({key:m.action==='clear'?null:key,oldValue:m.action==='clear'?null:oldValue,newValue:m.action==='set'?String(m.value):null,url:String(m.url||''),storageArea:m.area==='local'?window.localStorage:window.sessionStorage}))Object.defineProperty(event,name,{value});window.dispatchEvent(event)}}catch{}return}if(m.type==='ws-open-result'){const s=pageSockets.get(m.id);if(!s)return;if(m.ok){s.protocol=m.protocol||'';s.readyState=1;s._emit('open',new Event('open'))}else{s.readyState=3;pageSockets.delete(m.id);s._emit('error',new Event('error'));s._emit('close',new CloseEvent('close',{code:1006,reason:m.error||'',wasClean:false}))}return}if(m.type==='ws-message'){const s=pageSockets.get(m.id);if(!s||s.readyState!==1)return;const bytes=new Uint8Array(m.body);const data=m.kind===1?new TextDecoder().decode(bytes):s.binaryType==='arraybuffer'?bytes.buffer:new Blob([bytes]);try{s._emit('message',new MessageEvent('message',{data,origin:new URL(s.url).origin}))}finally{send({type:'ws-credit',id:m.id})}return}if(m.type==='ws-error'){const s=pageSockets.get(m.id);if(s)s._emit('error',new Event('error'));return}if(m.type==='ws-close'){const s=pageSockets.get(m.id);if(!s)return;pageSockets.delete(m.id);s.readyState=3;s._emit('close',new CloseEvent('close',{code:m.code||1006,reason:m.reason||'',wasClean:m.wasClean===true}));return}if(m.type==='highlight-node'){const node=elementsById.get(m.id);if(!node?.isConnected)return;if(highlightedElement===node){node.scrollIntoView?.({block:'nearest',inline:'nearest'});return}if(highlightedElement&&highlightStyle){if(highlightStyle.outline)highlightedElement.style.setProperty('outline',highlightStyle.outline,highlightStyle.outlinePriority);else highlightedElement.style.removeProperty('outline');if(highlightStyle.offset)highlightedElement.style.setProperty('outline-offset',highlightStyle.offset,highlightStyle.offsetPriority);else highlightedElement.style.removeProperty('outline-offset')}highlightedElement=node;highlightStyle={outline:node.style.getPropertyValue('outline'),outlinePriority:node.style.getPropertyPriority('outline'),offset:node.style.getPropertyValue('outline-offset'),offsetPriority:node.style.getPropertyPriority('outline-offset')};node.style.setProperty('outline','2px solid #13b8a6','important');node.style.setProperty('outline-offset','2px','important');node.scrollIntoView?.({block:'nearest',inline:'nearest'});return}if(m.type==='resource-url'||m.type==='resource-source'||m.type==='resource-error'){const r=resources.get(m.id);if(r){resources.delete(m.id);m.type==='resource-url'?r.resolve(m.url):m.type==='resource-source'?r.resolve({source:m.source,url:m.url,sources:m.sources,aliases:m.aliases,modules:m.modules,order:m.order,pageModule:m.pageModule===true}):r.reject(new TypeError(m.error||'Resource request failed'))}return}const p=pending.get(m.id);if(m.type==='response'){if(!p)return;` +
     String.raw`if(m.error){pending.delete(m.id);p.signal?.removeEventListener('abort',p.cancel);p.reject(new TypeError(m.error));return;}if(m.opaque){pending.delete(m.id);p.signal?.removeEventListener('abort',p.cancel);const opaque=new Response(null);try{Object.defineProperties(opaque,{type:{value:'opaque'},status:{value:0},ok:{value:false},headers:{value:new Headers()}})}catch{}p.resolve(opaque);return;}const status=m.status||200;const noBody=p.method==='HEAD'||[204,205,304].includes(status);let body=m.body?new Uint8Array(m.body):null;` +
     String.raw`if(m.stream&&!noBody)body=new ReadableStream({start(controller){p.streamController=controller},pull(){if(!p.creditWaiting){p.creditWaiting=true;send({type:'credit',id:m.id})}},cancel(){pending.delete(m.id);p.signal?.removeEventListener('abort',p.cancel);send({type:'cancel',id:m.id})}},{highWaterMark:0});` +
     String.raw`else{pending.delete(m.id);p.signal?.removeEventListener('abort',p.cancel)}const response=new Response(noBody?null:body,{status,statusText:m.statusText||'',headers:m.headers||[]});responseUrls.set(response,m.url||'');p.resolve(response);}` +
     String.raw`else if(m.type==='chunk'&&p?.streamController){p.creditWaiting=false;p.streamController.enqueue(new Uint8Array(m.body))}` +
     String.raw`else if(m.type==='response-end'&&p){pending.delete(m.id);p.signal?.removeEventListener('abort',p.cancel);p.streamController?.close()}` +
-    String.raw`else if(m.type==='response-error'&&p){pending.delete(m.id);p.signal?.removeEventListener('abort',p.cancel);p.streamController?.error(new TypeError(m.error||'Proxied response stream failed'))}};const previousPortHandler=port.onmessage;port.onmessage=async ev=>{if(ev.data?.type==='evaluate'){const m=ev.data;try{const value=await nativeEval(String(m.code||''));send({type:'evaluate-result',id:m.id,value:preview(value)})}catch(error){send({type:'evaluate-result',id:m.id,error:String(error?.stack||error).slice(0,8192)})}return}if(ev.data?.type==='edit-node'){const m=ev.data,node=elementsById.get(m.id);let error='';if(!node?.isConnected)error='Node no longer exists';else if(m.kind==='text'){if(!['SCRIPT','STYLE'].includes(node.tagName)&&node.childElementCount===0&&typeof m.value==='string'&&m.value.length<=4096&&new TextEncoder().encode(m.value).byteLength<=4096)node.textContent=m.value;else error='Text editing requires a leaf element and at most 4 KiB UTF-8'}else if(m.kind==='attribute'){const name=String(m.property||'').trim().toLowerCase(),value=m.value,allowed=['id','class','title','role','alt','hidden','tabindex','dir','lang'],safeName=allowed.includes(name)||/^aria-[a-z][a-z0-9-]{0,57}$/.test(name);if(!safeName||typeof value!=='string'||new TextEncoder().encode(value).byteLength>512||/[\u0000-\u001f\u007f]/.test(value))error='Unsupported or unsafe attribute edit';else node.setAttribute(name,value)}else if(m.kind==='style'){const name=String(m.property||'').toLowerCase(),value=m.value;if(!['color','background-color','display','position','width','height','margin','padding','opacity','font-size','font-weight','text-align','border-color','line-height','z-index','flex','grid-template-columns'].includes(name)||typeof value!=='string'||value.length>512||/[\u0000-\u001f\u007f]/.test(value)||/(?:url\s*\(|@import|expression\s*\()/i.test(value))error='Unsupported or unsafe CSS edit';else node.style.setProperty(name,value)}else error='Unsupported edit';send({type:'edit-node-result',id:m.id,ok:!error,error});return}if(ev.data?.type==='inspect-node'){const m=ev.data,node=elementsById.get(m.id);if(!node?.isConnected){send({type:'inspect-node-result',id:m.id,error:'Node no longer exists'});return}const style=getComputedStyle(node),rect=node.getBoundingClientRect(),computed={},names=['display','position','boxSizing','width','height','color','backgroundColor','fontFamily','fontSize','fontWeight','lineHeight','textAlign','overflow','margin','padding','border','opacity','zIndex','flex','gridTemplateColumns'];for(const name of names)computed[name]=String(style[name]||'').slice(0,512);send({type:'inspect-node-result',id:m.id,computed,box:{x:rect.x,y:rect.y,width:rect.width,height:rect.height,top:rect.top,right:rect.right,bottom:rect.bottom,left:rect.left}});return}return previousPortHandler(ev)};port.addEventListener('message',ev=>{const m=ev.data;if(m?.type!=='history-traverse')return;ev.stopImmediatePropagation();if(!Number.isInteger(m.index)||m.index<0||m.index>=virtualHistory.length)return;const oldUrl=virtualUrl();virtualHistoryIndex=m.index;const nextUrl=virtualUrl();updateVirtualBase(nextUrl);reportHistory('traverse');try{window.dispatchEvent(new PopStateEvent('popstate',{state:cloneHistoryState(virtualHistory[virtualHistoryIndex].state)}));if(new URL(oldUrl).hash!==new URL(nextUrl).hash)window.dispatchEvent(new HashChangeEvent('hashchange',{oldURL:oldUrl,newURL:nextUrl}))}catch{}},true);port.start();scan(document);},true);` +
-    String.raw`addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&String(e.key||'').toLowerCase()==='f'){nativePreventDefault(e);send({type:'find-open'})}},true);` +
+    String.raw`else if(m.type==='response-error'&&p){pending.delete(m.id);p.signal?.removeEventListener('abort',p.cancel);p.streamController?.error(new TypeError(m.error||'Proxied response stream failed'))}};const previousPortHandler=port.onmessage;port.onmessage=async ev=>{if(nativeMessageData(ev)?.type==='evaluate'){const m=nativeMessageData(ev);try{if(readerMode)throw Error('Page evaluation is unavailable in reader mode.');const value=await nativeEval(String(m.code||''));send({type:'evaluate-result',id:m.id,value:preview(value)})}catch(error){send({type:'evaluate-result',id:m.id,error:String(error?.stack||error).slice(0,8192)})}return}if(nativeMessageData(ev)?.type==='edit-node'){const m=ev.data,node=elementsById.get(m.id);let error='';if(!node?.isConnected)error='Node no longer exists';else if(m.kind==='text'){if(!['SCRIPT','STYLE'].includes(node.tagName)&&node.childElementCount===0&&typeof m.value==='string'&&m.value.length<=4096&&new TextEncoder().encode(m.value).byteLength<=4096)node.textContent=m.value;else error='Text editing requires a leaf element and at most 4 KiB UTF-8'}else if(m.kind==='attribute'){const name=String(m.property||'').trim().toLowerCase(),value=m.value,allowed=['id','class','title','role','alt','hidden','tabindex','dir','lang'],safeName=allowed.includes(name)||/^aria-[a-z][a-z0-9-]{0,57}$/.test(name);if(!safeName||typeof value!=='string'||new TextEncoder().encode(value).byteLength>512||/[\u0000-\u001f\u007f]/.test(value))error='Unsupported or unsafe attribute edit';else node.setAttribute(name,value)}else if(m.kind==='style'){const name=String(m.property||'').toLowerCase(),value=m.value;if(!['color','background-color','display','position','width','height','margin','padding','opacity','font-size','font-weight','text-align','border-color','line-height','z-index','flex','grid-template-columns'].includes(name)||typeof value!=='string'||value.length>512||/[\u0000-\u001f\u007f]/.test(value)||/(?:url\s*\(|@import|expression\s*\()/i.test(value))error='Unsupported or unsafe CSS edit';else node.style.setProperty(name,value)}else error='Unsupported edit';send({type:'edit-node-result',id:m.id,ok:!error,error});return}if(nativeMessageData(ev)?.type==='inspect-node'){const m=ev.data,node=elementsById.get(m.id);if(!node?.isConnected){send({type:'inspect-node-result',id:m.id,error:'Node no longer exists'});return}const style=getComputedStyle(node),rect=node.getBoundingClientRect(),computed={},names=['display','position','boxSizing','width','height','color','backgroundColor','fontFamily','fontSize','fontWeight','lineHeight','textAlign','overflow','margin','padding','border','opacity','zIndex','flex','gridTemplateColumns'];for(const name of names)computed[name]=String(style[name]||'').slice(0,512);send({type:'inspect-node-result',id:m.id,computed,box:{x:rect.x,y:rect.y,width:rect.width,height:rect.height,top:rect.top,right:rect.right,bottom:rect.bottom,left:rect.left}});return}return previousPortHandler(ev)};port.addEventListener('message',ev=>{const m=nativeMessageData(ev);if(m?.type!=='history-traverse')return;stopImmediate(ev);if(!Number.isInteger(m.index)||m.index<0||m.index>=virtualHistory.length)return;const oldUrl=virtualUrl();fragments.saveScroll();virtualHistoryIndex=m.index;const nextUrl=virtualUrl();updateVirtualBase(nextUrl);reportHistory('traverse');try{window.dispatchEvent(new PopStateEvent('popstate',{state:cloneHistoryState(virtualHistory[virtualHistoryIndex].state)}));fragments.restore(oldUrl,nextUrl);fragments.hashChanged(oldUrl,nextUrl)}catch{}},true);port.start();scan(document);},true);` +
+    String.raw`addEventListener('keydown',e=>{if(!e.isTrusted||e.isComposing)return;const stroke={key:nativeKey.key(e),code:nativeKey.code(e),ctrlKey:nativeKey.ctrlKey(e),metaKey:nativeKey.metaKey(e),altKey:nativeKey.altKey(e),shiftKey:nativeKey.shiftKey(e)};let key=stroke.code==='Backquote'?'Backquote':({' ':'Space',Spacebar:'Space',Esc:'Escape',Del:'Delete','+':'=','\x60':'Backquote','~':'Backquote'})[stroke.key]||String(stroke.key||'');if(key.length===1)key=key.toLowerCase();const action=shortcutBindings.find(action=>Array.isArray(action.strokes)&&action.strokes.some(s=>key===s.key&&(s.mod?(stroke.ctrlKey||stroke.metaKey):!!stroke.ctrlKey===s.ctrl&&!!stroke.metaKey===s.meta)&&!!stroke.altKey===s.alt&&!!stroke.shiftKey===s.shift));if(action){nativePreventDefault(e);stopImmediate(e);send({type:'browser-shortcut',action:action.id,...stroke})}},true);` +
     String.raw`P.postMessage({type:'eya-ready',nonce:N},'*');` +
     String.raw`class EyaXMLHttpRequest extends EventTarget {
       constructor(){super();this.readyState=0;this.status=0;this.statusText='';this.responseURL='';this.responseType='';this.timeout=0;this.withCredentials=false;this.upload=new EventTarget();this._headers=new Headers();this._responseHeaders=new Headers();this._controller=null;this._sent=false;this._timedOut=false;this._generation=0;this._text='';this._response=null;this._method='GET';this._url=''}
       open(method,url,async=true){if(async===false)throw new DOMException('Synchronous requests are not supported.','NotSupportedError');this._controller?.abort();this._generation++;this._method=String(method).toUpperCase();this._url=new URL(url,document.baseURI).href;this._headers=new Headers();this._responseHeaders=new Headers();this._sent=false;this._timedOut=false;this.status=0;this.statusText='';this.responseURL='';this._text='';this._response=null;this._change(1)}
-      setRequestHeader(name,value){if(this.readyState!==1||this._sent)throw new DOMException('Invalid state.','InvalidStateError');this._headers.append(name,value)}overrideMimeType(){}
+      setRequestHeader(name,value){if(this.readyState!==1||this._sent)throw new DOMException('Invalid state.','InvalidStateError');this._headers.append(name,value)}overrideMimeType(){if(this._sent)throw new DOMException('Invalid XHR state.','InvalidStateError');throw new DOMException('XHR MIME overrides are unavailable in Proxy browser. Open in Browser.','NotSupportedError')}
       send(body=null){if(this.readyState!==1||this._sent)throw new DOMException('Invalid state.','InvalidStateError');this._sent=true;this._timedOut=false;const generation=this._generation;this._controller=new AbortController();this._emit('loadstart');const timer=this.timeout>0?setTimeout(()=>{if(generation===this._generation){this._timedOut=true;this._controller.abort()}},this.timeout):null;
         request(this._url,{method:this._method,headers:this._headers,body,signal:this._controller.signal,credentials:this.withCredentials?'include':'same-origin',resourceType:'xmlhttprequest'}).then(async r=>{if(generation!==this._generation)return;this.status=r.status;this.statusText=r.statusText;this.responseURL=responseUrls.get(r)||this._url;this._responseHeaders=r.headers;this._change(2);const bytes=new Uint8Array(await r.arrayBuffer());if(generation!==this._generation)return;this._change(3);this._text=new TextDecoder().decode(bytes);const type=this.responseType;if(type==='arraybuffer')this._response=bytes.buffer;else if(type==='blob')this._response=new Blob([bytes],{type:r.headers.get('content-type')||''});else if(type==='json'){try{this._response=JSON.parse(this._text)}catch{this._response=null}}else if(type==='document')this._response=new DOMParser().parseFromString(this._text,'text/html');else this._response=this._text;this._change(4);this._emit('load');this._emit('loadend')}).catch(e=>{if(generation!==this._generation)return;if(this._timedOut){this.status=0;this._change(4);this._emit('timeout')}else if(e.name==='AbortError'){this._change(0);this._emit('abort')}else{this._change(4);this._emit('error')}this._emit('loadend')}).finally(()=>{if(timer!==null)clearTimeout(timer)})}
       abort(){if(this._controller&&!this._controller.signal.aborted){this._timedOut=false;this._controller.abort()}}
@@ -1336,27 +1361,24 @@ function bootstrapSource(nonce, initialCookies = '', initialStorage = {}, initia
     }` +
     `EyaXMLHttpRequest.UNSENT=0;EyaXMLHttpRequest.OPENED=1;EyaXMLHttpRequest.HEADERS_RECEIVED=2;EyaXMLHttpRequest.LOADING=3;EyaXMLHttpRequest.DONE=4;window.XMLHttpRequest=EyaXMLHttpRequest;` +
     `const emit=(level,args)=>send({type:'console',level,args:[...args].map(v=>{try{return typeof v==='string'?v:JSON.stringify(v)}catch{return String(v)}})});` +
+    `(${installProxyUnsupportedApis.toString()})((api,message)=>emit('warn',[message]));` +
     `const report=(type,data)=>send({type,...data});` +
     String.raw`const localStore=new Map(Object.entries(S.local||{})),sessionStore=new Map(Object.entries(S.session||{}));const storage=(map,area)=>{let used=[...map].reduce((sum,[key,value])=>sum+new TextEncoder().encode(key).byteLength+new TextEncoder().encode(value).byteLength,0);const quota=area==='local'?S.localQuota:S.sessionQuota;const limit=Number.isSafeInteger(quota)?Math.min(1048576,Math.max(used,quota)):1048576;const reportChange=(action,key,value)=>report('storage',{area,action,key,value});const apply=(action,key,value)=>{if(action==='clear'){map.clear();used=0;return}key=String(key);if(action==='remove'){const old=map.get(key);if(old!==undefined){map.delete(key);used-=new TextEncoder().encode(key).byteLength+new TextEncoder().encode(old).byteLength}return}value=String(value);const old=map.get(key),bytes=new TextEncoder().encode(key).byteLength+new TextEncoder().encode(value).byteLength,previous=old===undefined?0:new TextEncoder().encode(key).byteLength+new TextEncoder().encode(old).byteLength;if(used-previous+bytes<=limit&& (map.has(key)||map.size<5000)){map.set(key,value);used=used-previous+bytes}};map.__eyaApply=apply;const put=(key,value)=>{key=String(key);value=String(value);const old=map.get(key),bytes=new TextEncoder().encode(key).byteLength+new TextEncoder().encode(value).byteLength,previous=old===undefined?0:new TextEncoder().encode(key).byteLength+new TextEncoder().encode(old).byteLength;if(used-previous+bytes>limit||(!map.has(key)&&map.size>=5000))throw new DOMException('The storage quota has been exceeded.','QuotaExceededError');map.set(key,value);used=used-previous+bytes;reportChange('set',key,value)};const target={get length(){return map.size},key:i=>[...map.keys()][Number(i)]??null,getItem:k=>map.get(String(k))??null,setItem:put,removeItem(k){k=String(k);if(map.has(k)){apply('remove',k);reportChange('remove',k)}},clear(){if(map.size){apply('clear');reportChange('clear')}}};return new Proxy(target,{get:(o,k)=>k in o?o[k]:typeof k==='string'?(map.get(k)??null):undefined,set:(o,k,v)=>{if(typeof k==='string'){put(k,v);return true}return false},deleteProperty:(o,k)=>{k=String(k);if(map.has(k)){apply('remove',k);reportChange('remove',k)}return true},ownKeys:()=>[...map.keys()],getOwnPropertyDescriptor:(o,k)=>map.has(k)?{enumerable:true,configurable:true,value:map.get(k)}:undefined})};` +
     String.raw`try{Object.defineProperty(window,'localStorage',{configurable:true,value:storage(localStore,'local')});Object.defineProperty(window,'sessionStorage',{configurable:true,value:storage(sessionStore,'session')})}catch{};` +
     String.raw`report('storage',{area:'local',action:'snapshot',items:[...localStore]});report('storage',{area:'session',action:'snapshot',items:[...sessionStore]});` +
     `for(const level of ['log','info','warn','error','debug']){const old=console[level].bind(console);console[level]=(...a)=>{old(...a);emit(level,a)}};` +
     `addEventListener('error',e=>emit('error',[e.message,e.filename+':'+e.lineno]));` +
-    `let domTimer;const snapshot=(node,depth=0,count={n:0})=>{if(count.n++>500)return null;let id=nodeIds.get(node);if(!id){id=++nextNodeId;nodeIds.set(node,id)}elementsById.set(id,node);const value={id,tag:node.nodeName?.toLowerCase?.()||'',attrs:node.nodeType===1?[...node.attributes].slice(0,16).map(a=>[a.name,a.value.slice(0,180)]):[],` +
-    `text:node.nodeType===3?node.textContent.slice(0,240):node.children?.length?'':(node.textContent||'').slice(0,240),children:[]};if(depth<4&&node.children)for(const child of [...node.children].slice(0,80)){const result=snapshot(child,depth+1,count);if(result)value.children.push(result)}return value};` +
-    `const reportDom=()=>{clearTimeout(domTimer);domTimer=setTimeout(()=>{elementsById.clear();report('dom',{tree:[...document.body.children].slice(0,80).map(node=>snapshot(node)).filter(Boolean)})},40)};` +
+    `let domTimer,inspectDom=false;const snapshot=(node,depth,budget)=>{if(budget.nodes++>=500||budget.chars<=0)return null;const tag=node.nodeName.toLowerCase().slice(0,64),attrs=[...node.attributes].slice(0,16).map(a=>[a.name.slice(0,64),a.value.slice(0,180)]),text=node.children.length?'':(node.firstChild?.textContent||'').slice(0,240);budget.chars-=64+tag.length+text.length+attrs.reduce((sum,[name,value])=>sum+name.length+value.length+8,0);if(budget.chars<0)return null;let id=nodeIds.get(node);if(!id){id=++nextNodeId;nodeIds.set(node,id)}elementsById.set(id,node);const children=depth<4?snapshotChildren(node,depth+1,budget):[];return{id,tag,attrs,text,children}};` +
+    `const snapshotChildren=(node,depth,budget)=>{const result=[];for(let index=0;index<Math.min(node.children.length,80);index++){if(budget.nodes>=500||budget.chars<=0)break;const child=snapshot(node.children[index],depth,budget);if(child)result.push(child)}return result};` +
+    `const reportDom=()=>{if(!inspectDom)return;clearTimeout(domTimer);domTimer=setTimeout(()=>{if(!document.body)return;elementsById.clear();report('dom',{tree:snapshotChildren(document.body,0,{nodes:0,chars:32768})})},40)};` +
     `const removeNavigationMeta=root=>{const nodes=[];if(root.matches?.('meta[http-equiv]'))nodes.push(root);nodes.push(...(root.querySelectorAll?.('meta[http-equiv]')||[]));for(const meta of nodes)if(/^(?:refresh|content-security-policy)$/i.test(meta.getAttribute('http-equiv')||''))meta.remove()};` +
-    String.raw`const rewriteCss=async(text,base,depth=0)=>{if(depth>3)return text;let css=text;const check=(items,lengths)=>{let size=css.length;for(let i=0;i<items.length;i++)size+=lengths[i]-items[i][0].length;if(size>8*1024*1024)throw Error('Rewritten stylesheet exceeds the 8 MiB character limit.')};` +
-    String.raw`const imports=scanCssResourceMatches(css,/@import\s+(?:url\(\s*(?:"([^"]*)"|'([^']*)'|([^\s)]*))\s*\)|"([^"]*)"|'([^']*)'|([^\s;]+))([^;]*);/gi);` +
-    String.raw`const imported=await Promise.all(imports.map(async m=>{const url=m.slice(1,7).find(v=>v!==undefined)||'';if(/^(?:data:|blob:)/i.test(url))return null;try{return await proxyResource(new URL(url,base).href,'stylesheet')}catch{return ''}}));check(imports,imported.map((url,i)=>url===null?imports[i][0].length:url?16+url.length+imports[i][7].length:0));for(let i=imports.length-1;i>=0;i--){const m=imports[i],url=imported[i];css=css.slice(0,m.index)+(url===null?m[0]:url?'@import url("'+url+'")'+m[7]+';':'')+css.slice(m.index+m[0].length)}` +
-    String.raw`const urls=scanCssResourceMatches(css,/url\(\s*(?:["']([^"']*)["']|([^)]*?))\s*\)/gi);const rewritten=await Promise.all(urls.map(async m=>{const raw=(m[1]||m[2]||'').trim();` +
-    `if(!raw||/^(?:data:|blob:|#|about:)/i.test(raw))return null;try{const u=new URL(raw,base).href;const fontStart=css.lastIndexOf('@font-face',m.index)>css.lastIndexOf('}',m.index);return await proxyResource(u,fontStart?'font':'image')}catch{return ''}}));` +
-    String.raw`check(urls,rewritten.map((url,i)=>url===null?urls[i][0].length:url?url.length+7:16));for(let i=urls.length-1;i>=0;i--){const m=urls[i],blob=rewritten[i];if(blob===null)continue;css=css.slice(0,m.index)+(blob?'url("'+blob+'")':'url(about:blank)')+css.slice(m.index+m[0].length)}return css};` +
+    `const rewriteCss=(text,base)=>proxyCssTools.rewrite(text,base,(url,kind)=>proxyResource(url,kind));` +
+    `const proxyDom=(${installProxyDomResources.toString()})({load:proxyResource,loadModule:url=>proxyResourceSource(url,true,true).promise.then(createModuleGraph),getUrl:virtualUrl,onRoot:root=>{scan(root);styleWork(root);root.addEventListener('submit',proxySubmit,true)},report:error=>emit('error',[error])});` +
     String.raw`const scan=root=>{const selector='[data-eya-src],[data-eya-href],[data-eya-srcset],[data-eya-imagesrcset],[data-eya-module]',nodes=[];if(root.matches?.(selector))nodes.push(root);nodes.push(...(root.querySelectorAll?.(selector)||[]));` +
     String.raw`for(const el of nodes){if(el.__eyaPending)continue;el.__eyaPending=true;const dataAttr=el.hasAttribute('data-eya-href')?'data-eya-href':el.hasAttribute('data-eya-imagesrcset')?'data-eya-imagesrcset':el.hasAttribute('data-eya-srcset')?'data-eya-srcset':'data-eya-src',attr=dataAttr==='data-eya-href'?'href':dataAttr==='data-eya-imagesrcset'?'imagesrcset':dataAttr==='data-eya-srcset'?'srcset':'src';` +
     String.raw`const raw=el.getAttribute(dataAttr);if(!raw)continue;if(attr==='srcset'||attr==='imagesrcset'){const entries=[...raw.matchAll(/(data:[^,\s]+,[^,\s]+|[^,\s]+)(?:\s+(\d+(?:\.\d+)?[wx]))?/gi)].map(match=>({url:match[1],descriptor:match[2]||''}));` +
     String.raw`Promise.all(entries.map(async entry=>{if(/^(?:data:|blob:)/i.test(entry.url))return entry.url;try{return await proxyResource(new URL(entry.url,document.baseURI).href,'image')}catch{return ''}})).then(urls=>{if(el.isConnected){el.setAttribute(attr,entries.map((entry,index)=>urls[index]+(entry.descriptor?' '+entry.descriptor:'')).filter(entry=>entry.trim()).join(', '));el.removeAttribute(dataAttr)}el.__eyaPending=false}).catch(error=>{el.__eyaPending=false;emit('error',[String(error)])});continue}let url;try{url=new URL(raw,document.baseURI).href}catch{el.__eyaPending=false;continue};` +
-    `const kind=el.localName==='script'?'script':el.localName==='img'||el.localName==='image'||(el.localName==='source'&&!['video','audio'].includes(el.parentElement?.localName))?'image':el.matches('link[rel~="stylesheet"]')?'stylesheet':el.matches('link[rel~="icon"]')?'image':el.matches('link[as="font"]')?'font':el.localName==='video'||el.localName==='audio'||el.localName==='track'?'media':el.localName==='object'?'object':'other';const moduleScript=el.localName==='script'&&el.hasAttribute('data-eya-module');const loading=moduleScript?proxyResourceSource(url,true,true).promise.then(createModuleGraph):proxyResource(url,kind,{skipLocationRewrite:el.localName==='script'&&el.hasAttribute('integrity')});loading.then(resource=>{const blobUrl=moduleScript?resource.url:resource;if(el.isConnected){if(moduleScript){el.addEventListener('load',resource.release,{once:true});el.addEventListener('error',resource.release,{once:true})}el.setAttribute(attr,blobUrl);el.removeAttribute(dataAttr);el.removeAttribute('data-eya-module')}else if(moduleScript)resource.release();el.__eyaPending=false}).catch(error=>{el.__eyaPending=false;emit('error',[String(error)])});}};` +
+    `const kind=el.localName==='script'?'script':el.localName==='img'||el.localName==='image'||(el.localName==='source'&&!['video','audio'].includes(el.parentElement?.localName))?'image':el.matches('link[rel~="stylesheet"]')?'stylesheet':el.matches('link[rel~="icon"]')?'image':el.matches('link[as="font"]')?'font':el.localName==='video'||el.localName==='audio'||el.localName==='track'?'media':el.localName==='object'?'object':'other';const moduleScript=el.localName==='script'&&el.hasAttribute('data-eya-module');const loading=moduleScript?proxyResourceSource(url,true,true).promise.then(createModuleGraph):proxyResource(url,kind,{skipLocationRewrite:el.localName==='script'&&el.hasAttribute('integrity')});loading.then(resource=>{const blobUrl=moduleScript?resource.url:resource;if(el.isConnected){if(moduleScript){el.addEventListener('error',resource.release,{once:true})}el.setAttribute(attr,blobUrl);el.removeAttribute(dataAttr);el.removeAttribute('data-eya-module')}else if(moduleScript)resource.release();el.__eyaPending=false}).catch(error=>{el.__eyaPending=false;emit('error',[String(error)])});}};` +
     String.raw`const styleWork=root=>{const styles=[];if(root.matches?.('style'))styles.push(root);styles.push(...(root.querySelectorAll?.('style')||[]));` +
     String.raw`for(const el of styles){const source=el.textContent;if(el.__eyaCssText===source||!/(?:url\s*\(|@import\s)/i.test(source))continue;el.__eyaCssText=source;` +
     `rewriteCss(source,document.baseURI).then(css=>{if(el.isConnected&&el.textContent===source){el.textContent=css;el.__eyaCssText=css}}).catch(error=>emit('error',[String(error)]))}` +
@@ -1368,44 +1390,53 @@ function bootstrapSource(nonce, initialCookies = '', initialStorage = {}, initia
     `if(['src','poster','srcset','imagesrcset','background','data'].includes(name)){const raw=el.getAttribute(name);if(raw&&!/^(?:blob:|data:|about:)/i.test(raw)){el.setAttribute(name==='srcset'?'data-eya-srcset':name==='imagesrcset'?'data-eya-imagesrcset':'data-eya-src',raw);el.removeAttribute(name);el.__eyaPending=false;scan(el)}}` +
     `else if((name==='href'||name==='xlink:href')&&!['a','area','base'].includes(el.localName)){const raw=el.getAttribute(name);if(raw&&!/^(?:blob:|data:|about:)/i.test(raw)){el.setAttribute('data-eya-href',raw);el.removeAttribute(name);el.__eyaPending=false;scan(el)}}else if(name==='style')styleWork(el)}` +
     `for(const node of record.addedNodes)if(node.nodeType===1){removeNavigationMeta(node);scan(node);styleWork(node)}if(record.target?.localName==='style')styleWork(record.target)}reportDom()}).observe(document,{subtree:true,childList:true,attributes:true,attributeFilter:['src','href','xlink:href','poster','srcset','imagesrcset','background','data','style','http-equiv','content']});` +
-    `reportDom();report('storage',{items:[]});` +
-    `document.addEventListener('click',e=>{const a=e.target.closest?.('a[href],area[href]');if(!a)return;let u;try{u=new URL(a.href,document.baseURI)}catch{e.preventDefault();return}` +
-    `e.preventDefault();if(!['http:','https:'].includes(u.protocol))return;if(a.hasAttribute('download'))send({type:'download',url:u.href,filename:a.getAttribute('download')||''});else if(a.target==='_blank')send({type:'open-tab',url:u.href});else send({type:'navigate',url:u.href})},true);` +
-    String.raw`try{const nav=window.navigation;if(nav?.addEventListener)nav.addEventListener('navigate',event=>{if(event.hashChange||event.downloadRequest!=null||event.destination?.sameDocument)return;let url;try{url=new URL(String(event.destination?.url||''))}catch{return}if(!event.cancelable){try{nativeStop()}catch{}try{document.documentElement?.replaceChildren()}catch{}send({type:'navigation-unhandled',url:url.href});return}nativePreventDefault(event);if(!['http:','https:'].includes(url.protocol)){emit('error',['Blocked page navigation',url.href]);return}const history=event.navigationType==='replace'?'replace':event.navigationType==='reload'?'reload':'push',formData=event.formData;if(!formData){send({type:'navigate',url:url.href,history});return}(async()=>{try{const req=new Request(url.href,{method:'POST',body:formData}),body=await bytes(req.clone().body);send({type:'navigate',url:url.href,method:'POST',headers:[...req.headers],body,history},body?[body.buffer]:[])}catch(error){emit('error',['Page navigation failed:',String(error)])}})()},true)}catch{}` +
+    `report('storage',{items:[]});` +
+    `document.addEventListener('click',e=>{const a=(e.composedPath?.()||[e.target]).find(node=>node?.matches?.('a[href],area[href]'));if(!a)return;const href=a.getAttribute(readerMode?'data-eya-reader-href':'href');if(href===null){e.preventDefault();return}let u;try{u=new URL(href,document.baseURI)}catch{e.preventDefault();return}` +
+    `e.preventDefault();if(!['http:','https:'].includes(u.protocol))return;if(a.hasAttribute('download'))send({type:'download',url:u.href,filename:a.getAttribute('download')||''});else if(a.target==='_blank')send({type:'open-tab',url:u.href});else if(!fragments.navigate(u,{explicit:href.includes('#')}))send({type:'navigate',url:u.href})},true);` +
+    String.raw`if(!readerMode)try{const nav=window.navigation;if(nav?.addEventListener)nav.addEventListener('navigate',event=>{if(event.hashChange||event.downloadRequest!=null||event.destination?.sameDocument)return;let url;try{url=new URL(String(event.destination?.url||''))}catch{return}if(!event.cancelable){try{nativeStop()}catch{}try{document.documentElement?.replaceChildren()}catch{}send({type:'navigation-unhandled',url:url.href});return}nativePreventDefault(event);if(!['http:','https:'].includes(url.protocol)){emit('error',['Blocked page navigation',url.href]);return}const history=event.navigationType==='replace'?'replace':event.navigationType==='reload'?'reload':'push',formData=event.formData;if(!formData){send({type:'navigate',url:url.href,history});return}(async()=>{try{const req=new Request(url.href,{method:'POST',body:formData}),body=await bytes(req.clone().body);send({type:'navigate',url:url.href,method:'POST',headers:[...req.headers],body,history},body?[body.buffer]:[])}catch(error){emit('error',['Page navigation failed:',String(error)])}})()},true)}catch{}` +
     String.raw`try{const proto=Location.prototype,replaceMethod=(name,history)=>{const descriptor=Object.getOwnPropertyDescriptor(proto,name);if(!descriptor?.configurable||typeof descriptor.value!=='function')return;Object.defineProperty(proto,name,{...descriptor,value:function(value){let url;try{url=new URL(name==='reload'?document.baseURI:String(value),document.baseURI)}catch{return}if(['http:','https:'].includes(url.protocol))send({type:'navigate',url:url.href,history})}})};replaceMethod('assign','push');replaceMethod('replace','replace');replaceMethod('reload','reload')}catch{}` +
     `window.open=(url)=>{try{const u=new URL(url,document.baseURI);if(['http:','https:'].includes(u.protocol))send({type:'open-tab',url:u.href})}catch{}return null};` +
     String.raw`for(const name of ['RTCPeerConnection','webkitRTCPeerConnection'])try{Object.defineProperty(window,name,{configurable:false,writable:false,value:undefined})}catch{try{window[name]=undefined}catch{}}` +
-    String.raw`window.addEventListener('submit',async e=>{const form=e.target;if(!(form instanceof HTMLFormElement))return;const submitter=e.submitter,formValue=(attr,property,fallback)=>submitter?.hasAttribute(attr)?submitter[property]:fallback;if(String(formValue('formmethod','formMethod',form.method)).toLowerCase()==='dialog')return;e.preventDefault();` +
-    String.raw`try{const method=String(formValue('formmethod','formMethod',form.method)||'get').toUpperCase();if(!['GET','POST'].includes(method))throw Error('Only GET and POST form submissions are supported.');` +
-    String.raw`const url=new URL(formValue('formaction','formAction',form.action)||document.baseURI,document.baseURI),data=new FormData(form,submitter);let body=null,headers=[];` +
+    String.raw`const nativeFormGet=Object.fromEntries(['action','method','enctype','target'].map(name=>[name,Function.prototype.call.bind(Object.getOwnPropertyDescriptor(HTMLFormElement.prototype,name).get)])),nativeFormValidity=Function.prototype.call.bind(HTMLFormElement.prototype.reportValidity);` +
+    String.raw`const proxySubmit=async e=>{if(e.defaultPrevented)return;const form=(e.composedPath?.()||[e.target]).find(node=>node instanceof HTMLFormElement);if(!(form instanceof HTMLFormElement))return;const submitter=e.submitter,formValue=(attr,property,fallback)=>submitter?.hasAttribute(attr)?submitter[property]:fallback;if(String(formValue('formmethod','formMethod',nativeFormGet.method(form))).toLowerCase()==='dialog')return;e.preventDefault();` +
+    String.raw`try{const method=String(formValue('formmethod','formMethod',nativeFormGet.method(form))||'get').toUpperCase();if(readerMode&&method!=='GET')throw Error('Reader mode supports GET forms only.');if(!['GET','POST'].includes(method))throw Error('Only GET and POST form submissions are supported.');` +
+    String.raw`const url=new URL(formValue('formaction','formAction',nativeFormGet.action(form))||document.baseURI,document.baseURI),data=new FormData(form,submitter);let body=null,headers=[];` +
     String.raw`if(method==='GET'){for(const [k,v] of data)url.searchParams.append(k,typeof v==='string'?v:v.name)}` +
-    String.raw`else{const enctype=String(formValue('formenctype','formEnctype',form.enctype)||'application/x-www-form-urlencoded').toLowerCase();` +
+    String.raw`else{const enctype=String(formValue('formenctype','formEnctype',nativeFormGet.enctype(form))||'application/x-www-form-urlencoded').toLowerCase();` +
     String.raw`if(enctype==='application/x-www-form-urlencoded'){body=new TextEncoder().encode(new URLSearchParams([...data].map(([k,v])=>[k,typeof v==='string'?v:v.name])).toString());headers=[['content-type','application/x-www-form-urlencoded;charset=UTF-8']]}` +
     String.raw`else if(enctype==='text/plain'){body=new TextEncoder().encode([...data].map(([k,v])=>k+'='+(typeof v==='string'?v:v.name)+'\r\n').join(''));headers=[['content-type','text/plain;charset=UTF-8']]}` +
     String.raw`else{const req=new Request(url.href,{method,body:data});body=await bytes(req.clone().body);headers=[...req.headers]}}` +
-    String.raw`const message={type:'navigate',url:url.href,method,headers,body};const target=String(formValue('formtarget','formTarget',form.target)||'').toLowerCase();if(target&&target!=='_self')message.type='open-tab';send(message,body?[body.buffer]:[])}catch(error){emit('error',['Form submission failed:',String(error)])}},true);` +
+    String.raw`const message={type:'navigate',url:url.href,method,headers,body};const target=String(formValue('formtarget','formTarget',nativeFormGet.target(form))||'').toLowerCase();if(target&&target!=='_self')message.type='open-tab';send(message,body?[body.buffer]:[])}catch(error){emit('error',['Form submission failed:',String(error)])}};window.addEventListener('submit',proxySubmit,true);` +
     String.raw`const dispatchSubmit=(form,submitter=null)=>{let event;try{event=new SubmitEvent('submit',{bubbles:true,cancelable:true,submitter})}catch{event=new Event('submit',{bubbles:true,cancelable:true});try{Object.defineProperty(event,'submitter',{value:submitter})}catch{}}form.dispatchEvent(event)};` +
-    String.raw`HTMLFormElement.prototype.requestSubmit=function(submitter=null){if(submitter!==null&&(!(submitter instanceof HTMLElement)||submitter.form!==this||!['BUTTON','INPUT'].includes(submitter.tagName)||!['submit','image'].includes(String(submitter.type).toLowerCase())))throw new TypeError('Invalid form submitter.');if(submitter?.disabled||!this.reportValidity())return;dispatchSubmit(this,submitter)};` +
+    String.raw`HTMLFormElement.prototype.requestSubmit=function(submitter=null){if(submitter!==null&&(!(submitter instanceof HTMLElement)||submitter.form!==this||!['BUTTON','INPUT'].includes(submitter.tagName)||!['submit','image'].includes(String(submitter.type).toLowerCase())))throw new TypeError('Invalid form submitter.');if(submitter?.disabled||!nativeFormValidity(this))return;dispatchSubmit(this,submitter)};` +
     String.raw`HTMLFormElement.prototype.submit=function(){dispatchSubmit(this,null)};` +
-    String.raw`document.addEventListener('click',e=>{const submitter=e.target.closest?.('button,input');if(!submitter||!['submit','image'].includes(String(submitter.type).toLowerCase())||submitter.disabled||!submitter.form)return;e.preventDefault();if(submitter.form.reportValidity())dispatchSubmit(submitter.form,submitter)},true);` +
+    String.raw`document.addEventListener('click',e=>{const submitter=(e.composedPath?.()||[e.target]).find(node=>node?.matches?.('button,input'));if(!submitter||!['submit','image'].includes(String(submitter.type).toLowerCase())||submitter.disabled||!submitter.form)return;e.preventDefault();if(nativeFormValidity(submitter.form))dispatchSubmit(submitter.form,submitter)},true);` +
     `})();`;
 }
 
 export function buildIframeRuntime(nonce, initialCookies = '', initialStorage = {}, initialUrl = 'https://example.test/') { return bootstrapSource(nonce, initialCookies, initialStorage, initialUrl); }
 
-export function serializeCosmeticStyleScript(css) {
+export function serializeCosmeticStyleScript(css, nonceAttribute = '') {
   if (typeof css !== 'string' || !css || new TextEncoder().encode(css).byteLength > MAX_PAGE_COSMETIC_CSS_BYTES) return '';
   const source = `(()=>{const s=document.createElement('style');s.setAttribute('data-eya-cosmetic','');s.textContent=${JSON.stringify(css)};(document.head||document.documentElement).append(s)})()`;
-  return `<script>${escapeScriptElement(source)}</script>`;
+  return `<script${nonceAttribute}>${escapeScriptElement(source)}</script>`;
 }
 
-function injectBootstrap(html, nonce, baseUrl, initialCookies = '', userscripts = [], cosmeticCss = '', initialStorage = {}, userscriptStorage = {}) {
-  html = neutralizeDirectResources(html);
+async function injectBootstrap(html, nonce, baseUrl, initialCookies = '', userscripts = [], cosmeticCss = '', initialStorage = {}, userscriptStorage = {}, loadStatic, readerMode = false) {
+  html = neutralizeDirectResources(html, readerMode);
+  if (loadStatic) html = await prepareProxyStaticResources(html, baseUrl, loadStatic, (source, tag) => {
+    const template = inertHtmlTemplate();
+    template.innerHTML = `<${tag.name} ${parsedTagAttributes(source, tag)}></${tag.name}>`;
+    return template.content.firstElementChild;
+  }, scanHtmlTagTokens);
   const base = String(baseUrl).replaceAll('&', '&amp;').replaceAll('"', '&quot;');
-  const policy = `<meta http-equiv="Content-Security-Policy" content="${browserFrameCsp()}">`;
-  const scripts = serializeUserscriptElements(userscripts, userscriptStorage);
-  const cosmetic = serializeCosmeticStyleScript(cosmeticCss);
-  const head = `${policy}<base data-eya-proxy-base href="${base}"><script>${bootstrapSource(nonce, initialCookies, initialStorage, baseUrl)}</script>${cosmetic}${scripts}<script>delete window.__eyaUserscriptStorage;delete window.__eyaUserscriptRequest</script>`;
+  const readerNonce = readerMode ? randomToken() : '';
+  const nonceAttribute = readerMode ? ` nonce="${readerNonce}"` : '';
+  const policy = `<meta http-equiv="Content-Security-Policy" content="${browserFrameCsp(readerNonce, new URL(baseUrl).origin)}">`;
+  const scripts = readerMode ? '' : serializeUserscriptElements(userscripts, userscriptStorage);
+  const cosmetic = serializeCosmeticStyleScript(cosmeticCss, nonceAttribute);
+  const boot = escapeScriptElement(bootstrapSource(nonce, initialCookies, initialStorage, baseUrl, readerMode));
+  const head = `${policy}<base data-eya-proxy-base href="${base}"><script${nonceAttribute}>${boot}</script>${cosmetic}${scripts}<script${nonceAttribute}>delete window.__eyaUserscriptStorage;delete window.__eyaUserscriptRequest</script>`;
   const lower = html.toLowerCase();
   const start = lower.indexOf('<head');
   if (start >= 0) {
@@ -1497,16 +1528,61 @@ export function scanHtmlTagTokens(source) {
   return tags;
 }
 
-export function parsedTagAttributes(tagSource, tag) {
-  const template = document.createElement('template');
-  template.innerHTML = `<div${tagSource.slice(tag.nameEnd, tag.end - 1)}></div>`;
-  return [...(template.content.firstElementChild?.attributes || [])].map(attribute => `${attribute.name}="${escapeHtml(attribute.value)}"`).join(' ');
+let fragmentParsingDocument;
+function inertHtmlTemplate() {
+  // An SVG client is an XML document even after its XHTML DOM prelude. Parse
+  // untrusted web markup in an inert HTML template, never the outer document.
+  fragmentParsingDocument ||= new DOMParser().parseFromString('<!doctype html>', 'text/html');
+  return fragmentParsingDocument.createElement('template');
 }
 
-export function sanitizeHtmlFragment(source) {
-  const template = document.createElement('template');
+const proxyReaderElements = new Set(('a abbr address area article aside audio b bdi bdo blockquote br button caption cite code col colgroup dd del details dfn div dl dt em fieldset figcaption figure footer form h1 h2 h3 h4 h5 h6 header hgroup hr i img input ins kbd label legend li link main map mark menu meter nav ol optgroup option output p picture pre progress q rp rt ruby s samp section select small source span strong style sub summary sup table tbody td textarea tfoot th thead time title tr track u ul var video wbr').split(' '));
+const proxyReaderDropElements = new Set(['base', 'embed', 'fencedframe', 'frame', 'frameset', 'iframe', 'meta', 'object', 'portal', 'script', 'template']);
+const proxyReaderBlockedAttributes = new Set(['attributionsrc', 'dynsrc', 'is', 'lowsrc', 'manifest', 'nonce', 'ping', 'profile', 'srcdoc']);
+function proxyReaderAttributeAllowed({ name }) {
+  return /^[a-z_][a-z0-9_.:-]*$/i.test(name) && !/^(?:on|data-eya-)/i.test(name) && !proxyReaderBlockedAttributes.has(name);
+}
+
+function prepareProxyReaderMarkup(root) {
+  // Foreign markup (including SVG animation and MathML), raw scripting
+  // contexts, refresh directives and native navigation URLs never reach srcdoc.
+  for (const element of root.querySelectorAll('*')) {
+    const name = element.localName;
+    if (element.namespaceURI !== 'http://www.w3.org/1999/xhtml' || proxyReaderDropElements.has(name)) {
+      element.remove();
+      continue;
+    }
+    if (!proxyReaderElements.has(name)) {
+      const content = element.ownerDocument.createDocumentFragment();
+      while (element.firstChild) content.append(element.firstChild);
+      element.replaceWith(content);
+      continue;
+    }
+    for (const attribute of [...element.attributes]) {
+      if (!proxyReaderAttributeAllowed(attribute)) element.removeAttribute(attribute.name);
+    }
+    if (name === 'link' && !['stylesheet', 'icon'].includes((element.getAttribute('rel') || '').trim().toLowerCase())) {
+      element.remove();
+    } else if ((name === 'a' || name === 'area') && element.hasAttribute('href')) {
+      element.setAttribute('data-eya-reader-href', element.getAttribute('href'));
+      element.setAttribute('href', 'about:srcdoc#');
+    }
+  }
+}
+
+export function parsedTagAttributes(tagSource, tag, readerMode = false) {
+  const template = inertHtmlTemplate();
+  template.innerHTML = `<div${tagSource.slice(tag.nameEnd, tag.end - 1)}></div>`;
+  return [...(template.content.firstElementChild?.attributes || [])]
+    .filter(attribute => !readerMode || proxyReaderAttributeAllowed(attribute))
+    .map(attribute => `${attribute.name}="${escapeHtml(attribute.value)}"`).join(' ');
+}
+
+export function sanitizeHtmlFragment(source, readerMode = false) {
+  const template = inertHtmlTemplate();
   template.innerHTML = source;
   const root = template.content;
+  if (readerMode) prepareProxyReaderMarkup(root);
   sanitizeHtmlFragmentContent(root);
   return template.innerHTML;
 }
@@ -1522,7 +1598,7 @@ export function sanitizeHtmlFragmentContent(root) {
     if (name === 'script' && !element.hasAttribute('src')) {
       const type = (element.getAttribute('type') || '').trim().toLowerCase();
       if (!type || type === 'text/javascript' || type === 'application/javascript' || type === 'module') {
-        element.textContent = rewriteLocationNavigations(element.textContent || '');
+        element.textContent = rewriteProxyScriptReads(rewriteLocationNavigations(element.textContent || ''));
       }
     }
     if (name === 'script' && element.getAttribute('type')?.trim().toLowerCase() === 'module' && element.hasAttribute('src')) element.setAttribute('data-eya-module', '');
@@ -1549,7 +1625,7 @@ export function sanitizeHtmlFragmentContent(root) {
   for (const style of root.querySelectorAll('style')) style.setAttribute('__eya-style', '');
 }
 
-export function neutralizeDirectResources(html) {
+export function neutralizeDirectResources(html, readerMode = false) {
   const source = String(html);
   const tags = scanHtmlTagTokens(source);
   const documentTags = tags.filter(tag => tag.templateDepth === 0);
@@ -1572,11 +1648,11 @@ export function neutralizeDirectResources(html) {
   } else {
     bodySource = source.slice(htmlOpen?.end ?? 0, htmlEnd);
   }
-  const htmlAttributes = htmlOpen ? parsedTagAttributes(source, htmlOpen) : '';
-  const headAttributes = headOpen ? parsedTagAttributes(source, headOpen) : '';
-  const bodyAttributes = bodyOpen ? parsedTagAttributes(source, bodyOpen) : '';
-  const head = sanitizeHtmlFragment(headSource);
-  const body = sanitizeHtmlFragment(bodySource);
+  const htmlAttributes = htmlOpen ? parsedTagAttributes(source, htmlOpen, readerMode) : '';
+  const headAttributes = headOpen ? parsedTagAttributes(source, headOpen, readerMode) : '';
+  const bodyAttributes = bodyOpen ? parsedTagAttributes(source, bodyOpen, readerMode) : '';
+  const head = sanitizeHtmlFragment(headSource, readerMode);
+  const body = sanitizeHtmlFragment(bodySource, readerMode);
   const doctype = /^\s*<!doctype\s+html\b/i.test(source) ? '<!doctype html>' : '';
   return `${doctype}<html${htmlAttributes ? ` ${htmlAttributes}` : ''}><head${headAttributes ? ` ${headAttributes}` : ''}>${head}</head><body${bodyAttributes ? ` ${bodyAttributes}` : ''}>${body}</body></html>`;
 }
@@ -1593,47 +1669,60 @@ function appendStyles() {
   .eya-browser-page-dialog{width:min(460px,calc(100% - 24px));max-width:none;padding:16px;border:1px solid var(--ui-border,#465b68);border-radius:9px;background:var(--ui-surface,#1d2933);color:var(--ui-fg,#e4edf2);box-shadow:0 16px 48px #000b}.eya-browser-page-dialog::backdrop{background:#0009}.eya-browser-page-dialog form{display:grid;gap:10px}.eya-browser-page-dialog-message{max-height:35vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}.eya-browser-page-dialog input{min-width:0;padding:8px;border:1px solid var(--ui-border,#465b68);border-radius:5px;background:var(--ui-bg,#10151b);color:inherit}.eya-browser-page-dialog-status{min-height:1.2em;color:var(--ui-muted,#aebfc7);font-size:11px}.eya-browser-page-dialog-actions{display:flex;justify-content:flex-end;gap:6px}
   .eya-browser-toolbar button:disabled{opacity:.45;cursor:default}.eya-browser-toolbar .eya-address{flex:1;min-width:80px;padding:7px 10px;border:1px solid var(--ui-border,#465b68);border-radius:6px;background:var(--ui-bg,#10151b);color:inherit}
   .eya-browser-bookmarks{min-height:34px;overflow:auto}.eya-browser-tabs{padding-bottom:0;overflow-x:auto}.eya-browser-tab{max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.eya-browser-tab[aria-selected=true]{border-bottom-color:var(--ui-accent,#54d7bd)}
-  .eya-browser-tab-menu{position:relative;flex:none}.eya-browser-tab-menu summary{cursor:pointer;list-style:none;white-space:nowrap;padding:7px;border:1px solid var(--ui-border,#465b68);border-radius:5px}.eya-browser-tab-menu summary::-webkit-details-marker{display:none}.eya-browser-tab-menu .eya-browser-tabs{position:absolute;right:0;top:100%;z-index:20;display:flex;flex-direction:column;align-items:stretch;gap:4px;width:min(300px,80vw);max-height:min(60vh,420px);overflow:auto;padding:6px;background:var(--ui-surface,#1d2933);border:1px solid var(--ui-border,#465b68);border-radius:6px;box-shadow:0 8px 24px #0008}.eya-browser-tab-menu .eya-browser-tabs>div{min-width:0}.eya-browser-tab-menu .eya-browser-tab{flex:1;max-width:none;text-align:left}.eya-browser-tab-menu .eya-browser-tabs>button{width:100%;text-align:center}
+  .eya-browser-tab-menu{position:relative;flex:none}.eya-browser-tab-menu summary{cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:34px;height:34px;padding:0;border:1px solid var(--ui-border,#465b68);border-radius:5px}.eya-browser-tab-count{display:flex;align-items:center;justify-content:center;box-sizing:border-box;min-width:20px;height:20px;padding:0 2px;border:1.5px solid currentColor;border-radius:5px;font-size:12px;line-height:1;font-weight:600;font-variant-numeric:tabular-nums}.eya-browser-tab-menu summary::-webkit-details-marker{display:none}.eya-browser-tab-menu .eya-browser-tabs{position:absolute;right:0;top:100%;z-index:20;display:flex;flex-direction:column;align-items:stretch;gap:4px;width:min(300px,80vw);max-height:min(60vh,420px);overflow:auto;padding:6px;background:var(--ui-surface,#1d2933);border:1px solid var(--ui-border,#465b68);border-radius:6px;box-shadow:0 8px 24px #0008}.eya-browser-tab-menu .eya-browser-tabs>div{min-width:0}.eya-browser-tab-menu .eya-browser-tab{flex:1;max-width:none;text-align:left}.eya-browser-tab-menu .eya-browser-tabs>button{width:100%;text-align:center}
   .eya-browser-status{display:flex;align-items:center;gap:6px;padding:3px 8px;color:var(--ui-muted,#aebfc7);font-size:11px;border-bottom:1px solid var(--ui-border,#344854)}
   .eya-browser-find{display:flex;align-items:center;gap:5px;padding:4px 6px;border-bottom:1px solid var(--ui-border,#344854);background:var(--ui-surface,#1d2933);flex:0 0 auto}.eya-browser-find[hidden]{display:none}.eya-browser-find input{flex:1;min-width:70px;padding:5px 7px;border:1px solid var(--ui-border,#465b68);border-radius:5px;background:var(--ui-bg,#10151b);color:inherit}.eya-browser-find button{min-height:28px;padding:3px 7px;border:1px solid var(--ui-border,#465b68);border-radius:5px;background:var(--ui-bg,#10151b);color:inherit;cursor:pointer}.eya-browser-find-status{min-width:90px;color:var(--ui-muted,#aebfc7);font-size:11px;white-space:nowrap}
-  .eya-browser-library{position:absolute;z-index:7;inset:8px;display:flex;flex-direction:column;min-width:0;min-height:0;padding:10px;border:1px solid var(--ui-border,#465b68);border-radius:9px;background:var(--ui-surface,#1d2933);box-shadow:0 12px 32px #000a}.eya-browser-library[hidden]{display:none}.eya-browser-library-head,.eya-browser-library-tabs,.eya-browser-library-row{display:flex;align-items:center;gap:7px}.eya-browser-library-head{padding-bottom:8px}.eya-browser-library-head strong{flex:1}.eya-browser-library-search{width:min(360px,50%);padding:6px 8px;border:1px solid var(--ui-border,#465b68);border-radius:5px;background:var(--ui-bg,#10151b);color:inherit}.eya-browser-library button{min-height:30px;padding:4px 8px;border:1px solid var(--ui-border,#465b68);border-radius:5px;background:var(--ui-bg,#10151b);color:inherit;cursor:pointer}.eya-browser-library-tabs{padding-bottom:7px;border-bottom:1px solid var(--ui-border,#465b68)}.eya-browser-library-tabs button[aria-pressed=true]{border-color:var(--ui-accent,#54d7bd)}.eya-browser-library-list{flex:1;min-height:0;overflow:auto}.eya-browser-library-row{align-items:flex-start;padding:8px 2px;border-bottom:1px solid color-mix(in srgb,var(--ui-border,#465b68) 65%,transparent)}.eya-browser-library-row-main{flex:1;min-width:0}.eya-browser-library-row-title{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}.eya-browser-library-row-url,.eya-browser-library-row-time{display:block;margin-top:3px;color:var(--ui-muted,#aebfc7);font-size:11px;overflow-wrap:anywhere}.eya-browser-library-title-input{width:min(250px,35%);min-width:70px;padding:4px 6px;border:1px solid var(--ui-border,#465b68);border-radius:4px;background:var(--ui-bg,#10151b);color:inherit}.eya-browser-library-status{min-height:18px;padding-top:6px;color:var(--ui-muted,#aebfc7);font-size:11px}
-  .eya-browser-status[data-state=error]{color:#ff9d8f}.eya-browser-status[data-state=warning]{color:#ffd27d}.eya-browser-status .spacer{flex:1}.eya-browser-content{position:relative;display:flex;flex:1;min-height:0;background:#fff}.eya-browser-frame{width:100%;height:100%;flex:1;border:0;background:white}.eya-browser-frame[hidden]{display:none}.eya-browser-remote-view{width:100%;height:100%;object-fit:contain;background:#111;touch-action:none;outline:none}.eya-browser-remote-view[hidden]{display:none}.eya-browser-text-surface{position:absolute;inset:0;z-index:1;overflow:hidden;outline:none;opacity:0;white-space:pre-wrap;overflow-wrap:anywhere;caret-color:transparent;user-select:none;-webkit-user-select:none;touch-action:none}.eya-browser-text-surface[hidden]{display:none}.eya-browser-empty{position:absolute;inset:0;display:grid;place-content:center;text-align:center;color:#53616a;background:#fff;pointer-events:none}.eya-browser-empty[hidden]{display:none}
-  .eya-devtools{display:flex;flex:0 0 230px;min-height:120px;max-height:50%;flex-direction:column;background:var(--ui-bg,#10151b);border-top:1px solid var(--ui-border,#526774)}.eya-devtools[hidden]{display:none}.eya-devtools-toolbar{display:flex;align-items:center;gap:5px;padding:3px 6px}.eya-devtools-toolbar button[aria-selected=true]{border-color:var(--ui-accent,#54d7bd)}.eya-devtools-search{min-width:50px;max-width:220px;flex:1;padding:5px 7px;border:1px solid var(--ui-border,#465b68);border-radius:5px;background:var(--ui-bg,#10151b);color:inherit}.eya-devtools-output{flex:1;min-height:0;overflow:auto;padding:6px;font:12px ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere}.eya-devtools-performance-summary{padding:5px 8px;color:var(--ui-muted,#aebfc7);font-size:11px;overflow-wrap:anywhere;border-bottom:1px solid var(--ui-border,#344854)}.eya-devtools-performance-summary[hidden]{display:none}.eya-network-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(70px,24%);align-items:center;gap:8px;cursor:pointer}.eya-network-row[aria-selected=true]{background:color-mix(in srgb,var(--ui-accent,#54d7bd) 16%,transparent)}.eya-network-row-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.eya-network-waterfall-track{position:relative;display:block;height:9px;overflow:hidden;border-radius:4px;background:color-mix(in srgb,var(--ui-border,#465b68) 50%,transparent)}.eya-network-waterfall-bar{position:absolute;top:1px;bottom:1px;min-width:2px;border-radius:3px;background:var(--ui-accent,#54d7bd)}.eya-network-waterfall-bar[data-state=blocked]{background:#ff7c72}.eya-network-waterfall-bar[data-state=cache]{background:#72b7ff}.eya-devtools-row{padding:3px 5px;border-bottom:1px solid color-mix(in srgb,var(--ui-border,#344854) 65%,transparent)}.eya-devtools-row[data-level=error]{color:#ff9d8f}.eya-devtools-row[data-level=warn]{color:#ffd27d}.eya-devtools-download-row{display:flex;align-items:center;gap:5px;padding:4px 2px;border-bottom:1px solid color-mix(in srgb,var(--ui-border,#344854) 65%,transparent)}.eya-devtools-download-row span{min-width:0;flex:1;overflow-wrap:anywhere}.eya-browser-settings{position:absolute;z-index:5;right:8px;top:40px;width:min(290px,calc(100% - 16px));padding:10px;border:1px solid var(--ui-border,#465b68);border-radius:8px;background:var(--ui-surface,#1d2933);box-shadow:0 8px 24px #0008}.eya-browser-settings[hidden]{display:none}.eya-browser-settings label{display:flex;gap:8px;align-items:center;padding:6px}
+  .eya-browser-library{position:absolute;z-index:7;inset:8px;display:flex;flex-direction:column;min-width:0;min-height:0;padding:10px;border:1px solid var(--ui-border,#465b68);border-radius:9px;background:var(--ui-surface,#1d2933);box-shadow:0 12px 32px #000a}.eya-browser-library[hidden]{display:none}.eya-browser-library-head,.eya-browser-library-tabs,.eya-browser-library-row{display:flex;align-items:center;gap:7px}.eya-browser-library-head{padding-bottom:8px}.eya-browser-library-head strong{flex:1}.eya-browser-library-search{width:min(360px,50%);padding:6px 8px;border:1px solid var(--ui-border,#465b68);border-radius:5px;background:var(--ui-bg,#10151b);color:inherit}.eya-browser-library button{min-height:30px;padding:4px 8px;border:1px solid var(--ui-border,#465b68);border-radius:5px;background:var(--ui-bg,#10151b);color:inherit;cursor:pointer}.eya-browser-library-tabs{flex-wrap:wrap;padding-bottom:7px;border-bottom:1px solid var(--ui-border,#465b68)}.eya-browser-library-tabs button[aria-pressed=true]{border-color:var(--ui-accent,#54d7bd)}.eya-browser-library-list{flex:1;min-height:0;overflow:auto}.eya-browser-library-row{align-items:flex-start;padding:8px 2px;border-bottom:1px solid color-mix(in srgb,var(--ui-border,#465b68) 65%,transparent)}.eya-browser-library-row-main{flex:1;min-width:0}.eya-browser-library-row-title{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}.eya-browser-library-row-url,.eya-browser-library-row-time{display:block;margin-top:3px;color:var(--ui-muted,#aebfc7);font-size:11px;overflow-wrap:anywhere}.eya-browser-library-title-input{width:min(250px,35%);min-width:70px;padding:4px 6px;border:1px solid var(--ui-border,#465b68);border-radius:4px;background:var(--ui-bg,#10151b);color:inherit}.eya-browser-library-status{min-height:18px;padding-top:6px;color:var(--ui-muted,#aebfc7);font-size:11px}
+  .eya-browser-status[data-state=error]{color:#ff9d8f}.eya-browser-status[data-state=warning]{color:#ffd27d}.eya-browser-status .spacer{flex:1}.eya-browser-content{position:relative;display:flex;flex:1;min-height:0;background:#fff}.eya-browser-frame{width:100%;height:100%;flex:1;border:0;background:white}.eya-browser-frame[hidden]{display:none}.eya-browser-remote-view{display:block;min-width:0;min-height:0;width:100%;height:100%;object-fit:contain;background:#111;touch-action:none;outline:none}.eya-browser-remote-view[hidden]{display:none}.eya-browser-remote-canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#111;pointer-events:none}.eya-browser-remote-canvas[hidden],.eya-browser-remote-view[hidden]+.eya-browser-remote-canvas{display:none}.eya-browser-text-surface{position:absolute;inset:0;z-index:1;box-sizing:border-box;width:100%;height:100%;padding:0;border:0;resize:none;background:transparent;overflow:hidden;outline:none;opacity:0;white-space:pre-wrap;overflow-wrap:anywhere;caret-color:transparent;user-select:none;-webkit-user-select:none;touch-action:none}.eya-browser-text-surface[hidden]{display:none}.eya-browser-empty{position:absolute;inset:0;display:grid;place-content:center;text-align:center;color:#53616a;background:#fff;pointer-events:none}.eya-browser-empty[hidden]{display:none}
+  .eya-devtools{display:flex;flex:0 0 230px;min-height:120px;max-height:50%;flex-direction:column;background:var(--ui-bg,#10151b);border-top:1px solid var(--ui-border,#526774)}.eya-devtools[hidden]{display:none}.eya-devtools-toolbar{display:flex;min-width:0;flex-wrap:wrap;align-items:center;gap:5px;padding:3px 6px}.eya-devtools-toolbar button[aria-selected=true]{border-color:var(--ui-accent,#54d7bd)}.eya-devtools-search{min-width:50px;max-width:220px;flex:1;padding:5px 7px;border:1px solid var(--ui-border,#465b68);border-radius:5px;background:var(--ui-bg,#10151b);color:inherit}.eya-devtools-output{flex:1;min-height:0;overflow:auto;padding:6px;font:12px ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere}.eya-devtools-performance-summary{padding:5px 8px;color:var(--ui-muted,#aebfc7);font-size:11px;overflow-wrap:anywhere;border-bottom:1px solid var(--ui-border,#344854)}.eya-devtools-performance-summary[hidden]{display:none}.eya-network-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(70px,24%);align-items:center;gap:8px;cursor:pointer}.eya-network-row[aria-selected=true]{background:color-mix(in srgb,var(--ui-accent,#54d7bd) 16%,transparent)}.eya-network-row-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.eya-network-waterfall-track{position:relative;display:block;height:9px;overflow:hidden;border-radius:4px;background:color-mix(in srgb,var(--ui-border,#465b68) 50%,transparent)}.eya-network-waterfall-bar{position:absolute;top:1px;bottom:1px;min-width:2px;border-radius:3px;background:var(--ui-accent,#54d7bd)}.eya-network-waterfall-bar[data-state=blocked]{background:#ff7c72}.eya-network-waterfall-bar[data-state=cache]{background:#72b7ff}.eya-devtools-row{padding:3px 5px;border-bottom:1px solid color-mix(in srgb,var(--ui-border,#344854) 65%,transparent)}.eya-devtools-row[data-level=error]{color:#ff9d8f}.eya-devtools-row[data-level=warn]{color:#ffd27d}.eya-devtools-download-row{display:flex;align-items:center;gap:5px;padding:4px 2px;border-bottom:1px solid color-mix(in srgb,var(--ui-border,#344854) 65%,transparent)}.eya-devtools-download-row span{min-width:0;flex:1;overflow-wrap:anywhere}.eya-browser-settings{position:absolute;z-index:5;right:8px;top:40px;width:min(290px,calc(100% - 16px));padding:10px;border:1px solid var(--ui-border,#465b68);border-radius:8px;background:var(--ui-surface,#1d2933);box-shadow:0 8px 24px #0008}.eya-browser-settings[hidden]{display:none}.eya-browser-settings label{display:flex;gap:8px;align-items:center;padding:6px}
   .eya-devtools-console{display:flex;gap:5px;padding:5px;border-top:1px solid var(--ui-border,#344854)}.eya-devtools-console[hidden]{display:none}.eya-devtools-console textarea{flex:1;min-width:0;resize:vertical;max-height:100px;padding:6px 8px;border:1px solid var(--ui-border,#465b68);border-radius:5px;background:var(--ui-bg,#10151b);color:var(--ui-fg,#e4edf2);font:12px ui-monospace,monospace}
   .eya-userscript-list{display:grid;gap:4px;margin:6px 0}.eya-userscript-row{display:flex;align-items:center;gap:6px;min-width:0;padding:4px;border:1px solid var(--ui-border,#344854);border-radius:5px}.eya-userscript-row span{flex:1;min-width:0;overflow-wrap:anywhere;font-size:11px}.eya-userscript-row button{padding:3px 6px}
-  .eya-devtools-tabs{display:flex;align-items:center;gap:4px}.eya-devtools-cache-toggle{display:flex;align-items:center;gap:4px;white-space:nowrap;font-size:11px}.eya-devtools-cache-toggle[hidden]{display:none}.eya-devtools-sources{display:flex;flex:1;min-height:0;overflow:hidden}.eya-devtools-sources[hidden]{display:none}.eya-devtools-source-list{display:flex;flex:0 0 min(36%,220px);min-width:105px;flex-direction:column;gap:2px;overflow:auto;padding:4px;border-right:1px solid var(--ui-border,#344854)}.eya-devtools-source-item{flex:0 0 auto;width:100%;padding:4px 5px;border:0;border-radius:3px;background:transparent;color:inherit;text-align:left;font:10px ui-monospace,monospace;overflow-wrap:anywhere;cursor:pointer}.eya-devtools-source-item[aria-selected=true]{background:color-mix(in srgb,var(--ui-accent,#54d7bd) 22%,transparent)}.eya-devtools-source-pane{display:flex;flex:1;min-width:0;min-height:0;flex-direction:column}.eya-devtools-source-nav{display:flex;align-items:center;gap:5px;min-height:28px;padding:3px 6px;border-bottom:1px solid var(--ui-border,#344854)}.eya-devtools-source-nav button{padding:2px 6px}.eya-devtools-source-match-status{flex:1;color:var(--ui-muted,#aebfc7);font-size:10px;text-align:right}.eya-devtools-source-text{flex:1;min-width:0;min-height:0;overflow:auto;margin:0;padding:6px;font:10px/1.35 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere}.eya-devtools-details{flex:0 0 34%;max-height:34%;overflow:auto;margin:0;padding:6px;border-top:1px solid var(--ui-border,#344854);font:11px ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere}.eya-devtools-details:empty{display:none}.eya-devtools-element-editor{display:grid;gap:4px;padding:4px 6px;border-top:1px solid var(--ui-border,#344854)}.eya-devtools-element-editor[hidden]{display:none}.eya-devtools-edit-form{display:flex;gap:4px}.eya-devtools-edit-form textarea,.eya-devtools-edit-form input{flex:1;min-width:0;padding:4px 6px;border:1px solid var(--ui-border,#465b68);border-radius:4px;background:var(--ui-bg,#10151b);color:inherit;font:11px ui-monospace,monospace}.eya-devtools-edit-form button{padding:3px 6px}.eya-devtools-edit-status{font-size:10px;color:var(--ui-muted,#aebfc7)}.eya-element-row{display:flex;align-items:center;min-height:24px;white-space:nowrap}.eya-element-row button{min-height:22px;border:0;background:transparent;color:inherit;text-align:left;font:12px ui-monospace,monospace}.eya-element-toggle{width:22px;padding:0;text-align:center!important;color:var(--ui-muted,#aebfc7)!important}.eya-element-select{flex:1;overflow:hidden;text-overflow:ellipsis}.eya-element-select[aria-pressed=true]{background:color-mix(in srgb,var(--ui-accent,#54d7bd) 22%,transparent);color:var(--ui-fg,#e4edf2)}.eya-element-group{padding-left:14px}.eya-filter-info{padding:5px 7px;color:var(--ui-muted,#aebfc7);font-size:11px;overflow-wrap:anywhere}
+  .eya-devtools-tabs{display:flex;min-width:0;flex-wrap:wrap;align-items:center;gap:4px}.eya-devtools-cache-toggle{display:flex;align-items:center;gap:4px;white-space:nowrap;font-size:11px}.eya-devtools-cache-toggle[hidden]{display:none}.eya-devtools-sources{display:flex;flex:1;min-height:0;overflow:hidden}.eya-devtools-sources[hidden]{display:none}.eya-devtools-source-list{display:flex;flex:0 0 min(36%,220px);min-width:105px;flex-direction:column;gap:2px;overflow:auto;padding:4px;border-right:1px solid var(--ui-border,#344854)}.eya-devtools-source-item{flex:0 0 auto;width:100%;padding:4px 5px;border:0;border-radius:3px;background:transparent;color:inherit;text-align:left;font:10px ui-monospace,monospace;overflow-wrap:anywhere;cursor:pointer}.eya-devtools-source-item[aria-selected=true]{background:color-mix(in srgb,var(--ui-accent,#54d7bd) 22%,transparent)}.eya-devtools-source-pane{display:flex;flex:1;min-width:0;min-height:0;flex-direction:column}.eya-devtools-source-nav{display:flex;align-items:center;gap:5px;min-height:28px;padding:3px 6px;border-bottom:1px solid var(--ui-border,#344854)}.eya-devtools-source-nav button{padding:2px 6px}.eya-devtools-source-match-status{flex:1;color:var(--ui-muted,#aebfc7);font-size:10px;text-align:right}.eya-devtools-source-text{flex:1;min-width:0;min-height:0;overflow:auto;margin:0;padding:6px;font:10px/1.35 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere}.eya-devtools-details{flex:0 0 34%;max-height:34%;overflow:auto;margin:0;padding:6px;border-top:1px solid var(--ui-border,#344854);font:11px ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere}.eya-devtools-details:empty{display:none}.eya-devtools-element-editor{display:grid;gap:4px;padding:4px 6px;border-top:1px solid var(--ui-border,#344854)}.eya-devtools-element-editor[hidden]{display:none}.eya-devtools-edit-form{display:flex;gap:4px}.eya-devtools-edit-form textarea,.eya-devtools-edit-form input{flex:1;min-width:0;padding:4px 6px;border:1px solid var(--ui-border,#465b68);border-radius:4px;background:var(--ui-bg,#10151b);color:inherit;font:11px ui-monospace,monospace}.eya-devtools-edit-form button{padding:3px 6px}.eya-devtools-edit-status{font-size:10px;color:var(--ui-muted,#aebfc7)}.eya-element-row{display:flex;align-items:center;min-height:24px;white-space:nowrap}.eya-element-row button{min-height:22px;border:0;background:transparent;color:inherit;text-align:left;font:12px ui-monospace,monospace}.eya-element-toggle{width:22px;padding:0;text-align:center!important;color:var(--ui-muted,#aebfc7)!important}.eya-element-select{flex:1;overflow:hidden;text-overflow:ellipsis}.eya-element-select[aria-pressed=true]{background:color-mix(in srgb,var(--ui-accent,#54d7bd) 22%,transparent);color:var(--ui-fg,#e4edf2)}.eya-element-group{padding-left:14px}.eya-filter-info{padding:5px 7px;color:var(--ui-muted,#aebfc7);font-size:11px;overflow-wrap:anywhere}
   .eya-devtools-source-nav input{width:62px;min-width:48px;padding:3px 5px;border:1px solid var(--ui-border,#465b68);border-radius:4px;background:var(--ui-bg,#10151b);color:inherit;font:11px ui-monospace,monospace}
   .eya-devtools-debugger-stack{display:flex;max-height:72px;gap:2px;overflow:auto;padding:3px 6px;border-bottom:1px solid var(--ui-border,#344854)}.eya-devtools-debugger-stack[hidden]{display:none}.eya-devtools-debugger-stack button{flex:0 0 auto;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 5px;border:1px solid var(--ui-border,#465b68);border-radius:3px;background:var(--ui-surface,#1d2933);color:inherit;font:10px ui-monospace,monospace;text-align:left}
   .eya-devtools-object-inspector{display:flex;max-height:42%;min-height:64px;flex-direction:column;border-top:1px solid var(--ui-border,#344854)}.eya-devtools-object-inspector[hidden]{display:none}.eya-devtools-object-inspector-header{display:flex;align-items:center;gap:6px;padding:3px 7px}.eya-devtools-object-inspector-header strong{flex:1;font-size:11px}.eya-devtools-object-inspector-header button{padding:2px 6px}.eya-devtools-object-tree{min-height:0;overflow:auto;padding:2px 6px;font:11px ui-monospace,monospace}.eya-devtools-object-row{display:flex;align-items:flex-start;gap:4px;min-height:20px;padding-left:calc(var(--depth,0)*12px);overflow-wrap:anywhere}.eya-devtools-object-row button{flex:0 0 auto;border:0;background:transparent;color:var(--ui-accent,#54d7bd);font:inherit;text-align:left;cursor:pointer}.eya-devtools-object-value{min-width:0;overflow-wrap:anywhere;color:var(--ui-muted,#aebfc7)}
   .eya-devtools-object-result{display:flex;align-items:flex-start;gap:6px}.eya-devtools-object-result span{min-width:0;flex:1;overflow-wrap:anywhere}.eya-devtools-object-result button{flex:0 0 auto;padding:1px 5px;font-size:10px}
-  @media(max-width:600px){.eya-browser-toolbar{gap:3px;padding:4px;flex-wrap:wrap}.eya-browser-toolbar button{min-width:38px;min-height:40px;padding:4px}.eya-browser-toolbar .eya-address{font-size:16px;flex:1 1 45%;min-width:120px}.eya-browser-tab-menu summary{min-height:40px;display:flex;align-items:center}.eya-devtools{flex-basis:185px}.eya-devtools-search{max-width:120px}.eya-devtools-source-nav{flex-wrap:wrap}.eya-devtools-source-nav .eya-devtools-source-match-status{min-width:70px}}
+  .eya-browser-toolbar{min-width:0;flex-wrap:nowrap}.eya-browser-toolbar .eya-address{min-width:0}.eya-browser-toolbar>button{flex:none;padding:5px}.eya-browser-toolbar .ui-icon{display:block}.eya-browser-toolbar .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+  .eya-browser-status,.eya-browser-empty,.eya-devtools-output{user-select:text;-webkit-user-select:text}.eya-browser-actions-panel{max-height:80vh;overflow:auto}.eya-browser-actions-panel label{margin:4px;font-size:12px}
+  .eya-browser-actions{position:relative;flex:none}.eya-browser-actions summary{cursor:pointer;list-style:none;padding:6px;border:1px solid var(--ui-border,#465b68);border-radius:5px}.eya-browser-actions summary::-webkit-details-marker{display:none}.eya-browser-actions-panel{position:absolute;right:0;top:100%;z-index:30;display:grid;gap:4px;min-width:180px;padding:6px;background:var(--ui-surface,#1d2933);border:1px solid var(--ui-border,#465b68);border-radius:6px}.eya-browser-actions-panel button{text-align:left}.eya-web-browser:fullscreen{width:100%;height:100%}
+  @media(max-width:600px){.eya-browser-toolbar{gap:3px;padding:4px}.eya-browser-toolbar button{min-width:34px;min-height:38px;padding:4px}.eya-browser-toolbar .eya-address{font-size:16px}.eya-browser-tab-menu summary{width:38px;height:38px}.eya-devtools{flex-basis:185px}.eya-devtools-search{max-width:120px}.eya-devtools-source-nav{flex-wrap:wrap}.eya-devtools-source-nav .eya-devtools-source-match-status{min-width:70px}}
   `;
   document.head.append(style);
 }
 
-export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, readLocalFile, openLocalFile, preferences = {}, serverRenderedByDefault = true }) {
+export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, readLocalFile, openLocalFile, fileRequest, uploadServerFile, preferences = {}, serverRenderedByDefault = true, onAuxModifiersConsumed, onStateChange, onSettingsChange, onGlobalShortcut, retainRemoteSession = false, reconnectProxy }) {
   if (typeof request !== 'function') throw new TypeError('Browser panel requires a proxy request function.');
+  const proxyPanel = !serverRenderedByDefault || typeof openRemoteBrowser !== 'function';
+  const readerMode = proxyPanel && !proxyNavigationAvailable(window);
+  // Page data and imported executable code belong to this panel's lifetime.
+  // Never share them across servers, authenticated identities or workspaces.
+  const pageSettings = new Map();
+  const readStore = (key, fallback) => pageSettings.has(key) ? structuredClone(pageSettings.get(key)) : fallback;
+  const writeStore = (key, value) => { pageSettings.set(key, structuredClone(value)); };
+  const openBrowserStorageDb = async () => ({ close() {} });
+  const readBrowserStorageDb = async (db, key) => readStore(key, undefined);
+  const writeBrowserStorageDb = async (db, key, value) => writeStore(key, value);
+
   appendStyles();
   const element = document.createElement('section'); element.className = 'eya-web-browser';
   const toolbar = document.createElement('div'); toolbar.className = 'eya-browser-toolbar';
   const back = button('←', 'Back', () => navigateHistory(-1));
   const forward = button('→', 'Forward', () => navigateHistory(1));
   const reload = button('↻', 'Reload', () => navigate(active.url, false));
+  buttonIcon(back, 'ArrowLeft', 'Back', true); buttonIcon(forward, 'ArrowRight', 'Forward', true); buttonIcon(reload, 'RefreshCw', 'Reload', true);
   const address = document.createElement('input'); address.className = 'eya-address'; address.type = 'text'; address.placeholder = 'Search or enter address'; address.setAttribute('aria-label', 'Address or search'); address.autocomplete = 'url';
-  const go = button('Go', 'Navigate', () => navigateAddress());
   const bookmark = button('☆', 'Bookmark this page', toggleBookmark);
   const findButton = button('Find', 'Find text in the current page (Ctrl+F)', openFind);
   const privacy = button('◉', 'Privacy and site settings', () => { settings.hidden = !settings.hidden; });
   const localDocs = button('Local HTML', 'Open a local HTML file', openLocalDialog);
-  const remoteToggle = button('Fast proxy', 'Switch to client-rendered Proxy mode. It is faster, but page self-navigation is only best-effort confined to the WebSocket.', toggleRemoteMode);
   const pageUploadPicker = document.createElement('input'); pageUploadPicker.type = 'file'; pageUploadPicker.hidden = true;
   const uploadPageFiles = button('Choose files', 'Select local files requested by the remote page', () => {
     if (!pendingRemoteFileChooser) return;
-    pageUploadPicker.multiple = pendingRemoteFileChooser.multiple;
-    pageUploadPicker.click();
+    nativeFilePicker.open(pendingRemoteFileChooser);
   }); uploadPageFiles.hidden = true;
+  buttonIcon(uploadPageFiles, 'Upload', 'Select local files requested by the remote page', true);
   const openTools = button('DevTools', 'Toggle developer tools', () => toggleTools());
-  toolbar.append(back, forward, reload, address, go, localDocs, uploadPageFiles, pageUploadPicker);
+  toolbar.append(back, forward, reload, address, uploadPageFiles, pageUploadPicker);
   const localDialog = document.createElement('dialog'); localDialog.className = 'eya-browser-local-dialog';
   const localForm = document.createElement('form'); localForm.method = 'dialog';
   const localTitle = document.createElement('strong'); localTitle.textContent = 'Open local HTML';
@@ -1641,7 +1730,7 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
   localPathInput.placeholder = '/path/to/index.html'; localPathInput.setAttribute('aria-label', 'Path to local HTML file under the Eya file root');
   const localDialogStatus = document.createElement('span'); localDialogStatus.className = 'eya-browser-local-dialog-status'; localDialogStatus.setAttribute('role', 'status');
   const localActions = document.createElement('div'); localActions.className = 'eya-browser-local-dialog-actions';
-  const localCancel = button('Cancel', 'Cancel opening a local document', () => localDialog.close());
+  const localCancel = button('Cancel', 'Cancel opening a local document', cancelLocalOpen);
   const localOpen = button('Open', 'Open the selected local HTML file', () => openLocalPath());
   localActions.append(localCancel, localOpen); localForm.append(localTitle, localPathInput, localDialogStatus, localActions); localDialog.append(localForm);
   const pageDialog = document.createElement('dialog'); pageDialog.className = 'eya-browser-page-dialog';
@@ -1660,14 +1749,84 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
   const bookmarkBar = document.createElement('div'); bookmarkBar.className = 'eya-browser-bookmarks'; bookmarkBar.setAttribute('aria-label', 'Bookmarks');
   const tabBar = document.createElement('div'); tabBar.className = 'eya-browser-tabs'; tabBar.setAttribute('role', 'tablist');
   const tabMenu = document.createElement('details'); tabMenu.className = 'eya-browser-tab-menu';
-  const tabSummary = document.createElement('summary'); tabSummary.setAttribute('aria-label', 'Browser tabs'); tabSummary.textContent = 'Tabs';
+  const tabSummary = document.createElement('summary'); tabSummary.setAttribute('aria-label', 'Browser tabs');
+  const tabCount = document.createElement('span'); tabCount.className = 'eya-browser-tab-count'; tabCount.setAttribute('aria-hidden', 'true'); tabCount.textContent = '1'; tabSummary.append(tabCount);
   tabMenu.append(tabSummary, tabBar); toolbar.append(tabMenu);
+  let pageZoom = 1;
+  const actions = document.createElement('details'); actions.className = 'eya-browser-actions';
+  const actionsSummary = document.createElement('summary'); actionsSummary.setAttribute('aria-label', 'Browser options'); actionsSummary.append(icon('Ellipsis'));
+  const actionsPanel = document.createElement('div'); actionsPanel.className = 'eya-browser-actions-panel';
+  const zoomOut = button('Zoom out', 'Zoom out', () => setPageZoom(pageZoom - 0.1));
+  const zoomIn = button('Zoom in', 'Zoom in', () => setPageZoom(pageZoom + 0.1));
+  const zoomReset = button('Zoom 100%', 'Reset zoom', () => setPageZoom(1));
+  const fullscreen = button('Fullscreen', 'Toggle fullscreen', async () => {
+    try { if (document.fullscreenElement === element) await document.exitFullscreen(); else await element.requestFullscreen(); }
+    catch (error) { remoteStatus(String(error.message || error), 'error'); }
+  });
+  fullscreen.disabled = typeof element.requestFullscreen !== 'function';
+  const printButton = button('Print / PDF', 'Save current page as PDF', () => { actions.open = false; openPrintDialog(); });
+  const downloadsButton = button('Downloads', 'Show page downloads', () => { showDownloads(); actions.open = false; });
+  for (const [control, glyph] of [[printButton, 'File'], [downloadsButton, 'Download'], [localDocs, 'FolderOpen'], [zoomOut, 'ZoomOut'], [zoomIn, 'ZoomIn'], [zoomReset, 'RotateCcw'], [fullscreen, 'Maximize']]) buttonIcon(control, glyph, control.getAttribute('aria-label'));
+  if (proxyPanel) {
+    for (const [control, glyph] of [[findButton, 'Search'], [privacy, 'Shield'], [openTools, 'Code'], [bookmark, 'Star']]) buttonIcon(control, glyph, control.getAttribute('aria-label'));
+    const historyButton = button('History', 'Show browsing history', showHistory);
+    const bookmarksButton = button('Bookmarks', 'Show bookmarks', showBookmarks);
+    buttonIcon(historyButton, 'History', 'Show browsing history'); buttonIcon(bookmarksButton, 'Star', 'Show bookmarks');
+    actionsPanel.append(localDocs, findButton, bookmark, bookmarksButton, historyButton, privacy);
+    if (!readerMode) actionsPanel.append(openTools);
+  } else actionsPanel.append(printButton);
+  actionsPanel.append(downloadsButton, zoomOut, zoomIn, zoomReset, fullscreen);
+  const streamSettings = { format: ['png', 'efficient'].includes(preferences.stream?.format) ? preferences.stream.format : 'jpeg', quality: [40,60,80,95].includes(preferences.stream?.quality) ? preferences.stream.quality : 80, resolution: ['native','1920','1280','960'].includes(preferences.stream?.resolution) ? preferences.stream.resolution : 'native', fps: [5,15,30,60].includes(preferences.stream?.fps) ? preferences.stream.fps : 60 };
+  for (const [key, label, choices] of [
+    ['resolution', 'Stream resolution', [['native','Native'],['1920','Up to 1920 × 1080'],['1280','Up to 1280 × 720'],['960','Up to 960 × 540']]],
+    ['format', 'Stream encoding', [['jpeg','JPEG (lossy)'],['efficient','Efficient lossless'],['png','PNG (lossless)']]],
+    ['quality', 'JPEG quality', [[95,'95 · Highest'],[80,'80 · Standard'],[60,'60 · Balanced'],[40,'40 · Low bandwidth']]],
+    ['fps', 'Frame rate limit', [[60,'60 fps'],[30,'30 fps'],[15,'15 fps'],[5,'5 fps']]],
+  ]) {
+    const row = document.createElement('label'); row.textContent = label;
+    const select = document.createElement('select'); select.setAttribute('aria-label', label);
+    for (const [value, title] of choices) select.add(new Option(title, String(value)));
+    select.value = String(streamSettings[key]);
+    select.onchange = () => { streamSettings[key] = ['quality','fps'].includes(key) ? Number(select.value) : select.value; sendRemoteResize(); onStateChange?.(); onSettingsChange?.({ ...prefs, stream: { ...streamSettings } }); };
+    row.append(select); if (!proxyPanel) actionsPanel.append(row);
+  }
+  const streamInfo = document.createElement('small'); streamInfo.setAttribute('role', 'status'); if (!proxyPanel) actionsPanel.append(streamInfo);
+  actions.append(actionsSummary, actionsPanel); toolbar.append(actions);
+  tabSummary.addEventListener('click', () => { actions.open = false; });
+  actionsSummary.addEventListener('click', () => { tabMenu.open = false; });
+  function setPageZoom(value) {
+    pageZoom = Math.max(0.5, Math.min(2, Math.round(value * 10) / 10));
+    buttonIcon(zoomReset, 'RotateCcw', `Zoom ${Math.round(pageZoom * 100)}%`);
+    if (proxyPanel) for (const tab of tabs) {
+      tab.iframe.style.transform = `scale(${pageZoom})`;
+      tab.iframe.style.width = `${100 / pageZoom}%`; tab.iframe.style.height = `${100 / pageZoom}%`;
+    }
+    sendRemoteResize();
+    if (proxyPanel) onStateChange?.();
+  }
   const status = document.createElement('div'); status.className = 'eya-browser-status'; status.setAttribute('role', 'status');
   const statusText = document.createElement('span'); statusText.textContent = 'Ready';
   const blockedCount = document.createElement('span'); blockedCount.textContent = '0 blocked';
   const statusSpacer = document.createElement('span'); statusSpacer.className = 'spacer';
-  const newTab = button('+', 'New tab', () => createTab(''));
+  const newTab = button('+', 'New tab', () => createTab('')); buttonIcon(newTab, 'Plus', 'New tab');
+  const proxyConnection = document.createElement('span'); proxyConnection.className = 'eya-browser-connection'; proxyConnection.setAttribute('role', 'status');
+  const retryProxy = button('Reconnect', 'Reconnect the proxy without reloading pages', async () => {
+    retryProxy.disabled = true;
+    try { await reconnectProxy?.(); } catch { /* The transport reports retry state. */ }
+    finally { retryProxy.disabled = false; }
+  }); retryProxy.hidden = true;
   status.append(statusText, statusSpacer);
+  if (proxyPanel) status.append(proxyConnection, retryProxy);
+  function setProxyConnectionState(state, error) {
+    if (!proxyPanel || disposed) return;
+    const connected = state === 'ready';
+    const recovering = state === 'reconnecting' || state === 'retrying';
+    proxyConnection.dataset.state = state;
+    proxyConnection.textContent = connected ? 'Connected' : recovering ? 'Reconnecting…' : state === 'connecting' ? 'Connecting…' : 'Disconnected';
+    proxyConnection.title = error ? String(error.message || error).slice(0, 256) : '';
+    retryProxy.hidden = state !== 'retrying' || typeof reconnectProxy !== 'function';
+  }
+
   const findBar = document.createElement('div'); findBar.className = 'eya-browser-find'; findBar.setAttribute('role', 'search'); findBar.setAttribute('aria-label', 'Find in page'); findBar.hidden = true;
   const findInput = document.createElement('input'); findInput.type = 'search'; findInput.placeholder = 'Find in page'; findInput.setAttribute('aria-label', 'Find text in the current page'); findInput.maxLength = 256;
   const findPrevious = button('↑', 'Find previous match (Shift+Enter)', () => searchInPage(true));
@@ -1676,15 +1835,16 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
   const findClose = button('×', 'Close Find and return to page', closeFind);
   findBar.append(findInput, findPrevious, findNext, findStatus, findClose);
   const page = document.createElement('div'); page.className = 'eya-browser-content';
-  const empty = document.createElement('div'); empty.className = 'eya-browser-empty'; empty.innerHTML = '<div><strong>Eya Browser</strong><p>Open a web page in server Chromium, or choose Fast proxy for local rendering.</p></div>';
+  const empty = document.createElement('div'); empty.className = 'eya-browser-empty'; empty.innerHTML = '<div><strong>Eya Browser</strong></div>';
   page.append(empty);
   const settings = document.createElement('div'); settings.className = 'eya-browser-settings'; settings.hidden = true;
-  settings.innerHTML = '<strong>Privacy controls</strong><label><input type="checkbox" data-pref="blockTrackers" /> Block ads and trackers</label><label><input type="checkbox" data-pref="blockThirdParty" /> Block third-party requests</label><label><input type="checkbox" data-pref="stripTracking" /> Remove common tracking parameters</label><p>Built-in privacy controls apply in both modes. Imported network rules apply in Proxy and Full-browser modes; cosmetic selectors apply in Proxy mode only.</p><hr /><strong>Page scripts and extensions</strong><p>Import trusted userscripts. They run in the page world on matching sites at document start by default, or at document end or idle when specified. Proxy mode supports limited GM_addStyle, GM_log, opt-in GM_* value storage, GM_getResourceText, GM_getResourceURL, and GM_xmlhttpRequest grants. Full browser supports @grant none, GM_addStyle, and GM_log with a bounded per-page upload. The Full browser Extensions panel can load unpacked Manifest V3 extension folders into its temporary Chromium profile; declared actions can be triggered on the active page, and popup page targets open as Eya tabs. Extension code is executable and extensions are removed when Full browser closes. In Proxy mode, declared @resource files are fetched without page cookies, capped at 1 MiB each and 2 MiB per page. GM_xmlhttpRequest requires explicit @connect hosts, omits credentials, rejects redirects, and caps responses at 2 MiB. Page scripts and the site share a JavaScript world, so userscript state is not secret from that page. External @require code is not supported.</p>';
+  settings.innerHTML = '<strong>Privacy</strong><label><input type="checkbox" data-pref="blockTrackers" /> Block ads and trackers</label><label><input type="checkbox" data-pref="blockThirdParty" /> Block third-party requests</label><label><input type="checkbox" data-pref="stripTracking" /> Remove tracking parameters</label>';
+  if (!readerMode) settings.insertAdjacentHTML('beforeend', '<hr /><strong>Scripts and extensions</strong><p>Imported code can access matching pages. Only import trusted code.</p>');
   const filterFile = document.createElement('input'); filterFile.type = 'file'; filterFile.accept = '.txt,.list,text/plain'; filterFile.hidden = true;
   const importFilters = button('Import filter list', 'Choose a local EasyList or hosts filter file', () => filterFile.click());
   const clearFilters = button('Remove filter list', 'Remove the imported filter list', () => {
     filterListText = ''; filters = compileFilterList('');
-    try { localStorage.removeItem(FILTER_LIST_KEY); filterInfo.textContent = 'No imported rules.'; }
+    try { pageSettings.delete(FILTER_LIST_KEY); filterInfo.textContent = 'No imported rules.'; }
     catch { filterInfo.textContent = 'No imported rules for this panel.'; }
     clearFilters.disabled = true;
     if (remoteMode && remoteTransport?.ready) syncRemoteFilters().catch(error => { filterInfo.textContent = String(error.message || error); });
@@ -1692,13 +1852,14 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
   const filterInfo = document.createElement('div'); filterInfo.className = 'eya-filter-info'; filterInfo.setAttribute('role', 'status');
   settings.append(importFilters, clearFilters, filterFile, filterInfo);
   const remoteView = document.createElement('img'); remoteView.className = 'eya-browser-remote-view'; remoteView.alt = 'Remote browser page'; remoteView.tabIndex = 0; remoteView.draggable = false; remoteView.hidden = true;
-  const remoteTextSurface = document.createElement('div'); remoteTextSurface.className = 'eya-browser-text-surface'; remoteTextSurface.contentEditable = 'true'; remoteTextSurface.setAttribute('role', 'textbox'); remoteTextSurface.setAttribute('aria-label', 'Remote page text input; paste and composed text are sent to the remote browser'); remoteTextSurface.spellcheck = false; remoteTextSurface.autocapitalize = 'off'; remoteTextSurface.hidden = true;
-  page.append(remoteView, remoteTextSurface);
+  const remoteTextSurface = document.createElement('textarea'); remoteTextSurface.className = 'eya-browser-text-surface'; remoteTextSurface.setAttribute('role', 'textbox'); remoteTextSurface.setAttribute('aria-label', 'Remote page text input; paste and composed text are sent to the remote browser'); remoteTextSurface.inputMode = window.matchMedia?.('(pointer: coarse), (max-width: 760px)').matches ? 'none' : 'text'; remoteTextSurface.spellcheck = false; remoteTextSurface.autocapitalize = 'off'; remoteTextSurface.hidden = true;
+  let remoteCanvas = document.createElement('canvas'); remoteCanvas.className = 'eya-browser-remote-canvas'; remoteCanvas.setAttribute('aria-hidden', 'true'); remoteCanvas.hidden = true;
+  page.append(remoteView, remoteCanvas, remoteTextSurface);
   const userscriptFile = document.createElement('input'); userscriptFile.type = 'file'; userscriptFile.accept = '.user.js,.js,application/javascript,text/javascript'; userscriptFile.hidden = true;
   const importUserscript = button('Import userscript', 'Import a local JavaScript userscript for matching websites', () => userscriptFile.click());
   const userscriptList = document.createElement('div'); userscriptList.className = 'eya-userscript-list'; userscriptList.setAttribute('aria-label', 'Imported userscripts');
   const userscriptInfo = document.createElement('div'); userscriptInfo.className = 'eya-filter-info'; userscriptInfo.setAttribute('role', 'status');
-  settings.append(importUserscript, userscriptFile, userscriptList, userscriptInfo);
+  if (!readerMode) settings.append(importUserscript, userscriptFile, userscriptList, userscriptInfo);
   page.append(settings);
   const library = document.createElement('section'); library.className = 'eya-browser-library'; library.hidden = true; library.setAttribute('role', 'dialog'); library.setAttribute('aria-modal', 'true'); library.setAttribute('aria-label', 'Bookmarks and browsing history');
   const libraryHead = document.createElement('div'); libraryHead.className = 'eya-browser-library-head';
@@ -1717,7 +1878,7 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
   const libraryList = document.createElement('div'); libraryList.className = 'eya-browser-library-list'; libraryList.setAttribute('role', 'list');
   const libraryStatus = document.createElement('div'); libraryStatus.className = 'eya-browser-library-status'; libraryStatus.setAttribute('role', 'status');
   library.append(libraryHead, libraryTabs, libraryList, libraryStatus);
-  const devtools = document.createElement('section'); devtools.className = 'eya-devtools'; devtools.hidden = preferences.devtoolsOpen !== true;
+  const devtools = document.createElement('section'); devtools.className = 'eya-devtools'; devtools.hidden = readerMode || preferences.devtoolsOpen !== true;
   const devToolbar = document.createElement('div'); devToolbar.className = 'eya-devtools-toolbar'; devToolbar.setAttribute('role', 'toolbar');
   const devTabList = document.createElement('div'); devTabList.className = 'eya-devtools-tabs'; devTabList.setAttribute('role', 'tablist');
   const devSearch = document.createElement('input'); devSearch.className = 'eya-devtools-search'; devSearch.type = 'search'; devSearch.placeholder = 'Filter'; devSearch.setAttribute('aria-label', 'Filter DevTools output');
@@ -1825,13 +1986,62 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
   }
   devToolbar.append(devTabList, devSearch, disableCacheLabel, captureBodiesLabel, exportHarButton, performanceCaptureButton, performanceRecordButton, clearSiteDataButton, clearDev);
   devtools.append(devToolbar, loadNetworkBodyButton, devPerformanceSummary, devOutput, devSourceView, devConsole, devElementEditor, devExtensions, devObjectInspector, devDetails);
-  element.append(toolbar, status, findBar, page, localDialog, pageDialog);
+  element.append(toolbar, status, findBar, page, pageDialog);
+  if (proxyPanel) {
+    element.append(localDialog, library, devtools);
+    const warning = document.createElement('small'); warning.className = 'eya-browser-proxy-warning';
+    warning.style.cssText = 'padding:3px 8px;color:var(--ui-muted,#aebfc7);overflow-wrap:anywhere';
+    warning.textContent = 'Experimental · Some requests may use this device’s network.';
+    status.after(warning);
+    devTabButtons.get('Extensions').disabled = true;
+  }
+  const downloadsPanel = document.createElement('section'); downloadsPanel.className = 'eya-devtools'; downloadsPanel.hidden = true; downloadsPanel.setAttribute('aria-label', 'Downloads');
+  const downloadsHead = document.createElement('div'); downloadsHead.className = 'eya-devtools-toolbar';
+  const downloadsTitle = document.createElement('strong'); downloadsTitle.textContent = 'Downloads';
+  downloadsHead.append(downloadsTitle, button('Close', 'Close downloads', () => { downloadsPanel.hidden = true; }));
+  const downloadsOutput = document.createElement('div'); downloadsOutput.className = 'eya-devtools-output';
+  downloadsPanel.append(downloadsHead, downloadsOutput); element.append(downloadsPanel);
+  function showDownloads() { devTab = 'Downloads'; downloadsPanel.hidden = false; renderDevtools(); }
+  const printDialog = document.createElement('dialog'); printDialog.className = 'eya-browser-local-dialog'; printDialog.setAttribute('aria-label', 'Print page');
+  const printForm = document.createElement('form'); printForm.method = 'dialog';
+  const printLabel = document.createElement('strong'); printLabel.textContent = 'Save this page as PDF?';
+  const printInfo = document.createElement('p'); printInfo.textContent = 'The PDF appears in Downloads, where you can save it to your device or server files.';
+  const printCancel = button('Cancel', 'Cancel printing', () => printDialog.close());
+  const printAccept = button('Create PDF', 'Create page PDF', () => {
+    if (printTab === active && remoteMode && remoteTransport?.ready) {
+      try { remoteTransport.printPage(active.id); showDownloads(); }
+      catch (error) { remoteStatus(String(error.message || error), 'error'); }
+    }
+    printDialog.close();
+  });
+  printForm.append(printLabel, printInfo, printCancel, printAccept); printDialog.append(printForm); element.append(printDialog);
+  let printTab = null;
+  function openPrintDialog() {
+    if (!remoteMode || !remoteTransport?.ready || !active || printDialog.open) return;
+    printTab = active; printDialog.showModal();
+  }
+  const nativeActions = createBrowserNativeActions({ host: element,
+    isCurrent: entry => !disposed && remoteMode && remoteTransport?.ready && entry.tabId === active?.id && entry.nonce === active.nonce && entry.generation === remoteGeneration && entry.origin === (() => { try { return new URL(active.url).origin; } catch { return ''; } })(),
+    reply: (entry, value, error) => { try { remoteTransport?.respondToNativeAction(entry.tabId, entry.id, value, error); } catch { /* A disconnected request expires on the server. */ } },
+  });
+  const nativeFilePicker = createBrowserFilePicker({ host: element, request: fileRequest, read: readLocalFile,
+    cancel: () => clearRemoteFileChooser(true),
+    submit: async (chooser, files, progress) => {
+      if (pendingRemoteFileChooser !== chooser || !remoteTransport?.ready) throw Error('The page file chooser is no longer active.');
+      await remoteTransport.uploadPageFiles(chooser.tabId, chooser.id, files, progress);
+      if (pendingRemoteFileChooser === chooser) clearRemoteFileChooser(false);
+      remoteStatus('Selected files assigned to the page');
+    },
+  });
+  const serverSave = createBrowserServerSave({ host: element, upload: uploadServerFile,
+    onSaved: (item, path) => { remoteStatus(`Saved to ${path}`); item.error = ''; renderDevtools(); },
+  });
 
   let storedHistory = [];
   if (!Array.isArray(storedHistory)) storedHistory = [];
   let bookmarks = [];
   if (!Array.isArray(bookmarks)) bookmarks = [];
-  let siteStorage = readSiteStorage();
+  let siteStorage = sanitizeSiteStorage(readStore(SITE_STORAGE_KEY, {}));
   let siteStorageBytes = Object.values(siteStorage).reduce((sum, values) => sum + storageObjectBytes(values), 0);
   let siteStorageByteCounts = Object.fromEntries(Object.entries(siteStorage).map(([origin, values]) => [origin, storageObjectBytes(values)]));
   let siteStorageDb = null; let siteStorageWriteChain = Promise.resolve();
@@ -1861,7 +2071,7 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
   }
   let libraryMode = 'bookmarks';
   let libraryReturnFocus = null;
-  let prefs = { ...readStore(PREFS_KEY, {}), ...preferences, blockTrackers: false, blockThirdParty: false, stripTracking: false, disableCache: false, devtoolsOpen: false };
+  let prefs = { ...readStore(PREFS_KEY, {}), blockTrackers: false, blockThirdParty: false, stripTracking: false, disableCache: false, devtoolsOpen: false, ...preferences };
   disableCache.checked = prefs.disableCache === true;
   function browserRequest(url, options = {}) {
     return request(url, { ...options, bypassCache: prefs.disableCache === true || options.bypassCache === true });
@@ -1889,8 +2099,12 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
   const remoteTouchMoveEvents = new Map();
   const pendingRemoteDialogs = new Map();
   let localViewer = null, localViewerRequest = 0, localViewerUiState = null;
+  let remoteAckTimer;
+  const remoteTileDecoder = createBrowserTileDecoder();
+  let remoteTilesNegotiated = false;
   const remoteViewport = { width: 1280, height: 720 };
-  const remoteMousePointers = new Set();
+  let remoteDisplayedViewport = null;
+  const remoteMousePointers = new Map();
   const onMessage = event => {
     const tab = tabs.find(value => value.iframe?.contentWindow === event.source);
     if (!tab || event.origin !== 'null') return;
@@ -1902,10 +2116,16 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
       const frameNonce = tab.nonce; const framePort = channel.port1;
       tab.port.onmessage = value => handleFrameMessage(tab, value.data, framePort, frameNonce);
       tab.port.start(); tab.iframe.contentWindow.postMessage({ type: 'eya-connect', nonce: tab.nonce }, '*', [channel.port2]);
+      tab.port.postMessage({ type: 'shortcut-bindings', bindings: browserShortcutBindings() });
       tab.port.postMessage({ type: 'cookie-snapshot', value: cookieString(cookieJar, tab.url, { includeHttpOnly: false }) });
+      syncProxyDomInspection();
     }
   };
   window.addEventListener('message', onMessage);
+  const removeShortcutListener = subscribeKeybinds(() => {
+    const bindings = browserShortcutBindings();
+    for (const tab of tabs) tab.port?.postMessage({ type: 'shortcut-bindings', bindings });
+  });
 
   function releaseCapturedNetworkRow(row) {
     if (!row) return;
@@ -2102,9 +2322,9 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
     if (active) renderDevtools();
   }
   function activeFrame() { return active?.iframe; }
-  function savePrefs() { writeStore(PREFS_KEY, { ...prefs }); }
+  function savePrefs() { writeStore(PREFS_KEY, { ...prefs }); onSettingsChange?.({ ...prefs, stream: { ...streamSettings } }); }
   function persistUserscripts() {
-    try { localStorage.setItem(USERSCRIPTS_KEY, JSON.stringify(userscripts)); return true; }
+    try { writeStore(USERSCRIPTS_KEY, userscripts); return true; }
     catch { userscriptInfo.textContent = 'Could not save userscripts in this browser profile.'; return false; }
   }
   function renderUserscripts() {
@@ -2330,17 +2550,47 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
   }
   function renderTabs() {
     tabBar.replaceChildren();
-    tabSummary.textContent = `Tabs (${tabs.length})`;
+    tabCount.textContent = String(tabs.length);
     newTab.disabled = tabs.length >= MAX_BROWSER_TABS;
     for (const tab of tabs) {
       const wrapper = document.createElement('div'); wrapper.style.display = 'flex'; wrapper.style.alignItems = 'center';
       const select = button(tab.title || (tab.url ? new URL(tab.url).hostname : 'New tab'), 'Switch tab', () => { activateTab(tab); tabMenu.open = false; });
-      select.className = 'eya-browser-tab'; select.setAttribute('role', 'tab'); select.setAttribute('aria-selected', String(tab === active));
-      const close = button('×', 'Close tab', () => closeTab(tab)); close.className = 'eya-browser-tab-close'; wrapper.append(select, close); tabBar.append(wrapper);
+      buttonIcon(select, 'Globe'); select.className = 'eya-browser-tab'; select.setAttribute('role', 'tab'); select.setAttribute('aria-selected', String(tab === active));
+      const close = button('×', 'Close tab', () => closeTab(tab)); close.className = 'eya-browser-tab-close'; buttonIcon(close, 'X', 'Close tab', true); wrapper.append(select, close); tabBar.append(wrapper);
     }
     tabBar.append(newTab);
   }
+  function renderDownloads(output, filter = '') {
+    output.replaceChildren();
+    output.setAttribute('role', 'list');
+    const visible = downloads.filter(item => !filter || item.filename.toLowerCase().includes(filter) || item.status.toLowerCase().includes(filter));
+    for (const item of visible) {
+      const row = document.createElement('div'); row.className = 'eya-devtools-download-row';
+      const progress = item.status === 'downloading' && item.remoteDownloadId ? ` · ${item.receivedBytes.toLocaleString()}${item.totalBytes ? ` / ${item.totalBytes.toLocaleString()}` : ''} bytes` : '';
+      const label = document.createElement('span'); label.textContent = `${item.filename} · ${item.transferring ? 'receiving' : item.status}${progress || (item.bytes ? ` · ${item.bytes.toLocaleString()} bytes` : '')}${item.error ? ` · ${item.error}` : ''}`;
+      row.append(label);
+      if (item.status === 'ready' && item.blob) {
+        row.append(button('Save to device', `Save ${item.filename} to device`, () => saveDownload(item)));
+        if (uploadServerFile) row.append(button('Save to server', `Save ${item.filename} to server`, () => serverSave.open(item)));
+      }
+      if (item.status === 'downloading' && !item.transferring) row.append(button('Cancel', `Cancel ${item.filename}`, () => item.cancel ? item.cancel() : item.controller?.abort()));
+      if (item.status !== 'downloading') row.append(button('Remove', `Remove ${item.filename} from downloads`, () => removeDownload(item)));
+      output.append(row);
+    }
+    if (!visible.length) output.textContent = downloads.length ? 'No matching downloads.' : 'No downloads yet.';
+  }
+  let proxyDomPort;
+  function syncProxyDomInspection() {
+    const port = !readerMode && !remoteMode && !devtools.hidden && devTab === 'Elements' ? active?.port : null;
+    if (proxyDomPort === port) return;
+    proxyDomPort?.postMessage({ type: 'inspect-dom', active: false });
+    proxyDomPort = port;
+    proxyDomPort?.postMessage({ type: 'inspect-dom', active: true });
+  }
   function renderDevtools() {
+    syncProxyDomInspection();
+    if (!downloadsPanel.hidden) renderDownloads(downloadsOutput);
+    if (devtools.hidden) return;
     for (const [name, item] of devTabButtons) item.setAttribute('aria-selected', String(name === devTab));
     devOutput.replaceChildren();
     devDetails.textContent = '';
@@ -2456,22 +2706,7 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
       if (tab.selectedPerformance && entries.includes(tab.selectedPerformance)) devDetails.textContent = JSON.stringify(tab.selectedPerformance, null, 2);
       return;
     }
-    if (devTab === 'Downloads') {
-      devOutput.setAttribute('role', 'list');
-      const visible = downloads.filter(item => !filter || item.filename.toLowerCase().includes(filter) || item.status.toLowerCase().includes(filter));
-      for (const item of visible) {
-        const row = document.createElement('div'); row.className = 'eya-devtools-download-row';
-        const progress = item.status === 'downloading' && item.remoteDownloadId ? ` · ${item.receivedBytes.toLocaleString()}${item.totalBytes ? ` / ${item.totalBytes.toLocaleString()}` : ''} bytes` : '';
-        const label = document.createElement('span'); label.textContent = `${item.filename} · ${item.transferring ? 'receiving' : item.status}${progress || (item.bytes ? ` · ${item.bytes.toLocaleString()} bytes` : '')}${item.error ? ` · ${item.error}` : ''}`;
-        row.append(label);
-        if (item.status === 'ready' && item.blob) row.append(button('Save', `Save ${item.filename}`, () => saveDownload(item)));
-        if (item.status === 'downloading' && !item.transferring) row.append(button('Cancel', `Cancel ${item.filename}`, () => item.cancel ? item.cancel() : item.controller?.abort()));
-        if (item.status !== 'downloading') row.append(button('Remove', `Remove ${item.filename} from downloads`, () => removeDownload(item)));
-        devOutput.append(row);
-      }
-      if (!visible.length) devOutput.textContent = downloads.length ? 'No matching downloads.' : 'No downloads yet.';
-      return;
-    }
+    if (devTab === 'Downloads') { renderDownloads(devOutput, filter); return; }
     if (devTab === 'Sources') {
       devSourceList.replaceChildren();
       const sources = (tab.sources || []).filter(source => !filter || source.url.toLowerCase().includes(filter) || source.kind.toLowerCase().includes(filter) || (source.key === tab.selectedSource && findSourceMatchRanges(source.text, filter).matches.length > 0));
@@ -2860,7 +3095,9 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
     address.value = active?.url || '';
     bookmark.textContent = active && bookmarks.some(item => item.url === active.url) ? '★' : '☆';
     bookmark.title = active && bookmarks.some(item => item.url === active.url) ? 'Remove bookmark' : 'Bookmark this page';
-    statusText.textContent = active?.loading ? 'Loading…' : active?.url || 'Ready';
+    statusText.textContent = proxyPanel && active?.proxyError ? active.proxyError : active?.loading ? 'Loading…' : readerMode ? 'Reader mode' : active?.url || 'Ready';
+    if (readerMode) statusText.title = 'Site scripts are disabled. Open the Browser panel for interactive pages.';
+    if (proxyPanel) status.dataset.state = active?.proxyError ? 'error' : '';
     empty.hidden = !!active?.url;
     renderTabs(); renderDevtools();
   }
@@ -2888,13 +3125,19 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
     findBar.hidden = activeViewer || !!localViewerUiState?.findBar;
     settings.hidden = activeViewer || !!localViewerUiState?.settings;
     library.hidden = activeViewer || !!localViewerUiState?.library;
-    devtools.hidden = activeViewer || !prefs.devtoolsOpen;
+    devtools.hidden = activeViewer || readerMode || !prefs.devtoolsOpen;
+    syncProxyDomInspection();
     for (const tab of tabs) if (tab.iframe) tab.iframe.hidden = activeViewer || remoteMode || tab !== active;
     remoteView.hidden = activeViewer || !remoteMode || !active?.url;
     empty.hidden = activeViewer || !!active?.url;
     if (!activeViewer) localViewerUiState = null;
   }
+  function cancelLocalOpen() {
+    localViewerRequest++; localOpen.disabled = false; localDialog.close();
+  }
+  localDialog.addEventListener('cancel', cancelLocalOpen);
   function openLocalDialog() {
+    if (!proxyPanel) return;
     if (typeof readLocalFile !== 'function') { remoteStatus('Local files are unavailable in this browser context.', 'error'); return; }
     localDialogStatus.textContent = '';
     if (typeof localDialog.showModal === 'function') localDialog.showModal(); else localDialog.setAttribute('open', '');
@@ -2918,7 +3161,7 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
         openFile: typeof openLocalFile === 'function' ? openLocalFile : () => {},
       });
       localViewer.element.style.cssText = 'position:absolute;inset:0;z-index:6';
-      const exit = button('Web browser', 'Return to web browsing', closeLocalViewer);
+      const exit = button('Proxy browser', 'Return to proxy browsing', closeLocalViewer);
       localViewer.element.querySelector('.html-viewer-toolbar')?.prepend(exit);
       page.append(localViewer.element);
       localDialog.close?.(); localDialog.removeAttribute('open'); localDialogStatus.textContent = '';
@@ -2940,10 +3183,12 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
     status.dataset.state = state;
   }
   function clearRemoteFileChooser(cancel = false) {
+    pageContext.close(); printDialog.close(); nativeActions.cancel();
     const chooser = pendingRemoteFileChooser;
     pendingRemoteFileChooser = null;
     uploadPageFiles.hidden = true; uploadPageFiles.disabled = false;
     pageUploadPicker.value = '';
+    nativeFilePicker.close();
     if (cancel && chooser) {
       try { remoteTransport?.cancelPageFileChooser(chooser.tabId, chooser.id); } catch { /* The remote session may already be closing. */ }
     }
@@ -3218,7 +3463,20 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
   }
   function handleRemoteEvent(value, channel = 'status') {
     if (channel === 'status') {
-      if (value.type === 'ready') {
+      if (value.type === 'cursor') {
+        if (remoteMode && value.tabId === active?.id && remoteTransport?.capabilities?.includes('cursor-v1') && typeof value.cursor === 'string' && REMOTE_CURSORS.has(value.cursor)) {
+          active.remoteCursor = value.cursor; remoteTextSurface.style.cursor = value.cursor;
+        }
+        return;
+      }
+      if (value.type === 'stream-settings') {
+        const selected = remoteTransport?.capabilities?.includes('tiles-rgba-v1') === true;
+        if (selected !== remoteTilesNegotiated) {
+          remoteTilesNegotiated = selected;
+          if (streamSettings.format === 'efficient') sendRemoteResize();
+        }
+      }
+      else if (value.type === 'ready') {
         const limits = value.resourceLimits;
         if (limits?.enforced === true && Number.isInteger(limits.memoryMb) && Number.isInteger(limits.cpuPercent) && Number.isInteger(limits.processes)) {
           const downloads = value.downloadsEnabled === false ? '; downloads unavailable' : '';
@@ -3310,12 +3568,20 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
         if (tab) tab.remoteReady = false;
         if (tab === active) remoteStatus(String(value.message || 'Full-browser tab could not be activated').slice(0, 512), 'error');
       }
+      else if (value.type === 'native-action') {
+        if (!Number.isSafeInteger(value.id) || value.id < 1 || typeof value.origin !== 'string' || !value.data || typeof value.data !== 'object') return;
+        nativeActions.open({ ...value, nonce: active?.nonce, generation: remoteGeneration });
+      }
+      else if (value.type === 'native-action-closed') nativeActions.close(value.id);
+      else if (value.type === 'print-request') { if (value.tabId === active?.id) openPrintDialog(); }
       else if (value.type === 'file-chooser') {
         if (!remoteMode || value.tabId !== active?.id || !Number.isSafeInteger(value.id) || value.id < 1) return;
-        pendingRemoteFileChooser = { id: value.id, tabId: value.tabId, multiple: value.multiple === true };
+        clearRemoteFileChooser(true);
+        pendingRemoteFileChooser = { id: value.id, tabId: value.tabId, multiple: value.multiple === true, accept: typeof value.accept === 'string' ? value.accept.slice(0, 1024) : '' };
         pageUploadPicker.multiple = pendingRemoteFileChooser.multiple;
         uploadPageFiles.hidden = false; uploadPageFiles.disabled = false;
         remoteStatus(pendingRemoteFileChooser.multiple ? 'Page asks you to choose files' : 'Page asks you to choose a file');
+        nativeFilePicker.open(pendingRemoteFileChooser);
       }
       else if (value.type === 'javascript-dialog') {
         if (!remoteMode || typeof value.tabId !== 'string' || !tabs.some(tab => tab.id === value.tabId) || !Number.isSafeInteger(value.id) || value.id < 1 || !['alert', 'confirm', 'prompt', 'beforeunload'].includes(value.dialogType)) return;
@@ -3344,7 +3610,8 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
         }
       }
       else if (typeof value.tabId === 'string' && value.tabId !== active?.id) return;
-      else if (value.type === 'navigating') { clearRemoteFileChooser(false); remoteStatus('Loading in server browser…'); }
+      else if (value.type === 'navigating') { clearRemoteFileChooser(false); sendRemoteResize();
+      remoteStatus('Loading in server browser…'); }
       else if (value.type === 'title' && active) {
         active.title = String(value.title || new URL(active.url || 'https://example.invalid').hostname).slice(0, 256);
         if (value.url) active.url = String(value.url).slice(0, 8192);
@@ -3370,7 +3637,8 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
       } else if (value.type === 'download-failed' || value.type === 'download-cancelled') {
         const item = downloads.find(download => download.remoteDownloadId === value.id);
         if (item) { item.status = value.type === 'download-cancelled' ? 'cancelled' : 'failed'; item.error = String(value.message || '').slice(0, 256); item.cancel = null; if (devTab === 'Downloads') renderDevtools(); }
-      } else if (value.type === 'error') remoteStatus(value.message || 'Remote browser error', 'error');
+      } else if (value.type === 'stream-fallback') remoteStatus(value.message || 'Using PNG.', 'warning');
+      else if (value.type === 'error') remoteStatus(value.message || 'Remote browser error', 'error');
       return;
     }
     const eventTab = typeof value?.tabId === 'string' ? tabs.find(tab => tab.id === value.tabId) : active;
@@ -3460,6 +3728,7 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
     try {
       if (!(bytes instanceof Uint8Array) || bytes.byteLength > MAX_DOWNLOAD_BYTES) throw Error('Download exceeds the 64 MiB client limit.');
       release = resourceBudget.retain(bytes.byteLength);
+      item.filename = safeDownloadFilename('', '', metadata.filename || item.filename);
       item.blob = new Blob([bytes], { type: 'application/octet-stream' });
       item.releaseMemory = release; item.bytes = bytes.byteLength; item.receivedBytes = bytes.byteLength;
       item.status = 'ready'; item.cancel = null;
@@ -3470,24 +3739,62 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
     if (devTab === 'Downloads') renderDevtools();
   }
   function handleRemoteFrame(bytes, metadata) {
-    if (metadata.tabId !== active?.id) {
-      try { remoteTransport?.ack(metadata.seq); } catch { /* Drop stale-tab frames during a switch. */ }
-      return;
-    }
-    const url = URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' }));
-    if (remoteObjectUrl) URL.revokeObjectURL(remoteObjectUrl);
-    const acknowledge = () => {
+    const tiled = metadata.format === 'rgba-tiles-v1';
+    const transport = remoteTransport, generation = remoteGeneration;
+    const sendAck = presented => {
+      try { if (tiled) transport?.ackTiles(metadata.seq, presented); else transport?.ack(metadata.seq); }
+      catch (error) { if (transport === remoteTransport) remoteStatus(String(error.message || error), 'error'); }
+    };
+    if (metadata.tabId !== active?.id) { sendAck(false); return; }
+    streamInfo.textContent = `${metadata.width} × ${metadata.height} viewport · ${(bytes.length / 1024).toFixed(1)} KiB/${tiled ? 'update' : 'frame'}${remoteTransport?.capabilities?.includes('stream-settings-v1') ? '' : ' · Standard JPEG; server has not selected stream controls'}`;
+    const receivedAt = performance.now();
+    remoteFramePending = metadata.seq;
+    const current = () => !disposed && remoteMode && generation === remoteGeneration && transport === remoteTransport && remoteFramePending === metadata.seq && metadata.tabId === active?.id;
+    const acknowledge = presented => {
       if (remoteFramePending !== metadata.seq) return;
       remoteFramePending = null;
-      try { remoteTransport?.ack(metadata.seq); } catch (error) { remoteStatus(String(error.message || error), 'error'); }
+      if (transport !== remoteTransport || generation !== remoteGeneration) return;
+      clearTimeout(remoteAckTimer);
+      remoteAckTimer = setTimeout(() => {
+        if (!disposed && transport === remoteTransport && generation === remoteGeneration) sendAck(presented && metadata.tabId === active?.id);
+      }, Math.max(0, 1000 / streamSettings.fps - (performance.now() - receivedAt)));
     };
-    remoteObjectUrl = url; remoteFramePending = metadata.seq;
-    remoteView.onload = () => {
-      const decoded = remoteView.decode?.();
-      if (decoded) decoded.catch(() => {}).finally(acknowledge); else acknowledge();
+    const displayViewport = (width, height) => {
+      remoteDisplayedViewport = { width: Number(metadata.width) || width || remoteViewport.width, height: Number(metadata.height) || height || remoteViewport.height };
     };
-    remoteView.onerror = acknowledge;
-    remoteView.src = url;
+    if (tiled) {
+      remoteTileDecoder.decode(bytes, metadata).then(frame => {
+        if (!current()) { acknowledge(false); return; }
+        // Build a complete surface before changing the displayed element. A bad
+        // tile, allocation failure or tab switch leaves the old surface intact.
+        const canvas = document.createElement('canvas'); canvas.width = frame.width; canvas.height = frame.height;
+        canvas.className = 'eya-browser-remote-canvas'; canvas.setAttribute('aria-hidden', 'true');
+        const context = canvas.getContext('2d');
+        if (!context) throw Error('Remote browser canvas is unavailable.');
+        context.putImageData(new ImageData(new Uint8ClampedArray(frame.pixels.buffer, frame.pixels.byteOffset, frame.pixels.byteLength), frame.width, frame.height), 0, 0);
+        if (!current()) { acknowledge(false); return; }
+        remoteTileDecoder.commit(frame);
+        const previous = remoteCanvas; previous.replaceWith(canvas); remoteCanvas = canvas;
+        previous.width = previous.height = 1;
+        displayViewport(frame.width, frame.height);
+        acknowledge(true);
+      }).catch(() => { if (current()) remoteTileDecoder.reset(); acknowledge(false); });
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([bytes], { type: metadata.format === 'png' ? 'image/png' : 'image/jpeg' }));
+    const image = new Image();
+    const finish = success => {
+      if (success && current()) {
+        const previous = remoteObjectUrl;
+        remoteObjectUrl = url; remoteView.src = url; remoteCanvas.hidden = true;
+        displayViewport(image.naturalWidth, image.naturalHeight);
+        if (previous) URL.revokeObjectURL(previous);
+      } else URL.revokeObjectURL(url);
+      acknowledge(success);
+    };
+    if (!image.decode) { image.onload = () => finish(true); image.onerror = () => finish(false); }
+    image.src = url;
+    if (image.decode) image.decode().then(() => finish(true), () => finish(false));
   }
   async function ensureRemoteTransport() {
     if (remoteOpening) return remoteOpening;
@@ -3496,7 +3803,8 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
     const generation = remoteGeneration;
     const opening = openRemoteBrowser({ onState: (state, error) => {
       if (generation !== remoteGeneration || !remoteMode) return;
-      if (state === 'error') { clearRemoteDialogs(); remoteStatus(error?.message || 'Remote browser error', 'error'); }
+      if (state === 'error' || state === 'closed') { remoteTileDecoder.reset(); remoteTilesNegotiated = false; remoteTextSurface.style.cursor = 'default'; for (const tab of tabs) tab.remoteCursor = 'default'; }
+      if (state === 'error') { nativeActions.cancel(); clearRemoteDialogs(); remoteStatus(error?.message || 'Remote browser error', 'error'); }
       else if (state === 'ready') renderDevtools();
       else if (state === 'closed') {
         clearRemoteFileChooser(false);
@@ -3517,8 +3825,21 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
       if (disposed || !remoteMode || generation !== remoteGeneration) { transport.close(); return null; }
       remoteTransport = transport;
       try { await transport.start(); }
-      catch (error) { if (remoteTransport === transport) remoteTransport = null; transport.close(); throw error; }
+      catch (error) { error.code ||= 'startup-failed'; if (remoteTransport === transport) remoteTransport = null; transport.close(); throw error; }
       if (disposed || !remoteMode || generation !== remoteGeneration) { transport.close(); return null; }
+      if (transport.sessionState?.resumed) {
+        const saved = transport.sessionState;
+        const ids = new Set(saved.tabs.map(tab => tab.id));
+        for (const tab of [...tabs]) if (!ids.has(tab.id)) { tabReset(tab); tab.iframe?.remove(); tabs.splice(tabs.indexOf(tab), 1); if (active === tab) active = null; }
+        for (const tab of saved.tabs) {
+          const existing = tabs.find(item => item.id === tab.id);
+          if (existing) { existing.remoteReady = true; existing.url = tab.url; }
+          else createTab('', { id: tab.id, url: tab.url, remoteReady: true });
+        }
+        const selected = tabs.find(tab => tab.id === saved.active) || tabs[0];
+        if (selected) activateTab(selected); else createTab('');
+      }
+      onStateChange?.();
       transport.privacy(remotePrivacySettings()); sendRemoteResize(); return transport;
     });
     remoteOpening = opening;
@@ -3536,12 +3857,23 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
     return current;
   }
   function sendRemoteResize() {
+    const menuHeight = element.clientHeight - toolbar.clientHeight - 16;
+    if (menuHeight > 0) actionsPanel.style.maxHeight = `${menuHeight}px`;
     if (!remoteMode || !remoteTransport?.ready) return;
     const bounds = page.getBoundingClientRect();
-    const width = Math.max(320, Math.min(1920, Math.round(bounds.width))), height = Math.max(240, Math.min(1200, Math.round(bounds.height)));
+    if (!bounds.width || !bounds.height) return;
+    const dpr = window.devicePixelRatio || 1;
+    const scale = Math.min(dpr / pageZoom, 8192 / bounds.width, 8192 / bounds.height);
+    const width = Math.max(320, Math.round(bounds.width * scale)), height = Math.max(240, Math.round(bounds.height * scale));
     if (width < 160 || height < 120) return;
     remoteViewport.width = width; remoteViewport.height = height;
-    try { remoteTransport.resize(width, height, active?.id); } catch { /* Resize is best effort during teardown. */ }
+    try {
+      const cap = Number(streamSettings.resolution);
+      const efficient = streamSettings.format === 'efficient';
+      remoteTransport.resize(width, height, active?.id, { format: efficient ? (remoteTilesNegotiated ? 'png' : 'jpeg') : streamSettings.format, quality: streamSettings.quality, maxWidth: cap || 8192, maxHeight: cap ? Math.round(cap * 9 / 16) : 8192, ...(efficient ? { tiles: true } : {}) });
+      if (efficient && !remoteTilesNegotiated) streamInfo.textContent = 'Efficient lossless needs server and decoder support; using JPEG until confirmed.';
+      if (!remoteTransport.capabilities?.includes('stream-settings-v1')) streamInfo.textContent = 'Stream controls need server support; using standard JPEG until confirmed.';
+    } catch { /* Resize is best effort during teardown. */ }
   }
   async function navigateRemote(url, record, targetTab) {
     const generation = remoteGeneration;
@@ -3576,6 +3908,7 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
         }
         return false;
       }
+      sendRemoteResize();
       remoteStatus('Loading in server browser…');
       transport.navigate(url, targetTab.id);
       targetTab.remoteReady = true;
@@ -3601,6 +3934,7 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
     if (remoteMode) { cancelRemoteTouch(); clearRemoteFileChooser(true); }
     remoteMode = !remoteMode;
     const generation = ++remoteGeneration;
+    remoteTileDecoder.reset(); remoteTilesNegotiated = false;
     if (!remoteMode) for (const tab of tabs) {
       if (tab.remotePerformanceTimer) { clearTimeout(tab.remotePerformanceTimer); tab.remotePerformanceTimer = null; }
       tab.performanceRecording = false;
@@ -3611,10 +3945,6 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
     else for (const tab of tabs) if (tab.performanceRecording) {
       tab.performanceRecording = false; tab.port?.postMessage({ type: 'performance-record-stop' });
     }
-    remoteToggle.textContent = remoteMode ? 'Fast proxy' : 'Server browser';
-    remoteToggle.title = 'Fast proxy is unavailable until all page navigation can be kept on the WebSocket.';
-    remoteToggle.setAttribute('aria-label', remoteToggle.title);
-    remoteToggle.setAttribute('aria-pressed', String(remoteMode));
     findButton.disabled = false;
     for (const [name, tabButton] of devTabButtons) {
       tabButton.disabled = remoteMode && !['Console', 'Network', 'Performance', 'Elements', 'Sources', 'Downloads', 'Storage', 'Extensions'].includes(name);
@@ -3646,16 +3976,21 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
       for (const tab of tabs) { tab.remoteBreakpoints?.clear(); tab.remoteDebuggerPaused = null; tab.debuggerCallFrames = []; tab.selectedRemoteObject = null; tab.remoteObjectProperties?.clear(); tab.remoteObjectExpanded?.clear(); }
       if (remoteObjectUrl) { URL.revokeObjectURL(remoteObjectUrl); remoteObjectUrl = ''; }
       remoteView.removeAttribute('src');
-      remoteTextSurface.hidden = true; remoteTextSurface.replaceChildren();
+      remoteTextSurface.hidden = true; remoteTextSurface.value = '';
       if (active?.url) await navigate(active.url, false, active);
     }
     renderDevtools();
   }
+  const REMOTE_CURSORS = new Set('default none context-menu help pointer progress wait cell crosshair text vertical-text alias copy move no-drop not-allowed grab grabbing all-scroll col-resize row-resize n-resize e-resize s-resize w-resize ne-resize nw-resize se-resize sw-resize ew-resize ns-resize nesw-resize nwse-resize zoom-in zoom-out'.split(' '));
+  let remoteClick;
   function remoteInput(event, deferTouchMove = false) {
+    if (event.button === 2 || event.buttons & 2) return;
     if (!remoteMode || !remoteTransport?.ready) return;
     const bounds = remoteView.getBoundingClientRect();
-    const point = remoteViewportPoint(bounds, remoteViewport, event.clientX, event.clientY);
+    const point = remoteViewportPoint(bounds, remoteDisplayedViewport || remoteViewport, event.clientX, event.clientY);
     if (!point || (event.type === 'pointerdown' && !point.inside)) return;
+    if (event.pointerType !== 'touch' && event.type === 'pointermove' && !point.inside && !event.buttons) { remoteTextSurface.style.cursor = 'default'; return; }
+    if (point.inside) remoteTextSurface.style.cursor = active?.remoteCursor || 'default';
     const { x, y } = point, scaleX = point.scale, scaleY = point.scale;
     if (event.pointerType === 'touch') {
       const pointerId = Math.max(0, Math.min(0x7fff_ffff, Math.floor(Number(event.pointerId) || 0)));
@@ -3687,14 +4022,25 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
       }
       return;
     }
-    if (event.type === 'pointerdown') remoteMousePointers.add(event.pointerId);
+    const heldPointer = remoteMousePointers.get(event.pointerId);
+    if (event.type === 'pointerdown' || (event.type === 'pointermove' && heldPointer)) remoteMousePointers.set(event.pointerId, event);
     else if (event.type === 'pointerup' || event.type === 'pointercancel') {
       if (!remoteMousePointers.delete(event.pointerId)) return;
     }
-    const buttonName = event.button >= 0 ? (['left', 'middle', 'right'][event.button] || '') : '';
+    if (event.type === 'pointerdown') { const now = performance.now(); const prior = remoteClick; const count = prior && prior.button === event.button && now - prior.time < 450 && Math.hypot(x - prior.x, y - prior.y) < 6 ? prior.count % 3 + 1 : 1; remoteClick = { time: now, x, y, count, button: event.button }; }
+    // Pointer moves use button=-1; CDP still needs the held button for selection.
+    const buttonName = event.type === 'pointermove'
+      ? (event.buttons & 1 ? 'left' : event.buttons & 4 ? 'middle' : event.buttons & 8 ? 'back' : event.buttons & 16 ? 'forward' : '')
+      : event.type === 'pointercancel' ? (heldPointer?.buttons & 1 ? 'left' : heldPointer?.buttons & 4 ? 'middle' : '')
+      : (['left', 'middle', 'right', 'back', 'forward'][event.button] || '');
     try {
-      remoteTransport.input({ type: 'mouse', action: event.type === 'pointerdown' ? 'mousePressed' : event.type === 'pointerup' || event.type === 'pointercancel' ? 'mouseReleased' : 'mouseMoved', x, y, button: buttonName, buttons: event.buttons || 0, clickCount: event.type === 'pointerdown' ? 1 : 0 }, active?.id);
+      remoteTransport.input({ type: 'mouse', action: event.type === 'pointerdown' ? 'mousePressed' : event.type === 'pointerup' || event.type === 'pointercancel' ? 'mouseReleased' : 'mouseMoved', x, y, button: buttonName, buttons: event.buttons || 0, modifiers: (event.altKey ? 1 : 0) | (event.ctrlKey ? 2 : 0) | (event.metaKey ? 4 : 0) | (event.shiftKey ? 8 : 0), clickCount: event.type === 'pointerdown' || event.type === 'pointerup' ? remoteClick?.count || 1 : 0 }, active?.id);
     } catch { /* A stale input event must not break the panel. */ }
+  }
+  function flushRemotePointer() {
+    if (!remotePointerEvent) return;
+    const pending = remotePointerEvent; remotePointerEvent = null;
+    remoteInput(pending);
   }
   function scheduleRemotePointer(event) {
     if (!remoteMode || !remoteTransport?.ready) return;
@@ -3709,8 +4055,7 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
       }
       remoteTouchMoveEvents.clear();
       if (touchMoved) sendRemoteTouch('touchMove');
-      if (remotePointerEvent) remoteInput(remotePointerEvent);
-      remotePointerEvent = null;
+      flushRemotePointer();
     });
   }
   function sendRemoteTouch(action) {
@@ -3721,18 +4066,81 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
     try { remoteTransport.input({ type: 'touch', action, touchPoints }, active.id); }
     catch { /* A stale touch event must not break the panel. */ }
   }
+  let auxModifiers = {};
+  function focusInput() {
+    if (remoteMode) remoteTextSurface.focus(); else active?.iframe?.focus();
+  }
+  function activateKeyboard() {
+    if (remoteMode) {
+      if (document.activeElement === remoteTextSurface) remoteTextSurface.blur();
+      remoteTextSurface.inputMode = 'text';
+      remoteTextSurface.focus({ preventScroll: true });
+      try { navigator.virtualKeyboard?.show(); } catch { /* Focus opens the keyboard where the API is unavailable. */ }
+      return document.activeElement === remoteTextSurface;
+    }
+    active?.iframe?.focus();
+    return !!active?.iframe;
+  }
+  function dismissKeyboard() {
+    if (window.matchMedia?.('(pointer: coarse), (max-width: 760px)').matches) remoteTextSurface.inputMode = 'none';
+  }
+  remoteTextSurface.addEventListener('blur', dismissKeyboard);
+  function sendAuxKey(key, modifiers = {}, insert = false) {
+    if (!key) return;
+    focusInput();
+    const keyCode = (/^F(?:[1-9]|1[0-2])$/.test(key) ? 111 + Number(key.slice(1)) : 0) || ({ Escape: 27, Tab: 9, Home: 36, End: 35, PageUp: 33, PageDown: 34, Delete: 46, ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40 })[key] || (key.length === 1 ? key.toUpperCase().charCodeAt(0) : 0);
+    const event = { key, code: key.length === 1 ? `Key${key.toUpperCase()}` : key, keyCode, ...modifiers };
+    if (remoteMode) { remoteKey(event, 'keyDown'); remoteKey(event, 'keyUp'); }
+    else active?.port?.postMessage({ type: 'aux-key', key: event });
+    if (insert && key.length === 1 && !modifiers.ctrlKey && !modifiers.altKey) paste(modifiers.shiftKey ? key.toUpperCase() : key);
+  }
+  function setAuxModifiers(modifiers) {
+    auxModifiers = modifiers;
+    if (!remoteMode) active?.port?.postMessage({ type: 'aux-modifiers', modifiers });
+  }
+  function paste(text) {
+    focusInput();
+    if (remoteMode) sendRemoteText(text);
+    else active?.port?.postMessage({ type: 'aux-paste', text });
+  }
   function remoteKey(event, action) {
     if (!remoteMode || !remoteTransport?.ready) return;
-    if (event.isComposing || event.key === 'Dead' || (Array.from(event.key).length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey)) return;
+    if (event.isComposing || event.key === 'Dead') return;
     const modifiers = (event.altKey ? 1 : 0) | (event.ctrlKey ? 2 : 0) | (event.metaKey ? 4 : 0) | (event.shiftKey ? 8 : 0);
-    try { remoteTransport.input({ type: 'key', action, key: event.key, code: event.code, keyCode: event.keyCode || 0, modifiers, text: action === 'keyDown' && event.key.length === 1 ? event.key : '', unmodifiedText: action === 'keyDown' && event.key.length === 1 ? event.key : '' }, active?.id); }
+    try { remoteTransport.input({ type: 'key', action, key: event.key, code: event.code, keyCode: event.keyCode || 0, modifiers }, active?.id); }
     catch { /* A stale input event must not break the panel. */ }
   }
-  let remoteComposing = false;
+  let remoteComposing = false, auxiliaryKeyupCode = null;
   function sendRemoteText(text) {
     if (!remoteMode || !remoteTransport?.ready || !active || !text) return;
     try { remoteTransport.insertText(text, active.id); }
     catch (error) { remoteStatus(String(error.message || error), 'error'); }
+  }
+  let remoteClipboardPending = false;
+  async function copyRemoteSelection(cut = false) {
+    if (remoteClipboardPending || !remoteMode || !remoteTransport?.ready || !active) return;
+    const transport = remoteTransport, tab = active, generation = remoteGeneration;
+    remoteClipboardPending = true;
+    try {
+      if (!navigator.clipboard?.writeText) throw Error('Clipboard access requires a secure client context.');
+      const selection = transport.evaluate(tab.id, remoteClipboardExpression()).then(result => {
+        if (disposed || transport !== remoteTransport || generation !== remoteGeneration || tab !== active) throw new DOMException('Remote tab changed.', 'AbortError');
+        if (result.exception) throw Error(String(result.exception));
+        if (typeof result.result !== 'string') throw Error('Could not read the remote selection.');
+        if (!result.result) throw new DOMException('No remote selection.', 'AbortError');
+        return result.result;
+      });
+      // Start the write during the gesture, even though the remote text arrives later.
+      const write = navigator.clipboard.write && typeof ClipboardItem === 'function'
+        ? navigator.clipboard.write([new ClipboardItem({ 'text/plain': selection.then(text => new Blob([text], { type: 'text/plain' })) })])
+        : selection.then(text => navigator.clipboard.writeText(text));
+      const [text] = await Promise.all([selection, write]);
+      if (cut && !disposed && transport === remoteTransport && generation === remoteGeneration && tab === active) {
+        const deletion = await transport.evaluate(tab.id, remoteClipboardExpression(text));
+        if (deletion.exception) throw Error(String(deletion.exception));
+      }
+    } catch (error) { if (!disposed && error.name !== 'AbortError') remoteStatus(String(error.message || error), 'error'); }
+    finally { remoteClipboardPending = false; }
   }
   function cancelRemoteTouch() {
     if (remoteTouchActive) sendRemoteTouch('touchCancel');
@@ -3748,19 +4156,21 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
     tab.historyDocuments = []; tab.historyFrameIndices = [];
     if (initialUrl) { tab.historyDocuments.push(null); tab.historyFrameIndices.push(-1); }
     const iframe = document.createElement('iframe'); iframe.className = 'eya-browser-frame'; iframe.title = 'Web page';
+    if (proxyPanel) { iframe.style.position = 'absolute'; iframe.style.transformOrigin = 'top left'; iframe.style.transform = `scale(${pageZoom})`; iframe.style.width = `${100 / pageZoom}%`; iframe.style.height = `${100 / pageZoom}%`; }
     iframe.setAttribute('sandbox', 'allow-scripts'); iframe.setAttribute('referrerpolicy', 'no-referrer');
     // Never assign iframe.src. The frame receives only a generated srcdoc document.
     iframe.srcdoc = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font:16px system-ui;color:#586771;margin:2em}</style></head><body>Enter an address to begin.</body></html>';
     tab.iframe = iframe; tabs.push(tab); page.insertBefore(iframe, settings); activateTab(tab); if (url && !tab.remoteReady) navigate(url, true, tab); else updateNav(); return tab;
   }
   function activateTab(tab) {
-    if (active !== tab) cancelRemoteTouch();
+    if (active !== tab) { remoteTileDecoder.reset(); cancelRemoteTouch(); pageContext.close(); printDialog.close(); nativeActions.cancel(); }
     if (pendingRemoteFileChooser && pendingRemoteFileChooser.tabId !== tab.id) clearRemoteFileChooser(true);
     if (active) {
       active.remoteBreakpoints = remoteBreakpoints;
       active.remoteDebuggerPaused = remoteDebuggerPaused;
     }
     active = tab;
+    remoteTextSurface.style.cursor = tab.remoteCursor || 'default';
     showRemoteDialogForActive();
     remoteBreakpoints = tab.remoteBreakpoints || (tab.remoteBreakpoints = new Map());
     remoteDebuggerPaused = tab.remoteDebuggerPaused || null;
@@ -3771,6 +4181,13 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
     if (findTimer) { clearTimeout(findTimer); findTimer = null; }
     if (!findBar.hidden) { findInput.value = tab.findText || ''; findStatus.textContent = tab.findStatus || ''; }
     updateNav();
+    if (proxyPanel) {
+      onStateChange?.();
+      if (tab.pendingRestoreUrl) {
+        const url = tab.pendingRestoreUrl; tab.pendingRestoreUrl = '';
+        navigate(url, true, tab);
+      }
+    }
     if (remoteMode) {
       if (tab.remoteReady) remoteTransport?.activateTab(tab.id).catch(error => { if (tab === active) remoteStatus(String(error.message || error), 'error'); });
       else if (tab.url) navigateRemote(tab.url, false, tab);
@@ -3806,6 +4223,7 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
       else if (wasActive && remoteMode && active?.url) navigateRemote(active.url, false, active);
       else if (wasActive && remoteMode) { remoteTransport?.close(); remoteTransport = null; remoteView.hidden = true; }
     }
+    if (proxyPanel) onStateChange?.();
   }
   async function navigateAddress() {
     let raw = address.value.trim(); if (!raw) return;
@@ -3839,15 +4257,12 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
     try { url = safeUrl(raw, targetTab.url || undefined); } catch (error) { showError(error); return false; }
     if (prefs.stripTracking) url = stripTracking(url);
     if (remoteMode) return navigateRemote(url, record, targetTab);
-    if (!proxyNavigationAvailable(window)) {
-      targetTab.url = url; tabReset(targetTab);
-      showError(new Error('Proxy mode requires the browser Navigation API to keep page navigation inside the WebSocket proxy. Use Full browser in this browser.'), targetTab);
-      return false;
-    }
+    targetTab.pendingRestoreUrl = '';
     const previousUrl = targetTab.url;
     tabReset(targetTab);
     const navigationNonce = targetTab.nonce;
-    targetTab.loading = true; targetTab.url = url; if (targetTab === active) updateNav();
+    targetTab.loading = true; targetTab.url = url; targetTab.restoreUrl = ''; targetTab.proxyError = ''; if (targetTab === active) updateNav();
+    onStateChange?.();
     const controller = new AbortController(); controllers.add(controller); targetTab.controllers.add(controller);
     const started = performance.now(), startedAt = Date.now();
     try {
@@ -3862,21 +4277,28 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
       const contentType = header(response.headers, 'content-type');
       if (contentType && !/text\/html|application\/xhtml\+xml/i.test(contentType)) throw Error(`This page returned ${contentType}, not HTML.`);
       const decoder = new TextDecoder('utf-8'); let html = decoder.decode(body);
-      const finalUrl = response.url || url;
+      const destination = new URL(response.url || url);
+      // The HTTP transport omits fragments. Preserve the document's client-side
+      // destination so deep links can scroll when their document loads.
+      if (!destination.hash) destination.hash = new URL(url).hash;
+      const finalUrl = destination.href;
       rememberSource(targetTab, finalUrl, 'Document', html);
       applySetCookies(cookieJar, response.cookies, finalUrl);
       syncCookies();
+      targetTab.url = finalUrl;
       const origin = new URL(finalUrl).origin;
       const localValues = siteStorage[origin] || Object.create(null);
       const sessionValues = targetTab.sessionStorageByOrigin[origin] || Object.create(null);
       const localQuota = Math.min(MAX_STORAGE_AREA_BYTES, Math.max(storageObjectBytes(localValues), MAX_STORAGE_TOTAL_BYTES - (siteStorageBytes - (siteStorageByteCounts[origin] || 0))));
       const sessionQuota = Math.min(MAX_STORAGE_AREA_BYTES, Math.max(storageObjectBytes(sessionValues), MAX_TAB_SESSION_STORAGE_BYTES - (targetTab.sessionStorageBytes - (targetTab.sessionStorageByteCounts[origin] || 0))));
       const storageSnapshot = { local: localValues, session: sessionValues, localQuota, sessionQuota };
-      const pageUserscripts = await loadUserscriptResources(targetTab, matchingUserscripts(finalUrl), controller.signal);
-      html = injectBootstrap(html, targetTab.nonce, finalUrl, cookieString(cookieJar, finalUrl, { includeHttpOnly: false }), pageUserscripts, cosmeticCssForPage(filters, finalUrl), storageSnapshot, userscriptStorageSnapshot(pageUserscripts));
+      const pageUserscripts = readerMode ? [] : await loadUserscriptResources(targetTab, matchingUserscripts(finalUrl), controller.signal);
+      html = await injectBootstrap(html, targetTab.nonce, finalUrl, cookieString(cookieJar, finalUrl, { includeHttpOnly: false }), pageUserscripts, cosmeticCssForPage(filters, finalUrl), storageSnapshot, userscriptStorageSnapshot(pageUserscripts), (target, kind, options) => fetchResourceBlob(targetTab, target, kind, controller.signal, 0, false, false, options?.skipLocationRewrite === true), readerMode);
+      if (disposed || !tabs.includes(targetTab) || targetTab.nonce !== navigationNonce) return false;
       targetTab.iframe.srcdoc = html;
       targetTab.url = finalUrl;
       targetTab.title = titleFromHtml(html) || new URL(finalUrl).hostname;
+      targetTab.restoreUrl = method === 'GET' ? finalUrl : '';
       targetTab.loading = false;
       targetTab.network.push({ startedAt, method, status: response.status, url: finalUrl, requestBytes: requestOptions.body?.byteLength || 0, duration: Math.round(performance.now() - started), bytes: body.length, cacheHit: response.cacheHit === true, requestHeaders: Object.entries(headers), responseHeaders: normalizeHeaders(response.headers) }); trim(targetTab.network);
       if (record) {
@@ -3889,6 +4311,7 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
         if (!library.hidden) renderLibrary();
       } else if (targetTab.historyIndex >= 0) { targetTab.history[targetTab.historyIndex] = finalUrl; targetTab.historyDocuments[targetTab.historyIndex] = targetTab.nonce; targetTab.historyFrameIndices[targetTab.historyIndex] = 0; }
       if (targetTab === active) updateNav(); else renderTabs();
+      onStateChange?.();
       return true;
     } catch (error) {
       if (targetTab.nonce === navigationNonce) {
@@ -3899,6 +4322,8 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
     } finally { controllers.delete(controller); targetTab.controllers.delete(controller); }
   }
   function tabReset(tab) {
+    tab.remoteCursor = 'default';
+    if (tab === active) remoteTextSurface.style.cursor = 'default';
     tab.selectedRemoteObject = null;
     tab.remoteObjectProperties?.clear();
     tab.remoteObjectExpanded?.clear();
@@ -4029,44 +4454,7 @@ export function createBrowserPanel({ request, openWebSocket, openRemoteBrowser, 
   }
   async function rewriteProxyCss(tab, source, base, signal, depth) {
     if (depth > 3) return source;
-    let css = source;
-    const maxCssChars = 8 * 1024 * 1024;
-    const matches = expression => scanCssResourceMatches(css, expression);
-    const ensureSize = (items, lengths) => {
-      let size = css.length;
-      for (let i = 0; i < items.length; i++) size += lengths[i] - items[i][0].length;
-      if (size > maxCssChars) throw Error('Rewritten stylesheet exceeds the 8 MiB character limit.');
-    };
-    const imports = matches(/@import\s+(?:url\(\s*(?:"([^"]*)"|'([^']*)'|([^\s)]*))\s*\)|"([^"]*)"|'([^']*)'|([^\s;]+))([^;]*);/gi);
-    const imported = await Promise.all(imports.map(async match => {
-      const url = match.slice(1, 7).find(value => value !== undefined) || '';
-      if (/^(?:data:|blob:)/i.test(url)) return null;
-      try { return await fetchResourceBlob(tab, new URL(url, base).href, 'stylesheet', signal, depth + 1); }
-      catch { return ''; }
-    }));
-    ensureSize(imports, imported.map((url, i) => url === null ? imports[i][0].length : url ? 16 + url.length + imports[i][7].length : 0));
-    const importReplacements = imported.map((url, i) => url === null ? imports[i][0] : url ? `@import url("${url}")${imports[i][7]};` : '');
-    for (let i = imports.length - 1; i >= 0; i--) {
-      const match = imports[i];
-      css = css.slice(0, match.index) + importReplacements[i] + css.slice(match.index + match[0].length);
-    }
-    const urls = matches(/url\(\s*(?:["']([^"']*)["']|([^)]*?))\s*\)/gi);
-    const rewritten = await Promise.all(urls.map(async match => {
-      const raw = (match[1] || match[2] || '').trim();
-      if (!raw || /^(?:data:|blob:|#|about:)/i.test(raw)) return null;
-      try {
-        const url = new URL(raw, base).href;
-        const font = css.lastIndexOf('@font-face', match.index) > css.lastIndexOf('}', match.index);
-        return await fetchResourceBlob(tab, url, font ? 'font' : 'image', signal, depth + 1);
-      } catch { return ''; }
-    }));
-    ensureSize(urls, rewritten.map((url, i) => url === null ? urls[i][0].length : url ? url.length + 7 : 16));
-    const urlReplacements = rewritten.map((url, i) => url === null ? urls[i][0] : url ? `url("${url}")` : 'url(about:blank)');
-    for (let i = urls.length - 1; i >= 0; i--) {
-      const match = urls[i];
-      css = css.slice(0, match.index) + urlReplacements[i] + css.slice(match.index + match[0].length);
-    }
-    return css;
+    return proxyCssTools.rewrite(source, base, (url, kind) => fetchResourceBlob(tab, url, kind, signal, depth + 1));
   }
 async function fetchResourceBlob(tab, rawUrl, resourceType, signal, depth = 0, transferSource = false, skipShared = false, skipLocationRewrite = false) {
     if (depth > 3) throw Error('Stylesheet import depth exceeded.');
@@ -4154,7 +4542,7 @@ async function fetchResourceBlob(tab, rawUrl, resourceType, signal, depth = 0, t
       if (resourceType === 'script' && blob.size <= MAX_NAVIGATION_REWRITE_BYTES) {
         const sourceText = await blob.text();
         if (sourceText.length <= MAX_DEVTOOLS_SOURCE_BYTES) rememberSource(tab, response.url || target, 'Script', sourceText);
-        const rewritten = skipLocationRewrite ? sourceText : rewriteLocationNavigations(sourceText);
+        const rewritten = skipLocationRewrite ? sourceText : rewriteProxyScriptReads(rewriteLocationNavigations(sourceText));
         if (rewritten !== sourceText) {
           result.release();
           blob = new Blob([rewritten], { type });
@@ -4239,7 +4627,7 @@ async function fetchResourceBlob(tab, rawUrl, resourceType, signal, depth = 0, t
       }
     }
     for (const [url, record] of records) {
-      const replacements = record.calls.map(call => ({
+      const replacements = record.calls.filter(call => !call.computed).map(call => ({
         from: call.from,
         to: call.to,
         text: `(${call.urls.map(value => JSON.stringify(requested.get(value) || value)).join(',')})`,
@@ -4248,12 +4636,12 @@ async function fetchResourceBlob(tab, rawUrl, resourceType, signal, depth = 0, t
       for (const replacement of replacements.sort((a, b) => b.from - a.from)) {
         source = source.slice(0, replacement.from) + replacement.text + source.slice(replacement.to);
       }
-      sources.set(url, source);
+      sources.set(url, rewriteProxyScriptReads(source, { maxBytes: MAX_WORKER_SCRIPT_BYTES }));
     }
     const url = requested.get(mainUrl) || mainUrl;
-    return { source: sources.get(url), url, sources: Object.fromEntries(sources) };
+    return { source: sources.get(url), url, sources: Object.fromEntries(sources), aliases: Object.fromEntries([...requested].filter(([from, to]) => from !== to)) };
   }
-  async function fetchWorkerModuleGraph(tab, rawUrl, signal) {
+  async function fetchWorkerModuleGraph(tab, rawUrl, signal, pageModule = false) {
     const pageOrigin = new URL(tab.url).origin;
     const sources = new Map(), requested = new Map(), records = new Map(), scheduled = new Set();
     let sourceBytes = 0;
@@ -4274,10 +4662,11 @@ async function fetchResourceBlob(tab, rawUrl, resourceType, signal, depth = 0, t
         if (records.has(entry.finalUrl)) continue;
         sourceBytes += new TextEncoder().encode(entry.fetched.source).byteLength;
         if (sourceBytes > MAX_WORKER_GRAPH_BYTES) throw Error('Worker module graph exceeds the 4 MiB source limit.');
-        const parsed = parseModuleWorkerImports(entry.fetched.source, entry.finalUrl);
+        const moduleSource = pageModule ? rewriteProxyScriptReads(rewriteLocationNavigations(entry.fetched.source), { maxBytes: 4 * 1024 * 1024 }) : entry.fetched.source;
+        const parsed = parseProxyModuleImports(moduleSource, entry.finalUrl, { allowComputedDynamicImports: pageModule });
         if (parsed.error) throw Error(parsed.error);
-        records.set(entry.finalUrl, { source: entry.fetched.source, imports: parsed.imports });
-        sources.set(entry.finalUrl, entry.fetched.source);
+        records.set(entry.finalUrl, { source: parsed.source, imports: parsed.imports });
+        sources.set(entry.finalUrl, parsed.source);
         for (const dependency of parsed.imports) {
           if (requested.has(dependency.url) || scheduled.has(dependency.url)) continue;
           if (entry.depth >= MAX_WORKER_IMPORT_DEPTH) throw Error('Worker module import depth exceeded.');
@@ -4291,19 +4680,27 @@ async function fetchResourceBlob(tab, rawUrl, resourceType, signal, depth = 0, t
     }
     const url = requested.get(mainUrl) || mainUrl;
     const moduleMap = Object.fromEntries(records);
-    const order = orderWorkerModuleGraph(moduleMap, url);
-    return { source: sources.get(url), url, modules: moduleMap, order };
+    const order = pageModule ? Object.keys(moduleMap) : orderWorkerModuleGraph(moduleMap, url);
+    return { source: sources.get(url), url, modules: moduleMap, order, pageModule };
   }
   function handleFrameMessage(tab, message, framePort, frameNonce) {
     if (tab.port !== framePort || tab.nonce !== frameNonce || !tabs.includes(tab)) return;
     if (!message || typeof message !== 'object') return;
     const type = message.type;
-    if (['console', 'network', 'dom', 'storage', 'cookie', 'navigate', 'navigation-unhandled', 'history', 'history-go', 'open-tab', 'download', 'userscript-storage'].includes(type)) {
+    if (['console', 'network', 'dom', 'storage', 'cookie', 'navigate', 'navigation-unhandled', 'history', 'history-go', 'open-tab', 'download', 'userscript-storage', 'browser-shortcut'].includes(type)) {
       let size;
       try { size = new TextEncoder().encode(JSON.stringify(message)).byteLength; } catch { return; }
       const now = Date.now();
       if (!tab.frameMessageBudget || now - tab.frameMessageBudget.at >= 1000) tab.frameMessageBudget = { at: now, counts: Object.create(null) };
       if ((tab.frameMessageBudget.counts[type] = (tab.frameMessageBudget.counts[type] || 0) + 1) > FRAME_MESSAGE_LIMITS[type] || size > (type === 'dom' ? 256 * 1024 : type === 'storage' ? 2 * 1024 * 1024 : type === 'userscript-storage' ? 128 * 1024 : 32 * 1024)) return;
+    }
+    if (type === 'aux-consumed') { if (tab === active) { auxModifiers = {}; onAuxModifiersConsumed?.(); } return; }
+    if (type === 'browser-shortcut') {
+      if (tab !== active || typeof message.action !== 'string' || !browserShortcutActions.some(action => action.id === message.action) || typeof message.key !== 'string' || message.key.length > 32 || typeof message.code !== 'string' || message.code.length > 32 || !['ctrlKey','metaKey','altKey','shiftKey'].every(key => typeof message[key] === 'boolean')) return;
+      if (!matchesKeybind(message.action, message)) return;
+      if (message.action.startsWith('global.')) onGlobalShortcut?.(message.action);
+      else activateBrowserShortcut(message.action);
+      return;
     }
     if (type === 'find-open') { openFind(); return; }
     if (type === 'find-result') {
@@ -4340,7 +4737,9 @@ async function fetchResourceBlob(tab, rawUrl, resourceType, signal, depth = 0, t
         tab.historyIndex = index;
       }
       tab.url = url;
+      if (tab.restoreUrl) tab.restoreUrl = url;
       if (tab === active) updateNav(); else renderTabs();
+      onStateChange?.();
       return;
     }
     if (type === 'navigation-unhandled' && typeof message.url === 'string' && message.url.length <= 8192) {
@@ -4560,7 +4959,7 @@ async function fetchResourceBlob(tab, rawUrl, resourceType, signal, depth = 0, t
       }).catch(error => {
         relay.error = String(error?.message || error).slice(0, 1024);
         if (tab.port === framePort && tab.nonce === frameNonce) framePort.postMessage({ type: 'response-error', id: message.id, error: error.message });
-        controller.abort(error);
+        relay.controller.abort(error);
         relay.reader?.cancel().catch(() => {});
         relay.finish();
       }).finally(() => { relay.reading = false; });
@@ -4576,11 +4975,11 @@ async function fetchResourceBlob(tab, rawUrl, resourceType, signal, depth = 0, t
       const relay = { controller, finished: false, finish() { if (this.finished) return; this.finished = true; controllers.delete(controller); tab.controllers.delete(controller); if (tab.requestControllers.get(message.id) === this) tab.requestControllers.delete(message.id); } };
       tab.requestControllers.set(message.id, relay);
       (message.transferSource === true
-        ? (message.moduleMode === true ? fetchWorkerModuleGraph(tab, target, controller.signal) : fetchWorkerScriptGraph(tab, target, controller.signal))
+        ? (message.moduleMode === true ? fetchWorkerModuleGraph(tab, target, controller.signal, message.pageModule === true) : fetchWorkerScriptGraph(tab, target, controller.signal))
         : fetchResourceBlob(tab, target, resourceType, controller.signal, 0, false, false, message.skipLocationRewrite === true)).then(result => {
         if (message.pageModule === true) {
           const graphBytes = Object.values(result.modules || {}).reduce((sum, record) => sum + new TextEncoder().encode(record.source || '').byteLength, 0);
-          if (tab.pageModuleGraphs >= MAX_PAGE_MODULE_GRAPHS || tab.pageModuleBytes + graphBytes > MAX_PAGE_MODULE_GRAPH_BYTES) throw Error('Page module graphs exceeded the 16-graph or 8 MiB document limit.');
+          if (tab.pageModuleGraphs >= MAX_PAGE_MODULE_GRAPHS || tab.pageModuleBytes + graphBytes > MAX_PAGE_MODULE_GRAPH_BYTES) throw Error('Page module graphs exceeded the 64-graph or 8 MiB document limit.');
           tab.pageModuleGraphs++; tab.pageModuleBytes += graphBytes;
         }
         if (tab.port === framePort && tab.nonce === frameNonce && tabs.includes(tab)) {
@@ -4726,8 +5125,10 @@ async function fetchResourceBlob(tab, rawUrl, resourceType, signal, depth = 0, t
   }
   function showError(error, tab = active) {
     if (!tab) return;
-    tab.loading = false;
+    tab.loading = false; tab.restoreUrl = ''; tab.pendingRestoreUrl = '';
+    if (proxyPanel) onStateChange?.();
     const text = String(error?.message || error);
+    if (proxyPanel) tab.proxyError = text.slice(0, 512);
     tab.iframe.srcdoc = `<!doctype html><meta charset="utf-8"><title>Page unavailable</title><style>body{font:16px system-ui;margin:3em;color:#28343c}main{max-width:650px;margin:auto}code{overflow-wrap:anywhere}</style><main><h1>Page unavailable</h1><p>${escapeHtml(text)}</p><p><code>${escapeHtml(tab.url)}</code></p></main>`;
     tab.console.push({ level: 'error', args: [text], time: Date.now() });
     if (tab === active) { status.dataset.state = 'error'; statusText.textContent = text; updateNav(); }
@@ -4741,7 +5142,11 @@ async function fetchResourceBlob(tab, rawUrl, resourceType, signal, depth = 0, t
   }
   function showBookmarks() { openLibrary('bookmarks'); }
   function showHistory() { openLibrary('history'); }
-  function toggleTools() { devtools.hidden = !devtools.hidden; prefs.devtoolsOpen = !devtools.hidden; savePrefs(); }
+  function toggleTools() {
+    if (readerMode) return;
+    devtools.hidden = !devtools.hidden; prefs.devtoolsOpen = !devtools.hidden; savePrefs();
+    renderDevtools();
+  }
   function searchInPage(backwards = false, reset = false) {
     const tab = active, query = findInput.value.trim();
     if (!tab) { findStatus.textContent = 'No active page.'; return; }
@@ -4792,7 +5197,7 @@ async function fetchResourceBlob(tab, rawUrl, resourceType, signal, depth = 0, t
       if (file.size > MAX_FILTER_LIST_BYTES) throw Error('Filter lists are limited to 1 MiB.');
       const text = await file.text(); const compiled = compileFilterList(text);
       filterListText = text; filters = compiled; clearFilters.disabled = !text;
-      try { localStorage.setItem(FILTER_LIST_KEY, JSON.stringify(text)); filterInfo.textContent = `${compiled.count.toLocaleString()} rules imported and saved.`; }
+      try { writeStore(FILTER_LIST_KEY, text); filterInfo.textContent = `${compiled.count.toLocaleString()} rules imported for this client.`; }
       catch { filterInfo.textContent = `${compiled.count.toLocaleString()} rules loaded for this panel; browser storage is unavailable.`; }
       if (remoteMode && remoteTransport?.ready) await syncRemoteFilters();
     } catch (error) { filterInfo.textContent = String(error.message || error); }
@@ -4858,15 +5263,30 @@ async function fetchResourceBlob(tab, rawUrl, resourceType, signal, depth = 0, t
     } catch (error) { extensionStatus.textContent = String(error.message || error).slice(0, 512); }
     finally { extensionPicker.value = ''; extensionImport.disabled = !remoteMode; }
   });
+  function activateBrowserShortcut(action) {
+    switch (action) {
+      case 'browser.print': if (!remoteMode) return false; openPrintDialog(); break;
+      case 'browser.find': openFind(); break;
+      case 'browser.address': address.focus(); address.select(); break;
+      case 'browser.newTab': createTab(''); address.focus(); break;
+      case 'browser.closeTab': if (active) closeTab(active); break;
+      case 'browser.back': navigateHistory(-1); break;
+      case 'browser.forward': navigateHistory(1); break;
+      case 'browser.reload': if (active?.url) navigate(active.url, false); break;
+      case 'browser.tools': toggleTools(); break;
+      default: return false;
+    }
+    return true;
+  }
   function onKeydown(event) {
     if (event.key === 'Escape' && !library.hidden) { event.preventDefault(); closeLibrary(); }
     else if (event.key === 'Escape' && !findBar.hidden) { event.preventDefault(); closeFind(); }
-    else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') { event.preventDefault(); openFind(); }
-    else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'l') { event.preventDefault(); address.focus(); address.select(); }
-    else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 't') { event.preventDefault(); createTab(''); address.focus(); }
-    else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'w') { event.preventDefault(); if (active) closeTab(active); }
-    else if (event.altKey && event.key === 'ArrowLeft') { event.preventDefault(); navigateHistory(-1); }
-    else if (event.altKey && event.key === 'ArrowRight') { event.preventDefault(); navigateHistory(1); }
+    else {
+      const action = browserShortcutActions.find(action => action.group === 'Browser' && matchesKeybind(action.id, event));
+      if (!action || !activateBrowserShortcut(action.id)) return;
+      event.preventDefault();
+    }
+    event.stopPropagation();
   }
   function onAddressKey(event) { if (event.key === 'Enter') { event.preventDefault(); navigateAddress(); } }
   function stripTracking(raw) {
@@ -4875,61 +5295,126 @@ async function fetchResourceBlob(tab, rawUrl, resourceType, signal, depth = 0, t
   function looksLikeTracker(raw) {
     try { const host = new URL(raw).hostname.toLowerCase(); return /(^|\.)(doubleclick\.net|googlesyndication\.com|google-analytics\.com|googletagmanager\.com|facebook\.net|connect\.facebook\.net|hotjar\.com|segment\.io|mixpanel\.com)$/.test(host); } catch { return false; }
   }
-  settings.addEventListener('change', onPrefChange); element.addEventListener('keydown', onKeydown); address.addEventListener('keydown', onAddressKey);
-  remoteToggle.disabled = true;
-  remoteToggle.title = 'Fast proxy is unavailable until all page navigation can be kept on the WebSocket.';
-  remoteToggle.setAttribute('aria-label', remoteToggle.title);
+  settings.addEventListener('change', onPrefChange); element.addEventListener('keydown', onKeydown, { capture: true }); address.addEventListener('keydown', onAddressKey);
+  const pageContext = createMenu('Page actions', { consumeDismiss: true }); pageContext.trigger.hidden = true; element.append(pageContext.element);
+  let contextTab = null, contextLink = '', contextPoint = null;
+  function contextAction(label, action, glyph = 'File') {
+    const control = button(label, label, () => {
+      if (contextTab !== active || !remoteMode) return;
+      const focusPage = () => { if (!disposed && contextTab === active && remoteMode) remoteTextSurface.focus({ preventScroll: true }); };
+      try { Promise.resolve(action()).catch(error => remoteStatus(String(error.message || error), 'error')).finally(focusPage); }
+      catch (error) { remoteStatus(String(error.message || error), 'error'); focusPage(); }
+    });
+    menuAction(pageContext.panel, control, glyph, label); return control;
+  }
+  contextAction('Copy', () => copyRemoteSelection(), 'Copy');
+  contextAction('Cut', () => copyRemoteSelection(true), 'Pencil');
+  contextAction('Paste', async () => {
+    if (!navigator.clipboard?.readText) throw Error('Use your keyboard or accessory bar to paste.');
+    const tab = active, generation = remoteGeneration, text = await navigator.clipboard.readText();
+    if (tab === active && generation === remoteGeneration && !disposed) sendRemoteText(text);
+  }, 'ClipboardPaste');
+  const selectContextText = contextAction('Select all text', () => evaluateRemoteDom(active, `(()=>{const e=document.activeElement;if(e&&/^(INPUT|TEXTAREA)$/.test(e.tagName)&&e.type!=='password'){e.select();return}const s=getSelection(),r=document.createRange();r.selectNodeContents(document.body);s.removeAllRanges();s.addRange(r)})()`), 'FileCode');
+  const downloadContextImage = contextAction('Download image', () => { remoteTransport.downloadImage(active.id, contextPoint.x, contextPoint.y); showDownloads(); }, 'Download');
+  const openContextLink = contextAction('Open link in new tab', () => createTab(contextLink), 'Plus');
+  const copyContextLink = contextAction('Copy link address', () => navigator.clipboard.writeText(contextLink), 'Link');
+  remoteTextSurface.addEventListener('contextmenu', async event => {
+    if (!remoteMode) return;
+    event.preventDefault();
+    const point = remoteViewportPoint(remoteView.getBoundingClientRect(), remoteDisplayedViewport || remoteViewport, event.clientX, event.clientY);
+    if (!point?.inside) return;
+    const tab = active, generation = remoteGeneration;
+    try {
+      const snapshot = await evaluateRemoteDom(tab, `(()=>{const e=document.elementFromPoint(${point.x},${point.y});if(!e)return null;const a=e.closest('a[href]'),img=e.closest('img');return JSON.stringify({href:(a?.href||'').slice(0,8192),image:!!(img?.currentSrc||img?.src)})})()`);
+      const result = typeof snapshot === 'string' ? JSON.parse(snapshot) : null;
+      if (!result || disposed || tab !== active || generation !== remoteGeneration) return;
+      contextTab = tab; contextLink = ''; contextPoint = point;
+      downloadContextImage.hidden = !result.image;
+      try { contextLink = safeUrl(result.href, tab.url); } catch { /* Only web links are offered. */ }
+      if (!result.href) contextLink = '';
+      openContextLink.hidden = copyContextLink.hidden = !contextLink;
+      pageContext.open(true);
+      const menuBounds = pageContext.panel.getBoundingClientRect();
+      pageContext.panel.style.left = `${Math.max(8, Math.min(event.clientX, innerWidth - menuBounds.width - 8))}px`;
+      pageContext.panel.style.top = `${Math.max(8, Math.min(event.clientY, innerHeight - menuBounds.height - 8))}px`;
+    } catch (error) { remoteStatus(String(error.message || error), 'error'); }
+  });
   remoteTextSurface.addEventListener('pointerdown', event => {
     if (!remoteMode) return;
-    event.preventDefault(); remoteTextSurface.focus();
+    event.preventDefault(); if (event.button === 2) return; remoteTextSurface.focus();
     try { remoteTextSurface.setPointerCapture(event.pointerId); } catch { /* Optional capture. */ }
-    remoteInput(event);
+    flushRemotePointer(); remoteInput(event);
   });
   remoteTextSurface.addEventListener('pointermove', event => { if (remoteMode) scheduleRemotePointer(event); });
-  remoteTextSurface.addEventListener('pointerup', event => { if (remoteMode) { event.preventDefault(); remoteInput(event); } });
-  remoteTextSurface.addEventListener('pointercancel', event => { if (remoteMode) remoteInput(event); });
+  remoteTextSurface.addEventListener('pointerup', event => { if (remoteMode) { event.preventDefault(); flushRemotePointer(); remoteInput(event); } });
+  remoteTextSurface.addEventListener('pointercancel', event => { if (remoteMode) { flushRemotePointer(); remoteInput(event); } });
+  remoteTextSurface.addEventListener('dragstart', event => event.preventDefault());
+  remoteTextSurface.addEventListener('pointerleave', () => { remoteTextSurface.style.cursor = 'default'; });
+  remoteTextSurface.addEventListener('lostpointercapture', event => {
+    const held = remoteMousePointers.get(event.pointerId);
+    if (held) { flushRemotePointer(); remoteInput(new PointerEvent('pointercancel', { pointerId: event.pointerId, pointerType: held.pointerType, clientX: held.clientX, clientY: held.clientY })); }
+  });
   remoteTextSurface.addEventListener('wheel', event => {
     if (!remoteMode || !remoteTransport?.ready) return;
     event.preventDefault();
-    const point = remoteViewportPoint(remoteView.getBoundingClientRect(), remoteViewport, event.clientX, event.clientY);
+    const point = remoteViewportPoint(remoteView.getBoundingClientRect(), remoteDisplayedViewport || remoteViewport, event.clientX, event.clientY);
     if (!point?.inside) return;
-    try { remoteTransport.input({ type: 'mouse', action: 'mouseWheel', x: point.x, y: point.y, deltaX: event.deltaX, deltaY: event.deltaY }, active?.id); } catch { /* A stale wheel event is ignored. */ }
+    try { remoteTransport.input({ type: 'mouse', action: 'mouseWheel', x: point.x, y: point.y, deltaX: event.deltaX * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? remoteView.clientWidth : 1) * point.scale, deltaY: event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? remoteView.clientHeight : 1) * point.scale }, active?.id); } catch { /* A stale wheel event is ignored. */ }
   }, { passive: false });
   remoteTextSurface.addEventListener('keydown', event => {
     if (!remoteMode) return;
     const key = event.key.toLowerCase();
-    if ((event.ctrlKey || event.metaKey) && ['f', 'l', 't', 'w'].includes(key)) return;
-    if (event.altKey && ['arrowleft', 'arrowright'].includes(key)) return;
-    if ((event.ctrlKey || event.metaKey) && key === 'v') return;
+    if (Object.values(auxModifiers).some(Boolean) && !['control', 'alt', 'shift', 'meta'].includes(key) && !event.isComposing) {
+      const flags = auxModifiers; auxModifiers = {}; onAuxModifiersConsumed?.();
+      auxiliaryKeyupCode = event.code;
+      const modified = flags.shiftKey && event.key.length === 1 ? event.key.toUpperCase() : event.key;
+      sendAuxKey(modified, { ctrlKey: event.ctrlKey || flags.ctrlKey, altKey: event.altKey || flags.altKey, shiftKey: event.shiftKey || flags.shiftKey });
+      if (modified.length === 1 && !flags.ctrlKey && !flags.altKey) sendRemoteText(modified);
+      event.preventDefault(); event.stopPropagation(); return;
+    }
+    if ((event.ctrlKey || event.metaKey) && (key === 'c' || key === 'x')) {
+      event.preventDefault(); event.stopPropagation(); copyRemoteSelection(key === 'x'); return;
+    }
+    if ((event.ctrlKey || event.metaKey) && key === 'v') { remoteKey(event, 'keyDown'); event.stopPropagation(); return; }
     const textKey = !event.ctrlKey && !event.metaKey && !event.altKey && (event.isComposing || event.key === 'Dead' || Array.from(event.key).length === 1);
-    if (textKey) { event.stopPropagation(); return; }
+    if (textKey) { remoteKey(event, 'keyDown'); event.stopPropagation(); return; }
     remoteKey(event, 'keyDown'); event.preventDefault(); event.stopPropagation();
   });
   remoteTextSurface.addEventListener('keyup', event => {
     if (!remoteMode) return;
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v') return;
+    if (auxiliaryKeyupCode !== null && event.code === auxiliaryKeyupCode) { auxiliaryKeyupCode = null; event.preventDefault(); event.stopPropagation(); return; }
+    if ((event.ctrlKey || event.metaKey) && ['c', 'x'].includes(event.key.toLowerCase())) { event.preventDefault(); event.stopPropagation(); return; }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v') { remoteKey(event, 'keyUp'); event.stopPropagation(); return; }
     const textKey = !event.ctrlKey && !event.metaKey && !event.altKey && (event.isComposing || event.key === 'Dead' || Array.from(event.key).length === 1);
-    if (textKey) { event.stopPropagation(); return; }
+    if (textKey) { remoteKey(event, 'keyUp'); event.stopPropagation(); return; }
     remoteKey(event, 'keyUp'); event.preventDefault(); event.stopPropagation();
   });
   remoteTextSurface.addEventListener('beforeinput', event => {
     if (!remoteMode) return;
     if (remoteComposing || event.isComposing) return;
-    if (event.inputType === 'insertText' && !remoteComposing && typeof event.data === 'string') sendRemoteText(event.data);
+    if (event.inputType === 'insertText' && typeof event.data === 'string') {
+      const flags = auxModifiers; auxModifiers = {}; onAuxModifiersConsumed?.();
+      if (flags.ctrlKey || flags.altKey) { for (const key of event.data) sendAuxKey(key, flags); }
+      else sendRemoteText(flags.shiftKey ? event.data.toUpperCase() : event.data);
+    }
     event.preventDefault();
+  });
+  for (const action of ['copy', 'cut']) remoteTextSurface.addEventListener(action, event => {
+    if (!remoteMode) return;
+    event.preventDefault(); copyRemoteSelection(action === 'cut');
   });
   remoteTextSurface.addEventListener('paste', event => {
     if (!remoteMode) return;
     event.preventDefault();
     sendRemoteText(event.clipboardData?.getData('text/plain') || '');
-    remoteTextSurface.replaceChildren();
+    remoteTextSurface.value = '';
   });
   remoteTextSurface.addEventListener('compositionstart', () => { remoteComposing = true; });
   remoteTextSurface.addEventListener('compositionend', event => {
     remoteComposing = false;
-    const text = event.data || remoteTextSurface.textContent || '';
+    const text = event.data || remoteTextSurface.value || '';
     sendRemoteText(text);
-    remoteTextSurface.replaceChildren();
+    remoteTextSurface.value = '';
   });
   librarySearch.addEventListener('input', renderLibrary);
   importBookmarkFile.addEventListener('change', importBookmarks);
@@ -5036,11 +5521,29 @@ async function fetchResourceBlob(tab, rawUrl, resourceType, signal, depth = 0, t
   createTab('');
   if (serverRenderedByDefault && typeof openRemoteBrowser === 'function') toggleRemoteMode();
 
-  function cleanup() {
-    if (disposed) return; disposed = true; remoteGeneration++; window.removeEventListener('message', onMessage); settings.removeEventListener('change', onPrefChange);
+  function proxyState() {
+    return sanitizeProxyState({ v: 1, tabs: tabs.map(tab => ({ url: tab.restoreUrl || '' })), active: Math.max(0, tabs.indexOf(active)), zoom: pageZoom });
+  }
+  function restoreProxyState(value) {
+    if (!proxyPanel || disposed || tabs.length !== 1 || active.url || active.loading) return false;
+    const state = sanitizeProxyState(value);
+    setPageZoom(state.zoom);
+    for (let index = 0; index < state.tabs.length; index++) {
+      const tab = index === 0 ? tabs[0] : createTab('');
+      const url = state.tabs[index].url;
+      tab.url = url; tab.restoreUrl = url; tab.pendingRestoreUrl = url;
+      tab.title = url ? new URL(url).hostname : 'New tab';
+    }
+    activateTab(tabs[state.active]);
+    return true;
+  }
+  function cleanup({ detach = false } = {}) {
+    if (disposed) return; disposed = true; removeShortcutListener(); remoteGeneration++; window.removeEventListener('message', onMessage); settings.removeEventListener('change', onPrefChange);
     localViewerRequest++; localViewer?.dispose(); localViewer?.element.remove(); localViewer = null;
     localDialog.close?.(); localDialog.removeAttribute('open');
     clearRemoteDialogs();
+    printDialog.close();
+    nativeActions.destroy(); nativeFilePicker.destroy(); serverSave.destroy(); pageContext.destroy();
     if (findTimer) { clearTimeout(findTimer); findTimer = null; }
     if (siteStoragePersistTimer) { clearTimeout(siteStoragePersistTimer); siteStoragePersistTimer = null; }
     const finalStorage = sanitizeSiteStorage(siteStorage);
@@ -5048,21 +5551,54 @@ async function fetchResourceBlob(tab, rawUrl, resourceType, signal, depth = 0, t
       if (siteStorageDb) await writeBrowserStorageDb(siteStorageDb, SITE_STORAGE_KEY, finalStorage);
       else writeStore(SITE_STORAGE_KEY, finalStorage);
     }).catch(() => writeStore(SITE_STORAGE_KEY, finalStorage)).finally(() => siteStorageDb?.close());
-    element.removeEventListener('keydown', onKeydown); address.removeEventListener('keydown', onAddressKey);
+    element.removeEventListener('keydown', onKeydown, { capture: true }); address.removeEventListener('keydown', onAddressKey);
     for (const controller of controllers) controller.abort(); controllers.clear();
-    remoteTransport?.close(); remoteTransport = null;
+    remoteTileDecoder.reset(); remoteCanvas.width = remoteCanvas.height = 1;
+    remoteTransport?.close({ detach: detach || retainRemoteSession }); remoteTransport = null;
+    clearTimeout(remoteAckTimer);
     if (remoteObjectUrl) URL.revokeObjectURL(remoteObjectUrl);
     if (remotePointerFrame) cancelAnimationFrame(remotePointerFrame);
+    resizeObserver?.disconnect();
+    window.removeEventListener('resize', sendRemoteResize);
+    dprQuery?.removeEventListener('change', onDprChange);
     clearDownloads();
     for (const tab of tabs) { tabReset(tab); for (const row of tab.network) releaseCapturedNetworkRow(row); tab.iframe?.remove(); }
     tabs.length = 0;
   }
+  const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(() => sendRemoteResize()) : null;
+  resizeObserver?.observe(page);
+  let dprQuery;
+  function onDprChange() {
+    dprQuery?.removeEventListener('change', onDprChange);
+    dprQuery = window.matchMedia?.(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+    dprQuery?.addEventListener('change', onDprChange);
+    sendRemoteResize();
+  }
+  window.addEventListener('resize', sendRemoteResize);
+  onDprChange();
   return {
-    id: 'browser', title: 'Browser', kind: 'web-browser', element,
+    id: 'browser', title: proxyPanel ? 'Proxy browser' : 'Browser', kind: proxyPanel ? 'proxy-browser' : 'web-browser', element,
     onClose: cleanup,
-    onLayout() { for (const tab of tabs) if (tab.iframe?.contentWindow) tab.iframe.contentWindow.dispatchEvent(new Event('resize')); sendRemoteResize(); },
-    api: { navigate, back: () => navigateHistory(-1), forward: () => navigateHistory(1), reload: () => navigate(active?.url, false),
-      newTab: createTab, closeTab, get url() { return active?.url || ''; }, get tabs() { return tabs.map(tab => ({ id: tab.id, url: tab.url, title: tab.title })); },
+    // Sandboxed frames receive native resize events as their viewport changes.
+    // Their opaque Window must not be accessed from the outer client.
+    onLayout() { sendRemoteResize(); },
+    api: {
+      updateSettings(value = {}) {
+        for (const [key, select] of [...actionsPanel.querySelectorAll('select')].map((select, index) => [['resolution','format','quality','fps'][index], select])) {
+          const next = value.stream?.[key]; if (next !== undefined && [...select.options].some(option => option.value === String(next))) { select.value = String(next); streamSettings[key] = ['quality','fps'].includes(key) ? Number(next) : next; }
+        }
+        for (const key of ['blockTrackers','blockThirdParty','stripTracking','disableCache','devtoolsOpen']) if (typeof value[key] === 'boolean') prefs[key] = value[key];
+        for (const input of settings.querySelectorAll('[data-pref]')) input.checked = prefs[input.dataset.pref] === true;
+        disableCache.checked = prefs.disableCache === true;
+        const wasHidden = devtools.hidden;
+        devtools.hidden = readerMode || !prefs.devtoolsOpen;
+        if (wasHidden !== devtools.hidden) renderDevtools();
+        sendRemoteResize();
+      }, getSettings: () => ({ ...prefs, stream: { ...streamSettings } }), openSettings() { actions.open = true; sendRemoteResize(); actionsSummary.focus(); }, get streamSettings() { return { ...streamSettings }; }, sendAuxKey, setAuxModifiers, focusInput, activateKeyboard, dismissKeyboard, paste, navigate, back: () => navigateHistory(-1), forward: () => navigateHistory(1), reload: () => navigate(active?.url, false),
+      restoreRemote: () => ensureRemoteTransport(),
+      setProxyConnectionState, restoreProxyState, get proxyState() { return proxyState(); },
+      detach: () => { remoteTransport?.close({ detach: true }); remoteTransport = null; },
+      newTab: createTab, closeTab, get url() { return active?.url || ''; }, get restorableUrl() { return active?.restoreUrl || ''; }, get tabs() { return tabs.map(tab => ({ id: tab.id, url: tab.url, title: tab.title })); },
       showHistory, showBookmarks, toggleDevtools: toggleTools, focus: () => address.focus(), dispose: cleanup },
   };
 }

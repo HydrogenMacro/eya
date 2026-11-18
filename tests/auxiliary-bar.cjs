@@ -1,0 +1,64 @@
+const assert = require('node:assert/strict');
+const { chromium } = require('playwright');
+const { buildSync } = require('esbuild');
+(async () => {
+  const bundle = buildSync({ entryPoints: ['client/auxiliary-bar.js'], bundle: true, format: 'iife', globalName: 'Aux', write: false }).outputFiles[0].text;
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 320, height: 500 } });
+    const fs = require('node:fs');
+    await page.setContent(`<style>${fs.readFileSync('client/mobile.css','utf8')} #keybar{display:grid;width:100%;box-sizing:border-box}body{margin:0}</style><nav id="keybar"></nav>`);
+    await page.addScriptTag({ content: bundle });
+    await page.evaluate(() => { window.sent=[]; window.mods={}; window.bar=Aux.createAuxiliaryBar(document.querySelector('nav'), { send: text => { sent.push(text); return text; }, activateKeyboard: () => { window.keyboardActivated = true; }, paste: () => sent.push('paste'), panelId: () => 'test', toggleModifier: (key,value,locked) => { mods[key]=value; window.locks ||= new Set(); if(locked) locks.add(key); else locks.delete(key); bar.sync({ ctrlKey:mods.ctrl,shiftKey:mods.shift,altKey:mods.alt }, locks); } }); });
+    async function swipe(key, dx, dy=0) { const r=await page.locator(`[data-key="${key}"]`).boundingBox(); await page.mouse.move(r.x+r.width/2,r.y+r.height/2); await page.mouse.down(); await page.mouse.move(r.x+r.width/2+dx,r.y+r.height/2+dy); await page.mouse.up(); }
+    assert.equal(await page.locator('button:visible').count(),10);
+    assert.deepEqual(await page.locator('button:visible').evaluateAll(els=>els.map(el=>el.dataset.key)), ['escape','tab','ctrl','page','shift-alt','keyboard','fn','paste','arrows','menu']);
+    await swipe('shift-alt', -20);
+    await swipe('shift-alt', 20);
+    assert.deepEqual(await page.evaluate(()=>mods), {shift:true,alt:true});
+    await swipe('shift-alt', -20);
+    assert.equal(await page.locator('[data-key=shift-alt] .aux-locked').count(), 1);
+    await swipe('shift-alt', -20);
+    assert.equal(await page.evaluate(()=>mods.shift), false);
+    await swipe('ctrl', 0, -20);
+    await swipe('fn', 0, -20);
+    assert.equal(await page.evaluate(()=>mods.ctrl), undefined);
+    assert.equal(await page.locator('[data-key=fn]').isVisible(), true);
+    await page.locator('[data-key=keyboard]').click();
+    assert.equal(await page.evaluate(()=>keyboardActivated), true);
+    await swipe('page',0,-20); await swipe('page',20);
+    assert.deepEqual(await page.evaluate(()=>sent), ['\x1b[5~','\x1b[F']);
+    await page.locator('[data-key=ctrl]').dblclick();
+    assert.ok(await page.locator('[data-key=ctrl]').evaluate(el=>el.classList.contains('aux-locked')));
+    await page.locator('[data-key=fn]').click();
+    const blank = page.locator('[data-fn-lock]');
+    await blank.click();
+    assert.ok(await page.locator('.aux-row:not([hidden])').evaluate(el=>el.classList.contains('aux-locked')));
+    assert.equal(await page.locator('button:visible').count(),7);
+    for(let i=0;i<6;i++){await swipe(`f${i}`,-20);await swipe(`f${i}`,20);}
+    assert.deepEqual(await page.evaluate(()=>sent.slice(2)), ['\x1bOP','\x1bOQ','\x1bOR','\x1bOS',...[15,17,18,19,20,21,23,24].map(n=>`\x1b[${n}~`)]);
+    const back=await page.locator('[data-key=back]').boundingBox(); assert.ok(back.x>280);
+    await page.locator('[data-key=back]').click(); assert.equal(await page.locator('button:visible').count(),10);
+    await page.locator('[data-key=fn]').click();
+    await swipe('f0',20);
+    assert.equal(await page.locator('[data-key=fn]').isVisible(),true, 'one-shot Fn returns after a function key');
+    await page.locator('[data-key=menu]').click();
+    assert.deepEqual(await page.locator('button:visible').evaluateAll(els=>els.map(el=>el.dataset.key)), ['number-1','number-2','number-3','number-4','number-5','number-6','number-7','number-8','number-9','number-0']);
+    const before = await page.evaluate(()=>sent.length);
+    await page.locator('[data-key=number-1]').click(); await swipe('number-2',0,-30); await swipe('number-3',0,30);
+    assert.deepEqual(await page.evaluate(n=>sent.slice(n),before), ['1','@','-']);
+    const key = page.locator('[data-key=number-4]'), r = await key.boundingBox();
+    assert.equal(r.height,46);
+    const neutral = await key.evaluate(el=>getComputedStyle(el).backgroundColor);
+    await key.hover(); assert.equal(await key.evaluate(el=>getComputedStyle(el).backgroundColor),neutral);
+    await page.mouse.move(r.x+r.width/2,r.y+r.height/2); await page.mouse.down();
+    await page.mouse.move(r.x+r.width/2,r.y+r.height/2-12);
+    const early = await key.locator('.aux-preview').evaluate(el=>({matrix:el.style.transform,fade:el.parentElement.style.getPropertyValue('--aux-fade'),text:el.textContent}));
+    await page.mouse.move(r.x+r.width/2,r.y+r.height/2-40);
+    const late = await key.locator('.aux-preview').evaluate(el=>({matrix:el.style.transform,fade:el.parentElement.style.getPropertyValue('--aux-fade')}));
+    assert.equal(early.text,'$'); assert.notEqual(early.matrix,late.matrix); assert.ok(Number(late.fade)<Number(early.fade));
+    await page.mouse.up();
+    await swipe('number-0',0,30); assert.equal(await page.locator('[data-key=menu]').isVisible(),true);
+    console.log('Auxiliary row, modifier locks, F1–F12, number/symbol swipes, no-hover styling, and drag previews passed.');
+  } finally { await browser.close(); }
+})().catch(e=>{console.error(e);process.exitCode=1});

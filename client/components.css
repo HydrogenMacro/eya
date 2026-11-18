@@ -17,6 +17,10 @@ label>.ui-select{width:100%;margin-top:4px}
 .ui-menu label.ui-field>.ui-select{width:auto;max-width:175px;margin:0}
 .ui-menu .ui-select-trigger,.cad-toolbar .ui-menu .ui-select-trigger{width:100%;justify-content:space-between;font-size:16px}
 .panel-switcher-control{display:none}
+.panel-constrained .panel-split{display:contents!important}
+.panel-constrained .panel-sash,.panel-constrained .panel-group:not(.mobile-active){display:none!important}
+.panel-constrained .panel-group.mobile-active{display:flex!important;flex:1 1 0!important;width:100%;height:100%;min-width:0;min-height:0}
+.panel-switcher.constrained,.panel-constrained-switcher{display:flex!important}
 .cad-toolbar{flex-wrap:wrap}
 .cad-toolbar>.ui-select{flex:1 1 100px;max-width:165px}
 .cad-toolbar>.ui-select>.ui-select-trigger{font-size:14px;padding:5px 7px;min-height:32px;background:transparent;border-color:transparent}
@@ -30,13 +34,13 @@ label>.ui-select{width:100%;margin-top:4px}
 .cad-rotation-gizmo .cad-axis-arm{position:absolute;left:50%;top:50%;height:2px;transform-origin:left center;pointer-events:none}
 .cad-rotation-gizmo .cad-axis-button{position:absolute;left:50%;top:50%;width:24px;height:24px;padding:0;border:0;border-radius:50%;color:#081016;font:700 11px ui-monospace,monospace;pointer-events:auto;box-shadow:0 1px 5px #0009}
 .cad-rotation-gizmo .cad-axis-x{background:#ff6868}.cad-rotation-gizmo .cad-axis-y{background:#61e88b}.cad-rotation-gizmo .cad-axis-z{background:#6fa8ff}
-.cad-section-row{display:grid;grid-template-columns:44px minmax(130px,1fr);gap:5px 8px;padding:7px 8px;border-top:1px solid #304550}
+.cad-section-row{display:grid;grid-template-columns:12px minmax(42px,.65fr) minmax(48px,1.3fr) minmax(42px,.65fr);align-items:center;gap:4px;padding:3px 0;border-top:1px solid #304550}
 .cad-section-row:first-of-type{border-top:0}
-.cad-section-row>.ui-check{grid-row:1/3;align-self:center;padding:0!important;font-weight:700}
+
 .cad-section-row.cad-section-x>.ui-check{color:#ff7777}.cad-section-row.cad-section-y>.ui-check{color:#69e891}.cad-section-row.cad-section-z>.ui-check{color:#78adff}
 .cad-dual-range{position:relative;height:22px}.cad-dual-range input[type=range]{position:absolute;inset:0;width:100%;margin:0;background:transparent;pointer-events:none}
 .cad-dual-range input[type=range]::-webkit-slider-thumb{pointer-events:auto}.cad-dual-range input[type=range]::-moz-range-thumb{pointer-events:auto}
-.cad-section-numbers{display:grid;grid-template-columns:1fr 1fr;gap:6px}.cad-section-numbers input{min-width:0;width:100%;margin:0;padding:4px;font-size:13px}
+.cad-section-row>input[type=number],.cad-view-section-row>input[type=number]{min-width:0;width:100%;margin:0;padding:4px 2px;font-size:12px;box-sizing:border-box}.cad-section-row>input[type=number]::-webkit-inner-spin-button,.cad-view-section-row>input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}.cad-section-row>input[type=number],.cad-view-section-row>input[type=number]{-moz-appearance:textfield}
 .cad-toolbar .ui-menu input[type=color]{width:42px;height:28px;margin:0;padding:2px}.cad-toolbar .ui-menu input[type=number]{width:96px;margin:0;padding:5px}
 .file-drop-active{outline:2px solid var(--ui-accent,#7fdbc5);outline-offset:-3px;position:relative}
 .file-drop-active::after{content:'Drop to upload';position:absolute;inset:8px;z-index:20;display:grid;place-items:center;border:2px dashed var(--ui-accent,#7fdbc5);border-radius:8px;background:color-mix(in srgb,var(--ui-bg,#10151b) 90%,transparent);color:var(--ui-accent,#7fdbc5);font-size:18px;pointer-events:none}
@@ -53,3 +57,81 @@ input[type=range]:disabled{opacity:.4;cursor:default}
 input[type=file]:not([hidden]){padding:6px;font-size:14px}
 input[type=file]::file-selector-button{font:inherit;color:var(--ui-fg,#e4edf2);background:var(--ui-control,#253541);border:1px solid var(--ui-border,#617481);border-radius:5px;padding:6px 9px;margin-right:8px;cursor:pointer}
 @media(pointer:coarse),(max-width:760px){.ui-select-trigger{min-height:38px;font-size:16px}.ui-select-options .ui-select-option,.cad-toolbar .ui-menu .ui-select-option{min-height:42px;font-size:16px}.panel-switcher-control{display:flex;flex:0 0 auto;width:calc(100% - 8px);margin:4px 4px 0}.panel-switcher-control>.ui-select-trigger{padding:6px 9px}.cad-toolbar{gap:3px}.cad-toolbar>.ui-select{flex:1 1 calc(33% - 6px);max-width:none}.cad-toolbar>.ui-select>.ui-select-trigger{font-size:16px;padding:5px;min-height:36px}}
+.video-viewer-body{display:flex;overflow:hidden;min-width:0}
+.native-video-frame{display:block;flex:1;min-width:0;min-height:0;width:100%;height:100%;border:0;background:#000}
+
+.viewer-body.image-viewer-body{display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:grab;touch-action:none;user-select:none}.image-viewer-body.dragging{cursor:grabbing}.image-viewer-body img{flex:none;margin:0;pointer-events:none;transform-origin:center}
+
+.file-load-progress,.file-change-indicator{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}.file-load-progress{color:var(--ui-muted,#9eb2bc)}.file-change-indicator{color:var(--ui-accent,#7fdbc5)}.cad-viewer>.file-load-progress,.cad-viewer>.file-change-indicator{padding:4px 8px;flex-shrink:0}
+.viewer-actions{flex-wrap:wrap}.viewer-actions>.viewer-path{min-width:0}.viewer-actions>.file-load-progress,.viewer-actions>.file-change-indicator{flex:1 0 100%;white-space:normal;overflow-wrap:anywhere}
+
+.file-selection-bar{display:flex;align-items:center;gap:8px;flex:0 0 auto;padding:4px 8px;border-bottom:1px solid var(--ui-border,#344854);min-width:0}.file-selection-count{flex:1;min-width:0;font-size:12px;color:var(--ui-muted,#9eb2bc)}.file-selection-bar input[type=checkbox],.file-list .file-select-checkbox{width:16px;height:16px;margin:0 8px 0 0;vertical-align:middle;accent-color:var(--ui-accent,#7fdbc5);flex:0 0 auto}.file-selection-bar .icon-button{border-color:transparent;background:transparent}.file-list tr{user-select:none}.file-list .entry-name>.file-select-checkbox{cursor:pointer}.ui-menu input[type=color]{width:44px;min-width:44px;height:32px;padding:2px;margin:0;cursor:pointer}
+
+#client-update-indicator{margin-left:auto;flex:0 0 auto;color:var(--ui-accent,#7fdbc5);border-color:currentColor;position:relative}#client-update-indicator::after{content:"";position:absolute;right:2px;top:2px;width:6px;height:6px;border-radius:50%;background:currentColor}#client-update-indicator[hidden]{display:none!important}
+
+.image-background-choices{display:flex;align-items:center;gap:4px}.image-background-choice{position:relative;display:flex;align-items:center;justify-content:center;width:30px;height:30px;cursor:pointer}.image-background-choice input{position:absolute;width:100%;height:100%;inset:0;margin:0;opacity:0;cursor:pointer}.image-background-preview{display:block;width:22px;height:22px;border:1px solid var(--ui-border,#344854);border-radius:3px;pointer-events:none}.image-background-checkerboard{background:conic-gradient(#d8d8d8 25%,#a8a8a8 0 50%,#d8d8d8 0 75%,#a8a8a8 0);background-size:12px 12px}.image-background-white{background:#fff}.image-background-plain{background:var(--ui-bg,#10171c)}.image-background-choice input:checked+.image-background-preview{outline:2px solid var(--ui-accent,#7fdbc5);outline-offset:1px}.image-background-choice input:focus-visible+.image-background-preview{outline:2px solid var(--ui-focus,#7fdbc5);outline-offset:3px}
+.file-path-combobox{display:flex;flex:1;min-width:0}.file-path-combobox>input{width:100%;min-width:0;margin:0;padding:5px;font:16px ui-monospace,monospace}.file-combobox-options{position:fixed;inset:auto;margin:0;padding:4px;box-sizing:border-box;overflow:auto;z-index:1000;border:1px solid var(--ui-border,#344854);border-radius:6px;background:var(--ui-surface,#1b2932);color:var(--ui-fg,#e3edf2);box-shadow:0 6px 18px #0005;font-size:13px}.file-combobox-options[hidden]{display:none}.file-combobox-options>[role=option]{display:flex;align-items:center;gap:8px;min-height:34px;padding:4px 8px;box-sizing:border-box;cursor:pointer;border-radius:3px}.file-combobox-options>[role=option]>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.file-combobox-options>[role=option]:hover,.file-combobox-options>[aria-selected=true]{background:color-mix(in srgb,var(--ui-accent,#7fdbc5) 20%,transparent)}
+
+.file-list .modified{width:210px}.file-list .file-type{width:80px}.file-sort{display:flex;align-items:center;gap:4px;width:100%;padding:0;border:0;background:none;color:inherit;font:inherit;text-align:inherit}.file-list [aria-sort=ascending] .file-sort::after{content:" ↑"}.file-list [aria-sort=descending] .file-sort::after{content:" ↓"}.material-file-icon{width:20px;height:20px;flex:none;vertical-align:middle;margin-right:7px}.file-list .size .file-sort{justify-content:flex-end}
+
+/* Settings and connection surfaces share compact navigation and spacing. */
+.dialog-heading{display:flex;align-items:center;gap:10px;margin-bottom:16px}.dialog-heading h2{flex:1;margin:0;font-size:19px}.dialog-heading>button{width:32px;height:32px;padding:5px;background:transparent;border-color:transparent}.settings-categories{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.settings-category{display:flex;justify-content:flex-start;gap:10px;width:100%;min-width:0;min-height:48px;padding:12px;text-align:left;background:var(--ui-control,#21323e);border-color:transparent}.settings-category>.ui-icon:last-child{margin-left:auto;width:14px;transform:rotate(-90deg);opacity:.6}.settings-live-panels{grid-column:1/-1;display:grid;gap:6px}.settings-live-panels h3{font-size:12px;color:var(--ui-muted);margin:12px 0 2px}.settings-section[hidden],.settings-categories[hidden],.settings-empty[hidden]{display:none!important}#settings-dialog{width:min(660px,calc(100% - 24px));max-height:calc(100dvh - 32px);padding:20px}#settings-dialog .settings-search label{font-size:0}#settings-dialog .settings-search input{font-size:16px;margin:0 0 14px}#settings-dialog .settings-section{border:0;padding:0;margin:0}#settings-dialog .setting{padding:9px 0;margin:0}#settings-dialog>.actions:empty{display:none}.password-field{display:flex;align-items:center;border:1px solid var(--ui-border,#344854);border-radius:6px;background:var(--ui-bg,#10151b)}.password-field input{flex:1;min-width:0;margin:0!important;border:0;background:transparent}.password-field button{background:transparent;border:0;padding:8px 12px;font-size:13px}.connection-dialog{width:min(430px,calc(100% - 24px))}.connection-check{display:flex;align-items:center;gap:8px;min-height:26px;color:var(--ui-muted,#95adb9);font-size:13px}.connection-dialog [role=alert]{color:#ed958d;font-size:13px;user-select:text}.ui-spinner{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:eya-spin .8s linear infinite}.ui-spinner[hidden]{display:none}@keyframes eya-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.ui-spinner{animation-duration:2s}}@media(max-width:480px){.settings-categories{grid-template-columns:1fr}#settings-dialog{padding:14px}.settings-section .grid{grid-template-columns:1fr}}
+
+/* CAD inspector contents and paired clipping handles. */
+.cad-layout .cad-parts{position:static;max-width:none;max-height:none;overflow:visible;background:transparent;border:0;border-radius:0;padding:2px}
+.cad-sections,.cad-selection-panel{font-size:12px;padding:0;min-width:0;color:var(--ui-text,#e4edf2)}
+.cad-layout .dock-content{padding:6px}.cad-layout .dock-tabs{min-height:28px}.cad-layout .dock-tabs>button{padding:5px 7px;font-size:11px}
+.cad-sidebar-handle{position:absolute;right:0;top:50%;transform:translateY(-50%);z-index:7;width:14px;height:54px;min-width:0;min-height:0;padding:0;border:1px solid #506976;border-right:0;border-radius:5px 0 0 5px;background:#243744cf;color:#b6cad3;font-size:18px;line-height:1;cursor:pointer;touch-action:manipulation}.cad-sidebar-handle:hover,.cad-sidebar-handle:focus-visible{background:#3a5865;outline:1px solid #8edcca}
+.cad-sections .ui-menu-heading{margin:4px 0;padding:3px 0}.cad-layout .cad-parts label{font-size:12px;margin:2px 0;padding:2px 0}
+.cad-view-section-row{display:grid;grid-template-columns:minmax(44px,.75fr) minmax(48px,1.5fr) minmax(36px,.6fr);gap:5px;align-items:center}.cad-view-section-row>input[type=range]{width:100%;min-width:0;margin:0}.cad-view-section-end{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#91aab6;font-size:11px;text-align:right}
+.cad-sections .ui-check{display:flex;align-items:center;gap:5px;margin:4px 0}
+.cad-sections .ui-field{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0}
+.cad-sections .ui-field input{width:100px;margin:0;font-size:13px;padding:5px}
+.cad-sections>input[type=range]{width:100%;margin:6px 0}
+.cad-sections>small{color:#91aab6;font-size:11px}.cad-sections button,.cad-selection-panel button{font-size:13px;padding:5px 8px}
+
+.cad-section-axis{align-self:center;font-weight:700}.cad-section-x>.cad-section-axis{color:#ff7777}.cad-section-y>.cad-section-axis{color:#69e891}.cad-section-z>.cad-section-axis{color:#78adff}
+.cad-dual-range{background:linear-gradient(#506673,#506673) center/100% 3px no-repeat;isolation:isolate}
+.cad-dual-range input[type=range]{appearance:none;-webkit-appearance:none;height:22px;z-index:1;border:0;padding:0;background:transparent}
+.cad-dual-range input[type=range]::-webkit-slider-runnable-track{height:0;background:transparent;border:0}
+.cad-dual-range input[type=range]::-moz-range-track{height:0;background:transparent;border:0}
+.cad-dual-range input[type=range]::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;position:relative;z-index:3;width:13px;height:13px;margin-top:-6.5px;border:2px solid #bdf5e7;border-radius:50%;background:#315a54;cursor:ew-resize}
+.cad-dual-range input[type=range]::-moz-range-thumb{position:relative;z-index:3;width:10px;height:10px;border:2px solid #bdf5e7;border-radius:50%;background:#315a54;cursor:ew-resize}
+.cad-rotation-gizmo{pointer-events:auto;touch-action:none;cursor:grab}.cad-rotation-gizmo:active{cursor:grabbing}.cad-rotation-gizmo .cad-axis-button[data-sign="-1"]{background:color-mix(in srgb,currentColor 15%,#17232c);border:1px solid currentColor}
+.cad-rotation-gizmo .cad-axis-x[data-sign="-1"]{color:#ff6868}.cad-rotation-gizmo .cad-axis-y[data-sign="-1"]{color:#61e88b}.cad-rotation-gizmo .cad-axis-z[data-sign="-1"]{color:#6fa8ff}
+.cad-selection-panel .cad-measurement{padding:0;border:0;background:transparent;min-width:0}
+.cad-measurement-tabs{display:flex;gap:3px;margin:0 0 5px}
+.cad-measurement-tabs label{position:relative;display:flex;align-items:center;justify-content:center;flex:1 1 0;min-width:0;min-height:30px;padding:3px 4px;border:1px solid var(--ui-border,#344854);border-radius:4px;cursor:pointer;font-size:11px;white-space:nowrap;touch-action:manipulation}
+.cad-measurement-tabs input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
+.cad-measurement-tabs label:has(:checked){border-color:var(--ui-accent,#7fdbc5);background:#24453e;color:#bdf5e7}
+.cad-measurement-tabs label:has(input[value="2"]:checked){border-color:#c66a20;color:#e89b5d;background:#433020}
+.cad-measurement-tabs label:has(:disabled){opacity:.4;cursor:default}
+.cad-measurement-tabs label:has(:focus-visible){outline:2px solid var(--ui-accent,#7fdbc5)}
+.cad-pick-control{display:flex;align-items:center;gap:6px;margin:0 0 5px;font-size:11px;color:var(--ui-muted,#9bb0bc)}
+.cad-pick-control select{min-width:0;flex:1;margin:0;padding:3px 5px;font-size:12px;min-height:28px}
+.cad-selection-result,.cad-selection-distance,.cad-selection-overview{min-width:0;margin:0}
+.cad-measurement table{table-layout:fixed;border-collapse:collapse;width:100%;font-size:11px;color:var(--ui-text,#e4edf2)}
+.cad-measurement th,.cad-measurement td{width:50%;padding:0;text-align:left;border-bottom:1px solid var(--ui-border,#344854);font-weight:400;min-width:0}
+.cad-measurement th{color:var(--ui-muted,#9bb0bc)}
+.cad-measurement-pane[data-selection-index="2"] th,.cad-measurement tr[data-selection="2"] th{color:#e89b5d}
+.cad-cell-scroll{max-width:100%;overflow-x:auto;white-space:nowrap;padding:4px 3px;touch-action:pan-x;user-select:text;-webkit-user-select:text;overscroll-behavior-x:contain}
+.cad-cell-scroll:focus-visible{outline:1px solid var(--ui-accent,#7fdbc5);outline-offset:-1px}
+.cad-selection-actions{display:flex;gap:4px;margin-top:7px}
+.cad-selection-actions button{flex:1;min-width:0;min-height:30px;padding:4px!important;font-size:11px!important}
+.cad-selection-empty{font-size:12px;color:var(--ui-muted,#9bb0bc);margin:7px 0}
+.cad-selection-error{position:absolute;left:8px;bottom:8px;max-width:calc(100% - 16px);padding:4px 7px;border-radius:3px;background:#301d18e8;color:#ffc09d;font-size:11px;pointer-events:none;z-index:5}
+.cad-measurement-pane[hidden],.cad-selection-error[hidden]{display:none}
+@media(pointer:coarse),(max-width:760px){
+ .cad-measurement-tabs label{min-height:44px}.cad-pick-control select{min-height:36px}
+ .cad-sections,.cad-selection-panel{padding:0}.cad-layout .dock-content{padding:6px}.cad-layout .cad-parts label{min-height:36px;display:flex;align-items:center;gap:4px;margin:0}
+ .cad-layout .dock-tabs{min-height:44px}.cad-layout .dock-tabs>button{min-height:44px;padding:5px 8px}.cad-section-row{grid-template-columns:12px minmax(42px,.65fr) minmax(44px,1.3fr) minmax(42px,.65fr);gap:3px;padding:1px 0}
+ .cad-section-row>input[type=number],.cad-view-section-row>input[type=number]{padding:5px 1px;min-height:40px;font-size:16px}.cad-view-section-row>input[type=range]{min-height:44px;touch-action:none}.cad-view-section-row>input[type=range]::-webkit-slider-thumb{width:26px;height:26px}.cad-sidebar-handle{width:20px;height:64px}
+ .cad-dual-range{height:44px;touch-action:none}.cad-dual-range input[type=range]{height:44px;touch-action:none}
+ .cad-dual-range input[type=range]::-webkit-slider-thumb{width:26px;height:26px;margin-top:-13px;pointer-events:none}
+ .cad-dual-range input[type=range]::-moz-range-thumb{width:22px;height:22px;pointer-events:none}
+ .cad-sections>input[type=range]{min-height:44px;touch-action:none}.cad-sections>input[type=range]::-webkit-slider-thumb{width:26px;height:26px}
+ .cad-sections .ui-field{flex-wrap:wrap}.cad-sections .ui-field input{max-width:100%;min-width:0}
+ .cad-cell-scroll{padding-block:5px}.cad-sections button,.cad-selection-panel button{min-height:44px}
+}
+
+.ui-submenu{position:fixed;min-width:180px;max-width:calc(100vw - 12px);box-sizing:border-box;inset:auto;margin:0;z-index:2100}.ui-submenu[hidden]{display:none!important}.ui-submenu-chevron{margin-left:auto;padding-left:18px;font-size:20px;line-height:1}.ui-submenu>.ui-menu-item{white-space:normal;overflow-wrap:anywhere}.ui-submenu>.ui-menu-item:hover,.ui-submenu>.ui-menu-item:focus-visible{background:var(--ui-hover,#2c4351)}

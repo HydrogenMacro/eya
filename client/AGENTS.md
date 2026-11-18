@@ -4,16 +4,26 @@ This directory is the source of the standalone client and generator. It uses bro
 
 ## Source map
 
-- `app.js`: application integration, the primary connection, settings, editor/viewers, file request routing, and panel registration.
-- `panels.js`: generic split/tab workbench and panel type registry.
+- `app.js`: application integration, the independent workspace connection, settings, editor/viewers, file request routing, and panel registration.
+- `workspaces.js`, `connection-lifecycle.js`: server-owned workspace management/sync, explicit selection, generation/readiness notifications and request deadlines.
+- `panels.js`: generic split/tab workbench and panel type registry; `mobile-workspace.js` owns the optional floating mobile split-map switcher.
 - `terminal-panel.js`: independent terminal panel connection and resumable transport.
-- `browser-panel.js`, `browser-transport.js`, `browser-eventsource.js`: sandboxed browser panel, Noise WebSocket relay, and bounded EventSource parsing.
+- `terminal-network.js`, `terminal-codec.js`: bounded pacing/ACK/heartbeat policy and synchronous bounded raw-DEFLATE decoding (the bounded core is also used for browser tiles).
+- `browser-panel.js`, `browser-transport.js`, `browser-tiles.js`, `browser-eventsource.js`, `browser-native-actions.js`, `browser-native-files.js`: sandboxed browser panel, Noise WebSocket relay, and bounded EventSource parsing. `browser-proxy-apis.js` defines explicit unsupported API results inside the opaque frame; `browser-proxy-state.js` bounds saved GET tab/zoom metadata.
+- `browser-proxy-dom.js`, `browser-proxy-css.js`, `browser-proxy-script.js`, `browser-proxy-worker.js`: parser/dynamic resource loading, shared CSS token handling and script URL/module compatibility inside the fixed opaque sandbox. Self-contained runtime factories are serialized into iframe code; test both source and generated HTML/SVG behavior.
+- `file-openers.js`, `markdown-viewer.js`, `binary-viewer.js`: extension defaults, safe Markdown DOM rendering, and virtualized byte editing.
+- `server-settings.js`: process-local server admission settings over the negotiated workspace capability.
 - `file-browser.js`: reusable browser panel UI; file transport and editor/viewers remain integrated through `app.js`.
-- `cad.js`: Three.js STL/glTF viewer and CAD controls.
+- `cad.js`: Three.js STL/glTF/3MF viewer and CAD controls; `cad-navigation.js` owns camera gestures/movement, `cad-selection.js` owns picking/mesh measurements, `cad-3mf.js` bounds archive loading.
+- `docking.js`: shared edge previews, tab/split inspector layouts, and resizable sidebars.
 - `task-manager.js`, `docker-panel.js`: system panels; `system-panels.js` is their small export surface.
 - `charts.js`: reusable accessible SVG time-series charts.
-- `ui.js`: icons, menus, enhanced selects, notifications, and drop zones.
+- `ui.js`: icons, menus, enhanced selects, notifications, and drop zones; `submenu.js` owns adjacent menu layers and `radio-tabs.js` owns connected native radios.
 - `generator.js`: standalone HTML/SVG/data-URL generation.
+- `settings-schema.js`, `settings-navigation.js`: shared configuration registry and client submenus.
+- `keybinds-core.js`, `keybinds.js`: bounded shortcut overrides, matching and searchable shortcut editor.
+- `connection-form.js`: debounced credential checks without application-session creation.
+- `ids.js`: cryptographically random UUIDs in secure and standalone data origins.
 - `template.html` and `*.css`: client markup and styles. `generator.template.html` is the generator shell.
 - `build.mjs`: bundles/minifies sources into `../client.html` and `generator.html`.
 - `sodium-browser.js`: intentionally narrow crypto exports used by the optimized bundle.
@@ -30,10 +40,12 @@ The build must run from the root because paths in `build.mjs` are root-relative.
 
 ## Conventions and checks
 
+- Keep UI copy concise. Avoid filler and redundant help; explain only necessary consequences and errors.
 - Keep modules dependency-light and browser-compatible; expose new panel kinds through the workbench registry in `app.js`.
 - Reuse `ui.js`, `charts.js`, and panel lifecycle hooks instead of duplicating controls or timers.
 - Keep cleanup in `onClose`/disposal paths for observers, intervals, object URLs, WebGL objects, and connections.
 - Preserve keyboard, touch, narrow-screen, reduced-motion, and accessible-name behavior.
+- For mobile inputs, follow [the keyboard layout guidelines](../docs/interface.md#mobile-keyboards-and-input-placement): use the shared `mobile-viewport.js` geometry, bounded nested scrolling, and no panel-specific viewport offsets or editor exceptions. Run `tests/mobile-keyboard.cjs` for input/layout changes.
 - Coordinate Noise messages, request operation names, offsets, and size limits with `eya-server/src/` and protocol tests.
 - Choose the narrow browser test from `tests/AGENTS.md`; most UI changes require rebuilding `client.html` first.
 - Use `node client/size-report.mjs` only for bundle-size work; it reports in memory and does not replace the normal build.

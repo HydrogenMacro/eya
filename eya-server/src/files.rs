@@ -62,6 +62,7 @@ pub struct Upload {
     expected: u64,
     received: u64,
     overwrite: bool,
+    expected_version: Option<String>,
 }
 
 impl FileManager {
@@ -294,11 +295,15 @@ impl FileManager {
             expected: size,
             received: 0,
             overwrite,
+            expected_version: None,
         })
     }
 }
 
 impl Upload {
+    pub fn require_version(&mut self, version: String) {
+        self.expected_version = Some(version);
+    }
     pub async fn write(&mut self, data: &[u8]) -> io::Result<()> {
         self.received = self
             .received
@@ -329,7 +334,21 @@ impl Upload {
         let target = self.target;
         let identity = self.identity;
         let overwrite = self.overwrite;
+        let expected_version = self.expected_version;
         let result = blocking(identity.clone(), "finish upload", move || {
+            // Serialize Eya's version check and replace. External host writers
+            // cannot participate in this lock, so this is not a filesystem CAS.
+            static COMMIT: std::sync::Mutex<()> = std::sync::Mutex::new(());
+            let _commit = COMMIT
+                .lock()
+                .map_err(|_| invalid("Upload commit unavailable"))?;
+            if let Some(version) = expected_version
+                && super::file_version(&stdfs::metadata(&target)?) != version
+            {
+                return Err(invalid(
+                    "File changed while saving; reload or resolve the conflict before retrying",
+                ));
+            }
             rename_upload(&temporary, &target, overwrite)
         })
         .await;

@@ -1,0 +1,60 @@
+{
+  "description": "Six changing dashboard frames per preset; software Chromium, real production Noise transport; 2 Mbit/s transfer is a payload calculation, not WAN latency.",
+  "results": [
+    {
+      "name": "native-q80",
+      "width": 3840,
+      "height": 2160,
+      "meanBytes": 554864.83,
+      "meanWireBytes": 555252.83,
+      "meanDecodeMs": 44.5,
+      "meanCaptureTransferMs": 237.64,
+      "reductionPercent": 0,
+      "transferMsAt2Mbit": 2221
+    },
+    {
+      "name": "1080p-q80",
+      "width": 1920,
+      "height": 1080,
+      "meanBytes": 140357,
+      "meanWireBytes": 140537.83,
+      "meanDecodeMs": 13.85,
+      "meanCaptureTransferMs": 153.93,
+      "reductionPercent": 74.7,
+      "transferMsAt2Mbit": 562
+    },
+    {
+      "name": "720p-q60",
+      "width": 1280,
+      "height": 720,
+      "meanBytes": 44355,
+      "meanWireBytes": 44489,
+      "meanDecodeMs": 15.53,
+      "meanCaptureTransferMs": 111.83,
+      "reductionPercent": 92,
+      "transferMsAt2Mbit": 178
+    },
+    {
+      "name": "540p-q40",
+      "width": 960,
+      "height": 540,
+      "meanBytes": 19098.67,
+      "meanWireBytes": 19232.67,
+      "meanDecodeMs": 12.07,
+      "meanCaptureTransferMs": 95.3,
+      "reductionPercent": 96.6,
+      "transferMsAt2Mbit": 77
+    },
+    {
+      "name": "720p-png",
+      "width": 1280,
+      "height": 720,
+      "meanBytes": 340013.5,
+      "meanWireBytes": 340285.5,
+      "meanDecodeMs": 25.72,
+      "meanCaptureTransferMs": 192.35,
+      "reductionPercent": 38.7,
+      "transferMsAt2Mbit": 1361
+    }
+  ]
+}

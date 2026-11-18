@@ -4,15 +4,18 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const Noise = require('noise-handshake');
 const Cipher = require('noise-handshake/cipher');
+const fs = require('node:fs/promises');
+const os = require('node:os');
 
 async function main() {
+  const state = await fs.mkdtemp(path.join(os.tmpdir(), 'eya-browser-endpoint-'));
   const listener = net.createServer();
   await new Promise((resolve, reject) => { listener.once('error', reject); listener.listen(0, '127.0.0.1', resolve); });
   const port = listener.address().port;
   await new Promise(resolve => listener.close(resolve));
   const key = Buffer.from(Array.from({ length: 32 }, (_, i) => i));
   const server = spawn(path.resolve('eya-server/target/debug/eya-server'), [], {
-    cwd: '/tmp', env: { PATH: process.env.PATH, EYA_KEY: key.toString('hex'), EYA_BIND: `127.0.0.1:${port}`, EYA_CWD: '/tmp', EYA_BROWSER_CHROMIUM: '/tmp/eya-deliberately-missing-chromium' },
+    cwd: '/tmp', env: { PATH: process.env.PATH, EYA_KEY: key.toString('hex'), EYA_BIND: `127.0.0.1:${port}`, EYA_CWD: '/tmp', EYA_STATE_DIR: state, EYA_BROWSER_CHROMIUM: '/tmp/eya-deliberately-missing-chromium' },
     stdio: ['ignore', 'ignore', 'pipe'],
   });
   try {
@@ -54,6 +57,7 @@ async function main() {
   } finally {
     server.kill('SIGTERM');
     await new Promise(resolve => { if (server.exitCode !== null || server.signalCode !== null) resolve(); else { server.once('exit', resolve); setTimeout(() => { server.kill('SIGKILL'); resolve(); }, 3000).unref(); } });
+    await fs.rm(state, { recursive: true, force: true });
   }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

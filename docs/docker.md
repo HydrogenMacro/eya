@@ -22,7 +22,7 @@ Logs support client-side text filtering, 100–5000 recent lines, timestamps, a 
 
 ## Customization and lifecycle
 
-**Docker view options** controls refresh interval (3/5/10/30 seconds), table density, area/line charts, graph visibility, and image/port columns. Preferences persist in browser storage; histories remain local to the panel. Clear graph history removes collected samples. The **Live** toggle pauses polling; hidden/inactive panels and open action menus pause automatic requests. Search and log filter inputs retain normal text-editing behavior.
+**Docker view options** controls refresh interval (3/5/10/30 seconds), table density, area/line charts, graph visibility, and image/port columns. Display and log preferences are shared with Settings → Docker and saved in the workspace. Graph samples remain in the running panel. Reopening refreshes current data. Clear graph history removes collected samples. The **Live** toggle pauses polling; hidden/inactive panels and open action menus pause automatic requests. Search and log filter inputs retain normal text-editing behavior.
 
 All operations travel through the authenticated encrypted connection. The server needs the Docker CLI, Compose plugin, and access to its Docker daemon/context. Native mode uses the server user; host mode uses the configured host namespaces and login identity. See [system-panels.md](system-panels.md) for permissions, command deadlines, and output bounds.
 
